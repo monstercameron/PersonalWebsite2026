@@ -20,6 +20,7 @@ const TEXT_MOTD_FALLBACK = "Build with intention, ship with clarity, and keep im
 const PATH_HOME = "/";
 const PATH_RESUME = "/resume";
 const PATH_PROJECTS = "/projects";
+const PATH_RCTS = "/rcts";
 const PATH_BLOG = "/blog";
 const PATH_AI_WORKSHOP = "/aiworkshop";
 const RESUME_PRINT_ROOT_ID = "resume-print-root";
@@ -94,18 +95,21 @@ export function App() {
       </header>
 
       <nav aria-label={ARIA_PRIMARY} className="nav-wrap">
-        <div className="container nav-row">
+        <div className="container nav-shell">
+          <div className="nav-row">
           {navRes.value.map((item) => (
             <a
               key={item.href}
               href={item.href}
-              className="nav-link"
+              className={`nav-link ${pathname === item.href ? "is-active" : ""}`}
               target={item.external ? "_blank" : undefined}
               rel={item.external ? "noreferrer noopener" : undefined}
             >
               {item.label}
+              {item.external ? <span className="nav-ext">↗</span> : null}
             </a>
           ))}
+          </div>
         </div>
       </nav>
 
@@ -311,27 +315,51 @@ function renderPage(pathname, onResumeDownload, motd) {
     );
   }
 
-  if (pathname === PATH_PROJECTS) {
+  if (pathname === PATH_PROJECTS || pathname === PATH_RCTS) {
     return (
       <section className="panel">
         <p className="eyebrow">PROJECTS</p>
-        <h2>Featured Projects</h2>
+        <h2>Featured Repositories</h2>
         <div className="cards">
           <article className="card">
-            <h3>GoWebComponents</h3>
-            <p>Go-powered component architecture focused on reusable frontend primitives and systems-level composition.</p>
+            <h3><a href="https://github.com/monstercameron/pi-camera-gui" target="_blank" rel="noreferrer noopener">pi-camera-gui</a></h3>
+            <p><strong>What:</strong> A Pygame-based GUI that turns Raspberry Pi HQ camera setups into a menu-driven camera experience.</p>
+            <p><strong>Goal:</strong> Make camera control practical and reliable with deep settings, metadata support, and desktop mock mode.</p>
           </article>
           <article className="card">
-            <h3>LatentSpaceBrowser</h3>
-            <p>Interactive AI knowledge exploration experience that treats navigation as latent-space traversal.</p>
+            <h3><a href="https://github.com/monstercameron/LatentSpaceBrowser" target="_blank" rel="noreferrer noopener">LatentSpaceBrowser</a></h3>
+            <p><strong>What:</strong> A generative encyclopedia UI where each linked term recursively generates new AI content.</p>
+            <p><strong>Goal:</strong> Explore a new browsing model for LLMs with low-latency interaction and transparent token/cost metrics.</p>
           </article>
           <article className="card">
-            <h3>Zerver</h3>
-            <p>C-based server project emphasizing low-level performance, control, and runtime fundamentals.</p>
+            <h3><a href="https://github.com/monstercameron/MetaHumanServer" target="_blank" rel="noreferrer noopener">MetaHumanServer</a></h3>
+            <p><strong>What:</strong> A Python voice-interactive chatbot server that combines NLP and audio processing.</p>
+            <p><strong>Goal:</strong> Build more human-like voice interaction for games and online services.</p>
           </article>
           <article className="card">
-            <h3>Budgetting Tool</h3>
-            <p>Practical personal finance app for tracking expenses, debt, and goal progress with a dashboard workflow.</p>
+            <h3><a href="https://github.com/monstercameron/mdchem" target="_blank" rel="noreferrer noopener">mdchem</a></h3>
+            <p><strong>What:</strong> Backend services for an educational chemistry game with REST data capture and reporting workflows.</p>
+            <p><strong>Goal:</strong> Store gameplay data, generate useful trends, and manage controlled access for educators.</p>
+          </article>
+          <article className="card">
+            <h3><a href="https://github.com/monstercameron/Budgetting_tool_vibecoded" target="_blank" rel="noreferrer noopener">Budgetting_tool_vibecoded</a></h3>
+            <p><strong>What:</strong> A React + Vite budgeting app for income, expenses, debt, goals, and dashboard metrics.</p>
+            <p><strong>Goal:</strong> Centralize personal finance tracking with fast feedback and practical planning visibility.</p>
+          </article>
+          <article className="card">
+            <h3><a href="https://github.com/monstercameron/SchemaFlow" target="_blank" rel="noreferrer noopener">SchemaFlow</a></h3>
+            <p><strong>What:</strong> A Go library for type-safe LLM extraction and structured output validation.</p>
+            <p><strong>Goal:</strong> Replace fragile JSON parsing with compile-time safety and production-friendly LLM pipelines.</p>
+          </article>
+          <article className="card">
+            <h3><a href="https://github.com/monstercameron/Zerver" target="_blank" rel="noreferrer noopener">Zerver</a></h3>
+            <p><strong>What:</strong> A Zig backend framework built around pure-step request pipelines, explicit side effects, and built-in tracing.</p>
+            <p><strong>Goal:</strong> Make API behavior observable by default so bottlenecks and failures are easier to diagnose and fix in production.</p>
+          </article>
+          <article className="card">
+            <h3><a href="https://github.com/monstercameron/GoScript" target="_blank" rel="noreferrer noopener">GoScript</a></h3>
+            <p><strong>What:</strong> A browser-based Go environment running the real Go compiler via WebAssembly.</p>
+            <p><strong>Goal:</strong> Make Go runnable in docs, tutorials, and playgrounds without local installation.</p>
           </article>
         </div>
       </section>
@@ -399,10 +427,14 @@ body { margin: 0; background: radial-gradient(circle at 15% 15%, #1b2637 0, var(
 .brand-mark { width: 42px; height: 42px; border: 1px solid var(--accent); color: var(--accent); display: grid; place-items: center; font-weight: 700; letter-spacing: 0.08em; }
 .brand-name { margin: 0; font-size: 1.2rem; letter-spacing: 0.04em; text-transform: uppercase; }
 .brand-role { margin: 2px 0 0; color: var(--muted); font-size: 0.92rem; }
-.nav-wrap { border-bottom: 1px solid var(--line); background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0)); }
-.nav-row { display: flex; flex-wrap: wrap; gap: 10px; padding: 12px 0; }
-.nav-link { color: var(--ink); text-decoration: none; border: 1px solid var(--line); padding: 6px 10px; font-size: 0.9rem; letter-spacing: 0.03em; text-transform: uppercase; }
-.nav-link:hover { border-color: var(--accent); color: var(--accent-soft); }
+.nav-wrap { border-bottom: 1px solid var(--line); background: linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0)); }
+.nav-shell { padding: 12px 0; }
+.nav-row { display: flex; flex-wrap: wrap; gap: 8px; padding: 6px; border: 1px solid var(--line); background: rgba(255,255,255,0.01); border-radius: 12px; }
+.nav-link { color: var(--ink); text-decoration: none; border: 1px solid transparent; padding: 7px 12px; font-size: 0.84rem; letter-spacing: 0.07em; text-transform: uppercase; border-radius: 9px; transition: all 140ms ease; }
+.nav-link:hover { border-color: var(--accent); color: var(--accent-soft); background: rgba(244,185,66,0.08); }
+.nav-link:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.nav-link.is-active { border-color: var(--accent); background: rgba(244,185,66,0.14); color: var(--accent-soft); }
+.nav-ext { margin-left: 6px; font-size: 0.78rem; opacity: 0.85; }
 .main-grid { display: grid; gap: 16px; padding: 24px 0 28px; flex: 1; width: min(1120px, 92vw); }
 .panel { background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01)); border: 1px solid var(--line); padding: 20px; }
 .motd-panel { border-color: var(--accent); box-shadow: inset 0 0 0 1px rgba(244,185,66,0.2); }
