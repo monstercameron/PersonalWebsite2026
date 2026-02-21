@@ -8,6 +8,11 @@ const METHOD_GET = "GET";
 const EMPTY_STRING = "";
 const ERR_REQUEST_STATUS = "Request failed with status";
 const DEFAULT_CACHE_TTL_MS = 30000;
+const PDF_FORMAT = "a4";
+const PDF_UNIT = "pt";
+const PDF_PORTRAIT = "p";
+const PDF_MARGIN = 20;
+const PDF_FILENAME_DEFAULT = "EarlCameron-Resume.pdf";
 
 /**
  * @returns {Result<number>}
@@ -91,4 +96,55 @@ export function fromPromise(promise) {
     (value) => ({ value, err: null }),
     (err) => ({ value: null, err: err instanceof Error ? err : new Error(String(err)) })
   );
+}
+
+/**
+ * Critical path: capture live styled resume HTML and download as PDF for the client.
+ * @param {HTMLElement | null} element
+ * @param {string} [fileName]
+ * @returns {Promise<Result<boolean>>}
+ */
+export async function downloadResumePdf(element, fileName = PDF_FILENAME_DEFAULT) {
+  if (!element) {
+    return { value: null, err: new Error("Resume element not found") };
+  }
+
+  const modulesRes = await fromPromise(Promise.all([import("html2canvas"), import("jspdf")]));
+  if (modulesRes.err) {
+    return { value: null, err: modulesRes.err };
+  }
+
+  const html2canvas = modulesRes.value[0].default;
+  const jsPDF = modulesRes.value[1].jsPDF;
+
+  const canvasRes = await fromPromise(
+    html2canvas(element, { scale: 2, useCORS: true, backgroundColor: "#ffffff" })
+  );
+  if (canvasRes.err) {
+    return { value: null, err: canvasRes.err };
+  }
+
+  const canvas = canvasRes.value;
+  const imageData = canvas.toDataURL("image/png");
+  const pdf = new jsPDF(PDF_PORTRAIT, PDF_UNIT, PDF_FORMAT);
+  const pageWidth = pdf.internal.pageSize.getWidth();
+  const pageHeight = pdf.internal.pageSize.getHeight();
+  const contentWidth = pageWidth - PDF_MARGIN * 2;
+  const scaledHeight = (canvas.height * contentWidth) / canvas.width;
+
+  let remainingHeight = scaledHeight;
+  let offsetY = 0;
+
+  pdf.addImage(imageData, "PNG", PDF_MARGIN, PDF_MARGIN, contentWidth, scaledHeight);
+  remainingHeight -= pageHeight - PDF_MARGIN * 2;
+
+  while (remainingHeight > 0) {
+    offsetY += pageHeight - PDF_MARGIN * 2;
+    pdf.addPage();
+    pdf.addImage(imageData, "PNG", PDF_MARGIN, PDF_MARGIN - offsetY, contentWidth, scaledHeight);
+    remainingHeight -= pageHeight - PDF_MARGIN * 2;
+  }
+
+  pdf.save(fileName || PDF_FILENAME_DEFAULT);
+  return { value: true, err: null };
 }

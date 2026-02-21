@@ -1,6 +1,6 @@
 ﻿import React from "react";
 import { getYearLabel, buildNavItems } from "./core.pure.js";
-import { getCurrentYear } from "./core.impure.js";
+import { downloadResumePdf, getCurrentYear } from "./core.impure.js";
 
 const ARIA_PRIMARY = "Primary";
 const TEXT_INIT_ERROR = "Application failed to initialize.";
@@ -16,6 +16,9 @@ const PATH_RESUME = "/resume";
 const PATH_PROJECTS = "/projects";
 const PATH_BLOG = "/blog";
 const PATH_AI_WORKSHOP = "/aiworkshop";
+const RESUME_PRINT_ROOT_ID = "resume-print-root";
+const RESUME_PDF_FILENAME = "EarlCameron-Resume.pdf";
+const RESUME_PDF_EXPORT_CLASS = "pdf-export";
 
 /**
  * @returns {JSX.Element}
@@ -30,6 +33,21 @@ export function App() {
   }
 
   const pathname = window.location.pathname;
+  const handleResumeDownload = async (event) => {
+    event.preventDefault();
+    const element = document.getElementById(RESUME_PRINT_ROOT_ID);
+    if (element) {
+      element.classList.add(RESUME_PDF_EXPORT_CLASS);
+    }
+    const pdfRes = await downloadResumePdf(element, RESUME_PDF_FILENAME);
+    if (element) {
+      element.classList.remove(RESUME_PDF_EXPORT_CLASS);
+    }
+    if (pdfRes.err) {
+      console.error(pdfRes.err.message);
+      window.alert("Could not generate PDF. Please try again.");
+    }
+  };
 
   return (
     <div className="site-shell">
@@ -61,7 +79,7 @@ export function App() {
         </div>
       </nav>
 
-      <main className="container main-grid">{renderPage(pathname)}</main>
+      <main className="container main-grid">{renderPage(pathname, handleResumeDownload)}</main>
 
       <footer className="footer">
         <div className="container footer-inner">
@@ -78,9 +96,10 @@ export function App() {
 
 /**
  * @param {string} pathname
+ * @param {(event: React.MouseEvent<HTMLAnchorElement>) => Promise<void>} onResumeDownload
  * @returns {JSX.Element}
  */
-function renderPage(pathname) {
+function renderPage(pathname, onResumeDownload) {
   if (pathname === PATH_HOME) {
     return (
       <>
@@ -120,7 +139,7 @@ function renderPage(pathname) {
 
   if (pathname === PATH_RESUME) {
     return (
-      <section className="panel">
+      <section className="panel" id={RESUME_PRINT_ROOT_ID}>
         <p className="eyebrow">RESUME</p>
         <section className="resume-hero">
           <div>
@@ -143,7 +162,7 @@ function renderPage(pathname) {
             </p>
           </div>
           <div className="resume-hero-cta">
-            <a className="cta-link" href="/resume/EarlCameron.pdf" target="_blank" rel="noreferrer noopener">Download Full Resume (PDF)</a>
+            <a className="cta-link" href="/resume/EarlCameron.pdf" onClick={onResumeDownload}>Download Full Resume (PDF)</a>
           </div>
         </section>
 
@@ -350,6 +369,12 @@ body { margin: 0; background: radial-gradient(circle at 15% 15%, #1b2637 0, var(
 .xp-time { margin: 0; color: var(--muted); font-size: 0.9rem; }
 .cta-link { display: inline-block; border: 1px solid var(--accent); color: var(--accent-soft); text-decoration: none; padding: 8px 12px; font-weight: 600; }
 .cta-link:hover { background: rgba(244,185,66,0.12); }
+.pdf-export, .pdf-export * { color: #111111 !important; }
+.pdf-export { background: #ffffff !important; border-color: #d1d5db !important; }
+.pdf-export .resume-block { background: #ffffff !important; border-color: #d1d5db !important; }
+.pdf-export .chip { background: #ffffff !important; border-color: #d1d5db !important; color: #111111 !important; }
+.pdf-export .chip-label { border-color: #111111 !important; }
+.pdf-export .cta-link { border-color: #111111 !important; color: #111111 !important; background: #ffffff !important; }
 .footer { border-top: 1px solid var(--line); background: #0b1017; }
 .footer-inner { padding: 20px 0; display: flex; justify-content: space-between; gap: 12px; align-items: end; }
 .footer-title { font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; }
@@ -363,3 +388,5 @@ body { margin: 0; background: radial-gradient(circle at 15% 15%, #1b2637 0, var(
   .footer-inner { flex-direction: column; align-items: flex-start; }
 }
 `;
+
+
