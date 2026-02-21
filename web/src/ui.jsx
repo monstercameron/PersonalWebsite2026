@@ -1,6 +1,27 @@
-﻿import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { getYearLabel, buildNavItems } from "./core.pure.js";
-import { downloadResumePdf, fetchMessageOfDay, getCurrentYear } from "./core.impure.js";
+import { createBlog, createBlogCategory, deleteBlog, downloadResumePdf, fetchMessageOfDay, getBlogAdminToken, getBlogsDashboard, getCurrentYear, getPublicBlog, listBlogCategories, listBlogs, listBlogTags, loginBlogAdmin, logoutBlogAdmin, updateBlog, uploadBlogImage } from "./core.impure.js";
+import hljs from "highlight.js/lib/common";
+import "highlight.js/styles/github-dark.css";
+import javascriptLang from "highlight.js/lib/languages/javascript";
+import typescriptLang from "highlight.js/lib/languages/typescript";
+import goLang from "highlight.js/lib/languages/go";
+import javaLang from "highlight.js/lib/languages/java";
+import csharpLang from "highlight.js/lib/languages/csharp";
+import cssLang from "highlight.js/lib/languages/css";
+import rustLang from "highlight.js/lib/languages/rust";
+
+hljs.registerLanguage("javascript", javascriptLang);
+hljs.registerLanguage("js", javascriptLang);
+hljs.registerLanguage("typescript", typescriptLang);
+hljs.registerLanguage("ts", typescriptLang);
+hljs.registerLanguage("go", goLang);
+hljs.registerLanguage("java", javaLang);
+hljs.registerLanguage("csharp", csharpLang);
+hljs.registerLanguage("cs", csharpLang);
+hljs.registerLanguage("c#", csharpLang);
+hljs.registerLanguage("css", cssLang);
+hljs.registerLanguage("zig", rustLang);
 
 const ARIA_PRIMARY = "Primary";
 const TEXT_INIT_ERROR = "Application failed to initialize.";
@@ -22,10 +43,24 @@ const PATH_RESUME = "/resume";
 const PATH_PROJECTS = "/projects";
 const PATH_RCTS = "/rcts";
 const PATH_BLOG = "/blog";
+const PATH_BLOG_PREFIX = "/blog/";
+const PATH_BLOG_DASHBOARD = "/blog/dashboard";
 const PATH_AI_WORKSHOP = "/aiworkshop";
 const RESUME_PRINT_ROOT_ID = "resume-print-root";
 const RESUME_PDF_FILENAME = "EarlCameron-Resume.pdf";
 const RESUME_PDF_EXPORT_CLASS = "pdf-export";
+const BLOG_PAGE_SIZE = 10;
+const TEXT_CODE_COPY = "Copy";
+const TEXT_CODE_COPIED = "Copied";
+const TEXT_CODE_FALLBACK_LANG = "code";
+
+/**
+ * @param {string} text
+ * @returns {Promise<[boolean|null, Error|null]>}
+ */
+function copyToClipboard(text) {
+  return navigator.clipboard.writeText(text).then(() => [true, null]).catch((err) => [null, err]);
+}
 
 /**
  * @returns {JSX.Element}
@@ -366,23 +401,8 @@ function renderPage(pathname, onResumeDownload, motd) {
     );
   }
 
-  if (pathname === PATH_BLOG) {
-    return (
-      <section className="panel">
-        <p className="eyebrow">BLOG</p>
-        <h2>Technical Notes</h2>
-        <div className="cards">
-          <article className="card">
-            <h3>Constraint-First Architecture</h3>
-            <p>How requirements and operating limits shape system topology.</p>
-          </article>
-          <article className="card">
-            <h3>Buildability Over Hype</h3>
-            <p>Turning prototypes into maintainable production artifacts.</p>
-          </article>
-        </div>
-      </section>
-    );
+  if (pathname === PATH_BLOG || pathname.startsWith(PATH_BLOG_PREFIX)) {
+    return <BlogPage />;
   }
 
   if (pathname === PATH_AI_WORKSHOP) {
@@ -404,6 +424,546 @@ function renderPage(pathname, onResumeDownload, motd) {
       <h2>404 - Page Not Found</h2>
       <p>This route has not been mapped yet.</p>
     </section>
+  );
+}
+
+/**
+ * @returns {JSX.Element}
+ */
+function BlogPage() {
+  const pathname = window.location.pathname;
+  const search = window.location.search;
+  const searchParams = new URLSearchParams(search);
+  const activeCategory = String(searchParams.get("category") || "").trim().toLowerCase();
+  const activeTag = String(searchParams.get("tag") || "").trim().toLowerCase();
+  const segments = pathname.split("/").filter(Boolean);
+  const routeSecond = segments[1] || "";
+  const routeThird = segments[2] || "";
+  const routeId = Number(routeSecond);
+  const isDashboardRoute = routeSecond === "dashboard";
+  const isEditRoute = Number.isInteger(routeId) && routeId > 0 && routeThird === "edit";
+  const isNewRoute = Number.isInteger(routeId) && routeThird === "new";
+  const isDetailView = Number.isInteger(routeId) && routeId > 0 && !routeThird;
+  const detailId = routeId;
+  const [rows, setRows] = useState([]);
+  const [detailRow, setDetailRow] = useState(null);
+  const [detailNav, setDetailNav] = useState({ prevId: null, nextId: null });
+  const [categories, setCategories] = useState([]);
+  const [tags, setTags] = useState([]);
+  const [dashboard, setDashboard] = useState({ total: 0, published: 0, drafts: 0 });
+  const [status, setStatus] = useState({ text: "", error: false });
+  const [view, setView] = useState(isDashboardRoute ? (Boolean(getBlogAdminToken().value) ? "dashboard" : "login") : (isEditRoute || isNewRoute ? "editor" : "list"));
+  const [previousView, setPreviousView] = useState("list");
+  const [isAdmin, setIsAdmin] = useState(Boolean(getBlogAdminToken().value));
+  const [listPage, setListPage] = useState(1);
+  const [dashboardPage, setDashboardPage] = useState(1);
+  const [password, setPassword] = useState("");
+  const [newCategoryName, setNewCategoryName] = useState("");
+  const [imageScalePct, setImageScalePct] = useState(60);
+  const [form, setForm] = useState({ id: null, title: "", summary: "", content: "", published: 0, categoryId: "", tagsText: "" });
+  const imageInputRef = useRef(null);
+  const goTo = (path) => window.location.assign(path);
+  const goBack = (fallbackPath = PATH_BLOG) => {
+    if (window.history.length > 1) {
+      window.history.back();
+      return;
+    }
+    window.location.assign(fallbackPath);
+  };
+  const listRows = rows.filter((row) => (isAdmin || row.published) && matchesBlogFilters(row, activeCategory, activeTag));
+  const dashboardRows = rows.filter((row) => matchesBlogFilters(row, activeCategory, activeTag));
+  const listPageData = paginateItems(listRows, listPage, BLOG_PAGE_SIZE);
+  const dashboardPageData = paginateItems(dashboardRows, dashboardPage, BLOG_PAGE_SIZE);
+
+  const load = async () => {
+    if (isDetailView) {
+      const [rowRes, listRes] = await Promise.all([getPublicBlog(detailId), listBlogs()]);
+      if (rowRes.err || !rowRes.value) {
+        setStatus({ text: rowRes.err ? rowRes.err.message : "Blog not found", error: true });
+        return;
+      }
+      setDetailRow(rowRes.value);
+      if (!listRes.err) {
+        const published = listRes.value.filter((row) => row.published);
+        const sorted = [...published].sort((a, b) => Number(a.id) - Number(b.id));
+        const currentIndex = sorted.findIndex((row) => Number(row.id) === detailId);
+        const prevRow = currentIndex > 0 ? sorted[currentIndex - 1] : null;
+        const nextRow = currentIndex >= 0 && currentIndex < sorted.length - 1 ? sorted[currentIndex + 1] : null;
+        setDetailNav({ prevId: prevRow ? prevRow.id : null, nextId: nextRow ? nextRow.id : null });
+      }
+      return;
+    }
+
+    const [blogsRes, categoriesRes, tagsRes, dashboardRes] = await Promise.all([
+      listBlogs(),
+      listBlogCategories(),
+      listBlogTags(),
+      isAdmin ? getBlogsDashboard() : Promise.resolve({ value: { total: 0, published: 0, drafts: 0 }, err: null })
+    ]);
+    if (!blogsRes.err) {
+      setRows(blogsRes.value);
+    }
+    if (!categoriesRes.err) {
+      setCategories(categoriesRes.value);
+    }
+    if (!tagsRes.err) {
+      setTags(tagsRes.value);
+    }
+    if (!dashboardRes.err) {
+      setDashboard(dashboardRes.value);
+    }
+
+    if (!blogsRes.err) {
+      if (isDashboardRoute) {
+        setView(isAdmin ? "dashboard" : "login");
+      } else if (isEditRoute) {
+        const target = blogsRes.value.find((row) => Number(row.id) === routeId);
+        if (target) {
+          setForm({
+            id: target.id,
+            title: target.title || "",
+            summary: target.summary || "",
+            content: target.content || "",
+            published: target.published ? 1 : 0,
+            categoryId: target.category?.id ? String(target.category.id) : "",
+            tagsText: Array.isArray(target.tags) ? target.tags.map((tag) => tag.name).join(", ") : ""
+          });
+        }
+        setView("editor");
+      } else if (isNewRoute) {
+        setForm({ id: null, title: "", summary: "", content: "", published: 0, categoryId: "", tagsText: "" });
+        setView("editor");
+      } else {
+        setView("list");
+      }
+    }
+  };
+
+  useEffect(() => {
+    load();
+  }, [isAdmin]);
+
+  useEffect(() => {
+    if (listPage !== listPageData.page) {
+      setListPage(listPageData.page);
+    }
+  }, [listPage, listPageData.page]);
+
+  useEffect(() => {
+    if (dashboardPage !== dashboardPageData.page) {
+      setDashboardPage(dashboardPageData.page);
+    }
+  }, [dashboardPage, dashboardPageData.page]);
+
+  const onField = (key, value) => setForm((prev) => ({ ...prev, [key]: value }));
+  const payload = () => ({ title: form.title, summary: form.summary, content: form.content, published: form.published, categoryId: form.categoryId ? Number(form.categoryId) : null, tags: form.tagsText.split(",").map((tag) => tag.trim()).filter(Boolean) });
+
+  const onLogin = async (event) => {
+    event.preventDefault();
+    const res = await loginBlogAdmin(password);
+    if (res.err) {
+      setStatus({ text: res.err.message, error: true });
+      return;
+    }
+    setPassword("");
+    setIsAdmin(true);
+    goTo(PATH_BLOG_DASHBOARD);
+  };
+
+  const onSave = async (event) => {
+    event.preventDefault();
+    const res = form.id ? await updateBlog(form.id, payload()) : await createBlog(payload());
+    if (res.err) {
+      setStatus({ text: res.err.message, error: true });
+      return;
+    }
+    setStatus({ text: form.id ? "Blog updated." : "Blog created.", error: false });
+    setForm({ id: null, title: "", summary: "", content: "", published: 0, categoryId: "", tagsText: "" });
+    goTo(PATH_BLOG_DASHBOARD);
+    await load();
+  };
+
+  const onEdit = (row) => {
+    setPreviousView(view);
+    goTo(`/blog/${row.id}/edit`);
+  };
+
+  const onDelete = async (id) => {
+    const res = await deleteBlog(id);
+    if (res.err) {
+      setStatus({ text: res.err.message, error: true });
+      return;
+    }
+    await load();
+  };
+
+  /**
+   * @param {{id: number, title: string, summary: string, content: string, published: number, category?: {id: number}, tags?: Array<{name: string}>}} row
+   * @returns {Promise<void>}
+   */
+  const onTogglePublish = async (row) => {
+    const res = await updateBlog(row.id, {
+      title: row.title || "",
+      summary: row.summary || "",
+      content: row.content || "",
+      published: row.published ? 0 : 1,
+      categoryId: row.category?.id ? Number(row.category.id) : null,
+      tags: Array.isArray(row.tags) ? row.tags.map((tag) => tag.name) : []
+    });
+    if (res.err) {
+      setStatus({ text: res.err.message, error: true });
+      return;
+    }
+    setStatus({ text: row.published ? "Post unpublished." : "Post published.", error: false });
+    await load();
+  };
+
+  const applyEditorWrap = (prefix, suffix = prefix) => {
+    const editor = document.getElementById("blog-content-editor");
+    if (!editor) {
+      return;
+    }
+    const start = editor.selectionStart || 0;
+    const end = editor.selectionEnd || 0;
+    const selected = editor.value.slice(start, end);
+    onField("content", `${editor.value.slice(0, start)}${prefix}${selected}${suffix}${editor.value.slice(end)}`);
+  };
+
+  const onImagePick = async (event) => {
+    const file = event.target.files && event.target.files[0] ? event.target.files[0] : null;
+    if (!file) {
+      return;
+    }
+    const uploadRes = await uploadBlogImage(file);
+    if (uploadRes.err) {
+      setStatus({ text: uploadRes.err.message, error: true });
+      return;
+    }
+    const token = `![img](${uploadRes.value.url}|${imageScalePct})`;
+    onField("content", `${form.content}\n${token}`);
+  };
+
+  const createCategory = async () => {
+    const res = await createBlogCategory(newCategoryName);
+    if (res.err) {
+      setStatus({ text: res.err.message, error: true });
+      return;
+    }
+    setNewCategoryName("");
+    await load();
+  };
+
+  if (isDetailView && detailRow) {
+    return (
+      <article className="panel blog-post-detail">
+        <div className="blog-post-topbar">
+          <button className="cta-link cta-button" type="button" onClick={() => goTo(PATH_BLOG)}>Back to Blog List</button>
+        </div>
+        <p className="eyebrow">BLOG POST</p>
+        <h2>{detailRow.title}</h2>
+        {detailRow.summary ? <p className="blog-post-summary">{detailRow.summary}</p> : null}
+        <div className="blog-post-meta">
+          {detailRow.category ? <a className="meta-pill meta-link" href={buildBlogFilterHref({ category: detailRow.category.name })}>{detailRow.category.name}</a> : null}
+          {Array.isArray(detailRow.tags) ? detailRow.tags.map((tag) => <a className="meta-pill meta-link" key={tag.id} href={buildBlogFilterHref({ tag: tag.name })}>{tag.name}</a>) : null}
+        </div>
+        <div className="blog-content blog-detail-content">{renderRichContent(detailRow.content)}</div>
+        <div className="blog-row-actions blog-detail-nav">
+          {detailNav.prevId ? <a className="cta-link" href={`/blog/${detailNav.prevId}`}>Previous</a> : <span />}
+          {detailNav.nextId ? <a className="cta-link" href={`/blog/${detailNav.nextId}`}>Next</a> : <span />}
+        </div>
+      </article>
+    );
+  }
+
+  return (
+    <section className="panel blog-shell">
+      <header className="blog-header">
+        <div>
+          <p className="eyebrow">BLOG</p>
+          <h2>{isAdmin ? "Publishing Console" : "Journal & Notes"}</h2>
+          <p className="blog-subhead">Engineering notes, experiments, and build logs.</p>
+          {(activeCategory || activeTag) ? (
+            <p className="blog-subhead">
+              Filter:
+              {activeCategory ? ` category=${activeCategory}` : ""}
+              {activeCategory && activeTag ? " |" : ""}
+              {activeTag ? ` tag=${activeTag}` : ""}
+              {" "}
+              <a href={PATH_BLOG}>Clear</a>
+            </p>
+          ) : null}
+        </div>
+        <div className="blog-header-actions">
+          <button className={`tab-btn ${view === "list" ? "is-active" : ""}`} type="button" onClick={() => goTo(PATH_BLOG)}>Posts</button>
+          {!isAdmin ? <button className={`tab-btn ${view === "login" ? "is-active" : ""}`} type="button" onClick={() => goTo(PATH_BLOG_DASHBOARD)}>Admin</button> : null}
+          {isAdmin ? <button className={`tab-btn ${view === "dashboard" ? "is-active" : ""}`} type="button" onClick={() => goTo(PATH_BLOG_DASHBOARD)}>Dashboard</button> : null}
+          {isAdmin ? <button className={`tab-btn ${view === "editor" ? "is-active" : ""}`} type="button" onClick={() => { setPreviousView(view); goTo("/blog/0/new"); }}>New Post</button> : null}
+          {isAdmin ? <button className="tab-btn danger" type="button" onClick={() => { logoutBlogAdmin(); setIsAdmin(false); goTo(PATH_BLOG); }}>Logout</button> : null}
+        </div>
+      </header>
+
+      {status.text ? <p className={status.error ? "blog-error" : "blog-success"}>{status.text}</p> : null}
+
+      {view === "login" && !isAdmin ? (
+        <form className="blog-login-card" onSubmit={onLogin}>
+          <label>
+            <span>Admin Password</span>
+            <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
+          </label>
+          <button className="cta-link cta-button" type="submit">Login</button>
+        </form>
+      ) : null}
+
+      {view === "dashboard" && isAdmin ? (
+        <section className="blog-dash">
+          <div className="dash-stats">
+            <article className="dash-card"><p>Total Posts</p><h3>{dashboard.total}</h3></article>
+            <article className="dash-card"><p>Published</p><h3>{dashboard.published}</h3></article>
+            <article className="dash-card"><p>Drafts</p><h3>{dashboard.drafts}</h3></article>
+          </div>
+          <div className="dash-list">
+            <h3>All Posts</h3>
+            <div className="dash-rows">
+              {dashboardPageData.items.map((row) => (
+                <div className="dash-row" key={row.id}>
+                  <div className="dash-row-main">
+                    <a href={`/blog/${row.id}`}>{row.title}</a>
+                    <div className="dash-row-meta">
+                      <span className="meta-pill">{row.published ? "Published" : "Draft"}</span>
+                      {row.category ? <a className="meta-pill meta-link" href={buildBlogFilterHref({ category: row.category.name })}>{row.category.name}</a> : <span className="meta-pill">No category</span>}
+                      {Array.isArray(row.tags) && row.tags.length > 0
+                        ? row.tags.map((tag) => <a className="meta-pill meta-link" key={`${row.id}-${tag.id}`} href={buildBlogFilterHref({ tag: tag.name })}>{tag.name}</a>)
+                        : <span className="meta-pill">Tags: none</span>}
+                    </div>
+                  </div>
+                  <div className="dash-actions">
+                    <button className="cta-link cta-button" type="button" onClick={() => onEdit(row)}>Edit</button>
+                    <button className="cta-link cta-button cta-danger" type="button" onClick={() => onDelete(row.id)}>Delete</button>
+                    <button className="cta-link cta-button" type="button" onClick={() => onTogglePublish(row)}>{row.published ? "Unpublish" : "Publish"}</button>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <PaginationControls
+              page={dashboardPageData.page}
+              totalPages={dashboardPageData.totalPages}
+              onPrevious={() => setDashboardPage((prev) => Math.max(1, prev - 1))}
+              onNext={() => setDashboardPage((prev) => Math.min(dashboardPageData.totalPages, prev + 1))}
+            />
+          </div>
+        </section>
+      ) : null}
+
+      {view === "list" ? (
+        <section className="blog-grid">
+          {listPageData.items.map((row) => (
+            <article className="blog-card" key={row.id}>
+              <h3><a href={`/blog/${row.id}`}>{row.title}</a></h3>
+              <p className="blog-card-summary">{row.summary || "No summary yet."}</p>
+              <div className="blog-card-meta">
+                {row.category ? <a className="meta-pill meta-link" href={buildBlogFilterHref({ category: row.category.name })}>{row.category.name}</a> : null}
+                {Array.isArray(row.tags) ? row.tags.slice(0, 3).map((tag) => <a className="meta-pill meta-link" key={tag.id} href={buildBlogFilterHref({ tag: tag.name })}>{tag.name}</a>) : null}
+              </div>
+              {isAdmin ? (
+                <div className="blog-row-actions">
+                  <button className="cta-link cta-button" type="button" onClick={() => onEdit(row)}>Edit</button>
+                  <button className="cta-link cta-button cta-danger" type="button" onClick={() => onDelete(row.id)}>Delete</button>
+                </div>
+              ) : null}
+            </article>
+          ))}
+          <div className="blog-pagination-wrap">
+            <PaginationControls
+              page={listPageData.page}
+              totalPages={listPageData.totalPages}
+              onPrevious={() => setListPage((prev) => Math.max(1, prev - 1))}
+              onNext={() => setListPage((prev) => Math.min(listPageData.totalPages, prev + 1))}
+            />
+          </div>
+        </section>
+      ) : null}
+
+      {view === "editor" && isAdmin ? (
+        <section className="editor-shell">
+          <form className="blog-form editor-main" onSubmit={onSave}>
+            <div className="blog-row-actions">
+              <button className="cta-link cta-button" type="button" onClick={() => goBack(previousView === "dashboard" ? PATH_BLOG_DASHBOARD : PATH_BLOG)}>Back</button>
+            </div>
+            <label><span>Title</span><input value={form.title} onChange={(e) => onField("title", e.target.value)} /></label>
+            <label><span>Summary</span><input value={form.summary} onChange={(e) => onField("summary", e.target.value)} /></label>
+            <label>
+              <span>Content</span>
+              <div className="blog-editor-toolbar">
+                <button className="cta-link cta-button" type="button" onClick={() => applyEditorWrap("**")}>Bold</button>
+                <button className="cta-link cta-button" type="button" onClick={() => applyEditorWrap("__")}>Underline</button>
+                <button className="cta-link cta-button" type="button" onClick={() => applyEditorWrap("[tc]", "[/tc]")}>TC</button>
+                <button className="cta-link cta-button" type="button" onClick={() => applyEditorWrap("```\n", "\n```")}>Code</button>
+                <button className="cta-link cta-button" type="button" onClick={() => imageInputRef.current && imageInputRef.current.click()}>Image</button>
+                <label>Scale %<input type="number" min="10" max="100" value={imageScalePct} onChange={(e) => setImageScalePct(Number(e.target.value || 60))} /></label>
+                <input ref={imageInputRef} type="file" accept="image/*" onChange={onImagePick} style={{ display: "none" }} />
+              </div>
+              <textarea id="blog-content-editor" rows={14} value={form.content} onChange={(e) => onField("content", e.target.value)} />
+              <div className="editor-preview">
+                <p className="editor-help">Live Preview</p>
+                <div className="blog-content">{renderRichContent(form.content)}</div>
+              </div>
+            </label>
+            <label className="blog-check"><input type="checkbox" checked={Boolean(form.published)} onChange={(e) => onField("published", e.target.checked ? 1 : 0)} /><span>Published</span></label>
+            <button className="cta-link cta-button" type="submit">{form.id ? "Save Changes" : "Create Blog"}</button>
+          </form>
+
+          <aside className="editor-side">
+            <div className="editor-side-card">
+              <h3>Category</h3>
+              <select value={form.categoryId} onChange={(e) => onField("categoryId", e.target.value)}>
+                <option value="">No category</option>
+                {categories.map((cat) => <option key={cat.id} value={String(cat.id)}>{cat.name}</option>)}
+              </select>
+              <div className="blog-inline-form">
+                <input value={newCategoryName} onChange={(e) => setNewCategoryName(e.target.value)} placeholder="New category name" />
+                <button className="cta-link cta-button" type="button" onClick={createCategory}>Add</button>
+              </div>
+            </div>
+            <div className="editor-side-card">
+              <h3>Tags</h3>
+              <input value={form.tagsText} onChange={(e) => onField("tagsText", e.target.value)} list="blog-tags-list" placeholder="infra, ai, systems" />
+              <datalist id="blog-tags-list">{tags.map((tag) => <option key={tag.id} value={tag.name} />)}</datalist>
+              <p className="editor-help">Comma-separated tags only.</p>
+            </div>
+          </aside>
+        </section>
+      ) : null}
+    </section>
+  );
+}
+
+/**
+ * @param {{page: number, totalPages: number, onPrevious: () => void, onNext: () => void}} props
+ * @returns {JSX.Element}
+ */
+function PaginationControls(props) {
+  return (
+    <div className="pagination-row">
+      <button className="tab-btn pagination-btn" type="button" onClick={props.onPrevious} disabled={props.page <= 1}>Previous</button>
+      <span className="pagination-meta">Page {props.page} of {props.totalPages}</span>
+      <button className="tab-btn pagination-btn" type="button" onClick={props.onNext} disabled={props.page >= props.totalPages}>Next</button>
+    </div>
+  );
+}
+
+/**
+ * @param {Array<any>} items
+ * @param {number} page
+ * @param {number} pageSize
+ * @returns {{items: Array<any>, page: number, totalPages: number}}
+ */
+function paginateItems(items, page, pageSize) {
+  const totalPages = Math.max(1, Math.ceil(items.length / pageSize));
+  const safePage = Math.min(Math.max(1, page), totalPages);
+  const start = (safePage - 1) * pageSize;
+  return { items: items.slice(start, start + pageSize), page: safePage, totalPages };
+}
+
+/**
+ * @param {{category?: string, tag?: string}} params
+ * @returns {string}
+ */
+function buildBlogFilterHref(params) {
+  const search = new URLSearchParams();
+  if (params.category) {
+    search.set("category", String(params.category).trim().toLowerCase());
+  }
+  if (params.tag) {
+    search.set("tag", String(params.tag).trim().toLowerCase());
+  }
+  return `${PATH_BLOG}?${search.toString()}`;
+}
+
+/**
+ * @param {{category?: {name?: string} | null, tags?: Array<{name?: string}>}} row
+ * @param {string} activeCategory
+ * @param {string} activeTag
+ * @returns {boolean}
+ */
+function matchesBlogFilters(row, activeCategory, activeTag) {
+  const categoryName = String(row?.category?.name || "").toLowerCase();
+  const tagNames = Array.isArray(row?.tags) ? row.tags.map((tag) => String(tag?.name || "").toLowerCase()) : [];
+  const categoryMatch = !activeCategory || categoryName === activeCategory;
+  const tagMatch = !activeTag || tagNames.includes(activeTag);
+  return categoryMatch && tagMatch;
+}
+
+/**
+ * @param {string} content
+ * @returns {Array<JSX.Element>}
+ */
+function renderRichContent(content) {
+  const source = String(content || "");
+  const blocks = source.split("```");
+  return blocks.map((block, index) => {
+    if (index % 2 === 1) {
+      const firstLineBreak = block.indexOf("\n");
+      const header = firstLineBreak >= 0 ? block.slice(0, firstLineBreak).trim().toLowerCase() : "";
+      const body = firstLineBreak >= 0 ? block.slice(firstLineBreak + 1) : block;
+      const lang = header === "c#" ? "csharp" : header === "cs" ? "csharp" : header;
+      return <CodeBlock key={`code-${index}`} code={body} language={lang} />;
+    }
+    const withImages = block.split(/(!\[img\]\([^)]*\))/g).filter(Boolean);
+    return (
+      <div key={`text-${index}`}>
+        {withImages.map((part, partIndex) => {
+          const imageMatch = part.match(/^!\[img\]\(([^|)]+)\|?(\d{1,3})?\)$/);
+          if (imageMatch) {
+            const widthPct = Number(imageMatch[2] || 60);
+            return <img key={`img-${partIndex}`} src={imageMatch[1]} style={{ width: `${Math.max(10, Math.min(100, widthPct))}%`, height: "auto" }} alt="Blog content" />;
+          }
+          const tokens = part.split(/(\*\*[^*]+\*\*|__[^_]+__|\[tc\][\s\S]*?\[\/tc\])/g).filter(Boolean);
+          return <p key={`line-${partIndex}`}>{tokens.map((token, tokenIndex) => token.startsWith("**") && token.endsWith("**") ? <strong key={tokenIndex}>{token.slice(2, -2)}</strong> : token.startsWith("__") && token.endsWith("__") ? <u key={tokenIndex}>{token.slice(2, -2)}</u> : token.startsWith("[tc]") && token.endsWith("[/tc]") ? <span key={tokenIndex} className="text-center-block">{token.slice(4, -5)}</span> : <span key={tokenIndex}>{token}</span>)}</p>;
+        })}
+      </div>
+    );
+  });
+}
+
+/**
+ * @param {{code: string, language: string}} props
+ * @returns {JSX.Element}
+ */
+function CodeBlock(props) {
+  const [copied, setCopied] = useState(false);
+  const normalizedCode = String(props.code || "").replace(/\r\n/g, "\n");
+  const lines = normalizedCode.split("\n");
+  const lang = props.language && hljs.getLanguage(props.language) ? props.language : "";
+
+  const onCopy = async () => {
+    const [, err] = await copyToClipboard(normalizedCode);
+    if (err) {
+      setCopied(false);
+      return;
+    }
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1200);
+  };
+
+  return (
+    <div className="code-shell">
+      <div className="code-head">
+        <span className="code-lang">{lang || TEXT_CODE_FALLBACK_LANG}</span>
+        <button className="code-copy-btn" type="button" onClick={onCopy}>{copied ? TEXT_CODE_COPIED : TEXT_CODE_COPY}</button>
+      </div>
+      <div className="code-body">
+        {lines.map((line, index) => {
+          const rawLine = line || " ";
+          const highlighted = lang ? hljs.highlight(rawLine, { language: lang }).value : hljs.highlightAuto(rawLine).value;
+          return (
+            <div className="code-line" key={`line-${index}`}>
+              <span className="line-no">{index + 1}</span>
+              <code className="hljs" dangerouslySetInnerHTML={{ __html: highlighted }} />
+            </div>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 
@@ -435,7 +995,7 @@ body { margin: 0; background: radial-gradient(circle at 15% 15%, #1b2637 0, var(
 .nav-link:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .nav-link.is-active { border-color: var(--accent); background: rgba(244,185,66,0.14); color: var(--accent-soft); }
 .nav-ext { margin-left: 6px; font-size: 0.78rem; opacity: 0.85; }
-.main-grid { display: grid; gap: 16px; padding: 24px 0 28px; flex: 1; width: min(1120px, 92vw); }
+.main-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; padding: 24px 0 28px; flex: 1; width: min(1120px, 92vw); }
 .panel { background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01)); border: 1px solid var(--line); padding: 20px; }
 .motd-panel { border-color: var(--accent); box-shadow: inset 0 0 0 1px rgba(244,185,66,0.2); }
 .motd-quote { margin: 8px 0 0; color: var(--ink) !important; font-size: clamp(1.05rem, 1.6vw, 1.3rem); line-height: 1.5; font-weight: 600; }
@@ -488,7 +1048,81 @@ body { margin: 0; background: radial-gradient(circle at 15% 15%, #1b2637 0, var(
 .xp-role { margin: 0; color: var(--ink); font-weight: 600; }
 .xp-time { margin: 0; color: var(--muted); font-size: 0.9rem; }
 .cta-link { display: inline-block; border: 1px solid var(--accent); color: var(--accent-soft); text-decoration: none; padding: 8px 12px; font-weight: 600; }
+.panel a.cta-link { border-bottom: 1px solid var(--accent); }
 .cta-link:hover { background: rgba(244,185,66,0.12); }
+.cta-button { background: transparent; cursor: pointer; font: inherit; }
+.cta-danger { border-color: #d26b6b; color: #ffd0d0; }
+.blog-toolbar { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+.blog-shell { width: 100%; max-width: 1060px; margin: 0 auto; }
+.blog-header { display: flex; justify-content: space-between; gap: 20px; align-items: flex-start; margin-bottom: 14px; }
+.blog-subhead { margin: 4px 0 0; color: #aebacd !important; }
+.blog-header-actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
+.tab-btn { border: 1px solid var(--line); background: #111826; color: var(--ink); padding: 8px 12px; cursor: pointer; font: inherit; }
+.tab-btn.is-active { border-color: var(--accent); color: var(--accent-soft); background: rgba(244,185,66,0.12); }
+.tab-btn.danger { border-color: #d26b6b; color: #ffd0d0; }
+.blog-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.blog-card { border: 1px solid var(--line); background: var(--bg-soft); padding: 14px; display: grid; gap: 10px; }
+.blog-card h3 { margin: 0; font-size: 1.1rem; }
+.blog-card-summary { margin: 0; color: #b7c3d3 !important; }
+.blog-card-meta { display: flex; gap: 8px; flex-wrap: wrap; }
+.meta-pill { border: 1px solid var(--line); padding: 2px 7px; font-size: 0.78rem; color: #b7c3d3; text-transform: uppercase; letter-spacing: 0.05em; }
+.meta-link { text-decoration: none; cursor: pointer; }
+.meta-link:hover { border-color: var(--accent); color: var(--accent-soft); background: rgba(244,185,66,0.1); }
+.blog-dash { display: grid; gap: 12px; }
+.dash-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.dash-card { border: 1px solid var(--line); background: var(--bg-soft); padding: 14px; }
+.dash-card p { margin: 0; font-size: 0.85rem; color: #9db0c8 !important; text-transform: uppercase; letter-spacing: 0.08em; }
+.dash-card h3 { margin: 8px 0 0; font-size: 1.8rem; color: var(--ink); }
+.dash-list { border: 1px solid var(--line); background: var(--bg-soft); padding: 14px; }
+.dash-list h3 { margin: 0 0 10px; }
+.dash-rows { display: grid; gap: 8px; }
+.dash-row { display: flex; justify-content: space-between; gap: 12px; padding: 8px 0; border-bottom: 1px dashed rgba(255,255,255,0.08); }
+.dash-row:last-child { border-bottom: 0; }
+.dash-row-main { min-width: 0; display: grid; gap: 6px; }
+.dash-row-main a { font-weight: 600; }
+.dash-row-meta { display: flex; gap: 8px; flex-wrap: wrap; }
+.dash-actions { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+.pagination-row { margin-top: 12px; display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.pagination-btn[disabled] { opacity: 0.5; cursor: not-allowed; }
+.pagination-meta { color: #9db0c8; font-size: 0.86rem; letter-spacing: 0.04em; text-transform: uppercase; }
+.blog-pagination-wrap { grid-column: 1 / -1; }
+.editor-shell { display: grid; grid-template-columns: minmax(0, 1fr) 280px; gap: 14px; }
+.editor-main { border: 1px solid var(--line); background: var(--bg-soft); padding: 14px; display: grid; gap: 10px; }
+.editor-side { display: grid; gap: 12px; align-content: start; }
+.editor-side-card { border: 1px solid var(--line); background: var(--bg-soft); padding: 12px; display: grid; gap: 8px; }
+.editor-side-card h3 { margin: 0; }
+.editor-help { margin: 0; color: #9db0c8 !important; font-size: 0.85rem; }
+.editor-preview { border: 1px solid var(--line); background: #0b121c; padding: 10px; margin-top: 6px; }
+.blog-login-card { width: min(460px, 100%); border: 1px solid var(--line); background: var(--bg-soft); padding: 14px; display: grid; gap: 10px; }
+.blog-form { display: grid; gap: 10px; }
+.blog-form label { display: grid; gap: 6px; color: var(--muted); }
+.blog-form input, .blog-form textarea, .blog-form select { background: #0f1725; border: 1px solid #33435a; color: var(--ink); padding: 8px; font: inherit; }
+.blog-check { display: flex !important; align-items: center; gap: 8px; }
+.blog-row-actions { display: flex; gap: 8px; }
+.blog-editor-toolbar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.blog-post-detail { width: 100%; max-width: 900px; margin: 0 auto; padding: 30px 34px; background: linear-gradient(180deg, #101a2a, #0e1623); border-color: #2d3d53; display: flex; flex-direction: column; min-height: 72vh; }
+.blog-post-topbar { display: flex; justify-content: space-between; margin-bottom: 12px; }
+.blog-post-detail h2 { font-size: clamp(1.9rem, 3.1vw, 2.5rem); line-height: 1.1; margin: 4px 0 12px; color: #f2f6fb; }
+.blog-post-summary { font-size: 1.08rem; line-height: 1.7; margin: 0 0 16px; color: #b8c8dc !important; max-width: 70ch; }
+.blog-post-meta { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
+.blog-detail-content { border-top: 1px solid rgba(255,255,255,0.08); padding-top: 16px; }
+.blog-detail-content p { margin: 0 0 12px; color: #d8e1ee; }
+.blog-detail-nav { justify-content: space-between; margin-top: auto; padding-top: 20px; }
+.code-shell { margin: 12px 0; border: 1px solid #2f3a4a; background: #0b1118; border-radius: 8px; overflow: hidden; }
+.code-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 8px 10px; border-bottom: 1px solid #2f3a4a; background: #101824; }
+.code-lang { color: #9cb3d4; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.08em; }
+.code-copy-btn { border: 1px solid #45608a; background: #172235; color: #dce7f7; font: inherit; font-size: 0.78rem; padding: 4px 10px; border-radius: 6px; cursor: pointer; }
+.code-copy-btn:hover { background: #1d2c44; border-color: #5d7eb3; }
+.code-body { overflow-x: auto; }
+.code-line { display: grid; grid-template-columns: 42px 1fr; gap: 10px; align-items: baseline; padding: 0 12px; min-height: 1.6rem; }
+.line-no { color: #6f809b; text-align: right; user-select: none; font: 500 0.75rem/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; }
+.code-line code { display: block; white-space: pre; color: #dce7f7; font: 500 0.86rem/1.6 ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; }
+.blog-content img { display: block; margin: 8px 0; border: 1px solid var(--line); }
+.text-center-block { display: block; text-align: center; }
+.blog-inline-form { display: flex; gap: 8px; }
+.blog-inline-form input { flex: 1; }
+.blog-error { color: #ff9f9f !important; }
+.blog-success { color: #a8ffb2 !important; }
 .pdf-export, .pdf-export * { color: #111111 !important; }
 .pdf-export { background: #ffffff !important; border-color: #d1d5db !important; }
 .pdf-export .resume-block { background: #ffffff !important; border-color: #d1d5db !important; }
@@ -502,6 +1136,10 @@ body { margin: 0; background: radial-gradient(circle at 15% 15%, #1b2637 0, var(
 .footer-year { color: var(--muted); font-size: 0.92rem; }
 @media (max-width: 760px) {
   .kv-grid, .cards { grid-template-columns: 1fr; }
+  .blog-grid, .dash-stats, .editor-shell { grid-template-columns: 1fr; }
+  .blog-header { flex-direction: column; }
+  .blog-header-actions { justify-content: flex-start; }
+  .blog-post-detail { padding: 20px 16px; }
   .hero-intro-grid, .home-grid { grid-template-columns: 1fr; }
   .home-grid .panel:first-child { grid-column: span 1; }
   .home-anchor-image { width: min(320px, 100%); }
