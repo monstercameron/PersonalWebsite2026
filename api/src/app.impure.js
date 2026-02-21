@@ -23,6 +23,7 @@ const LOG_EVENT_CACHE_HIT = "cache_hit";
 const CACHE_KEY_PROMPTS_LATEST = "prompts:list:latest";
 const CACHE_PREFIX_PROMPTS = "prompts:";
 const CACHE_PREFIX_AI_REPLY = "ai:reply:";
+const CACHE_PREFIX_MOTD = "motd:";
 const SQLITE_SCHEMA = `
   CREATE TABLE IF NOT EXISTS prompts (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -43,6 +44,8 @@ const maxLogBytes = 1_000_000;
 const maxLogFiles = 5;
 const defaultPromptsCacheTtlMs = 15000;
 const defaultAiReplyCacheTtlMs = 300000;
+const motdCacheTtlMs = 86_400_000;
+const MOTD_PROMPT_PREFIX = "Generate one short inspiring quote for software engineers. Keep it under 22 words. No markdown. No attribution line. Date key:";
 
 const dbFile = resolve(process.cwd(), DATA_DIR, DB_FILE);
 mkdirSync(dirname(dbFile), { recursive: true });
@@ -154,6 +157,39 @@ export async function generateReply(modelPrompt) {
   }
 
   return { value: output, err: null };
+}
+
+/**
+ * @returns {Promise<Result<string>>}
+ */
+export async function getMessageOfDay() {
+  const dateKey = new Date().toISOString().slice(0, 10);
+  const cacheKey = `${CACHE_PREFIX_MOTD}${dateKey}`;
+  const cacheRes = readCache(cacheKey);
+  if (cacheRes.err) {
+    return { value: null, err: cacheRes.err };
+  }
+
+  if (cacheRes.value) {
+    const logRes = logEvent(LOG_LEVEL_INFO, LOG_EVENT_CACHE_HIT, { cacheKey });
+    if (logRes.err) {
+      return { value: null, err: logRes.err };
+    }
+    return { value: cacheRes.value, err: null };
+  }
+
+  const replyRes = await generateReply(`${MOTD_PROMPT_PREFIX} ${dateKey}`);
+  if (replyRes.err) {
+    return { value: null, err: replyRes.err };
+  }
+
+  const cleanQuote = String(replyRes.value).replace(/\s+/g, " ").trim();
+  const writeRes = writeCache(cacheKey, cleanQuote, motdCacheTtlMs);
+  if (writeRes.err) {
+    return { value: null, err: writeRes.err };
+  }
+
+  return { value: cleanQuote, err: null };
 }
 
 /**

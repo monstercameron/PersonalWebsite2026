@@ -13,6 +13,8 @@ const PDF_UNIT = "pt";
 const PDF_PORTRAIT = "p";
 const PDF_MARGIN = 20;
 const PDF_FILENAME_DEFAULT = "EarlCameron-Resume.pdf";
+const API_MESSAGE_OF_DAY_PATH = "/api/message-of-day";
+const MESSAGE_CACHE_TTL_MS = 60_000;
 
 /**
  * @returns {Result<number>}
@@ -65,6 +67,22 @@ export async function apiRequestCached(url, options, ttlMs = DEFAULT_CACHE_TTL_M
 
   apiCache.set(cacheKey, { value: resultRes.value, expiresAt: now + ttlMs });
   return { value: resultRes.value, err: null };
+}
+
+/**
+ * @returns {Promise<Result<string>>}
+ */
+export async function fetchMessageOfDay() {
+  const motdRes = await apiRequestCached(API_MESSAGE_OF_DAY_PATH, undefined, MESSAGE_CACHE_TTL_MS);
+  if (motdRes.err) {
+    return { value: null, err: motdRes.err };
+  }
+
+  if (!motdRes.value || typeof motdRes.value.quote !== "string") {
+    return { value: null, err: new Error("Invalid message-of-day response") };
+  }
+
+  return { value: motdRes.value.quote, err: null };
 }
 
 /**

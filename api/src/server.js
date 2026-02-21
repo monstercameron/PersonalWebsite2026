@@ -4,6 +4,7 @@ import { serve } from "@hono/node-server";
 import { buildModelPrompt, toPublicError, validatePromptBody } from "./app.pure.js";
 import {
   fromPromise,
+  getMessageOfDay,
   generateReplyCached,
   listPromptsCached,
   logEvent,
@@ -23,11 +24,14 @@ const LEVEL_ERROR = "error";
 const PATH_API_HEALTH = "/api/health";
 const PATH_API_PROMPTS = "/api/prompts";
 const PATH_API_AI = "/api/ai";
+const PATH_API_MOTD = "/api/message-of-day";
 const STATUS_BAD_REQUEST = 400;
 const STATUS_SERVER_ERROR = 500;
 const STATUS_BAD_GATEWAY = 502;
+const STATUS_SERVICE_UNAVAILABLE = 503;
 const PROMPTS_CACHE_TTL_MS = 15000;
 const AI_CACHE_TTL_MS = 300000;
+const MOTD_CACHE_HEADER = "public, max-age=3600, stale-while-revalidate=86400";
 const ENV_API_PORT = "API_PORT";
 const DEFAULT_API_PORT = 8787;
 const LOG_BOOT_TEXT = "API server running on";
@@ -123,6 +127,17 @@ app.post(PATH_API_AI, async (c) => {
 
   c.header(CACHE_CONTROL, CACHE_NO_STORE);
   return c.json({ reply: replyRes.value });
+});
+
+app.get(PATH_API_MOTD, async (c) => {
+  const motdRes = await getMessageOfDay();
+  if (motdRes.err) {
+    const publicErrRes = toPublicError(motdRes.err);
+    return c.json(publicErrRes.value, STATUS_SERVICE_UNAVAILABLE);
+  }
+
+  c.header(CACHE_CONTROL, MOTD_CACHE_HEADER);
+  return c.json({ quote: motdRes.value });
 });
 
 const port = Number(process.env[ENV_API_PORT] || DEFAULT_API_PORT);
