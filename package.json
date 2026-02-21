@@ -1,0 +1,22 @@
+﻿{
+  "name": "website_2025",
+  "private": true,
+  "workspaces": [
+    "web",
+    "api"
+  ],
+  "scripts": {
+    "install:all": "npm install --workspaces",
+    "dev": "concurrently \"npm run dev -w api\" \"npm run dev -w web\"",
+    "dev:bg:start": "powershell -ExecutionPolicy Bypass -File ./scripts/dev-start.ps1",
+    "dev:bg:stop": "powershell -ExecutionPolicy Bypass -File ./scripts/dev-stop.ps1",
+    "dev:bg:logs": "powershell -ExecutionPolicy Bypass -File ./scripts/dev-logs.ps1",
+    "build": "npm run build -w web && npm run build -w api",
+    "lint": "npm run lint -w web && npm run lint -w api",
+    "test": "npm run test -w web && npm run test -w api"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1"
+  }
+}
+

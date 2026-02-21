@@ -1,0 +1,25 @@
+﻿{
+  "name": "api",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node --watch src/server.js",
+    "start": "node src/server.js",
+    "build": "node -e \"console.log('no build step for api')\"",
+    "lint": "eslint .",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@hono/node-server": "^1.13.8",
+    "better-sqlite3": "^11.10.0",
+    "hono": "^4.9.7",
+    "openai": "^5.12.2"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.34.0",
+    "eslint": "^9.34.0",
+    "eslint-plugin-jsdoc": "^50.8.0",
+    "globals": "^16.3.0",
+    "vitest": "^3.2.4"
+  }
+}
