@@ -2,9 +2,9 @@ import { randomUUID } from "node:crypto";
 import "dotenv/config";
 import { Hono } from "hono";
 import { serve } from "@hono/node-server";
+import { secureHeaders } from "hono/secure-headers";
 import jwt from "jsonwebtoken";
 import cron from "node-cron";
-import { runAnimeReleaseCheckJob } from "./cron-anime-release-check.js";
 import {
   buildModelPrompt,
   toPublicError,
@@ -36,6 +36,7 @@ import {
   listTrackedAnime,
   logEvent,
   removeTrackedAnime,
+  runAnimeReleaseCheckJob,
   searchAniListAiringCached,
   getBudgetProfileJson,
   saveUploadedImage,
@@ -60,6 +61,10 @@ const EVENT_ANIME_CRON_TICK_START = "anime_cron_tick_start";
 const EVENT_ANIME_CRON_TICK_COMPLETE = "anime_cron_tick_complete";
 const EVENT_ANIME_CRON_TICK_ERROR = "anime_cron_tick_error";
 const EVENT_ANIME_CRON_TICK_SKIPPED = "anime_cron_tick_skipped";
+const EVENT_RATE_LIMIT_EXCEEDED = "rate_limit_exceeded";
+const EVENT_SHUTDOWN_SIGNAL = "shutdown_signal";
+const EVENT_SHUTDOWN_COMPLETE = "shutdown_complete";
+const EVENT_SHUTDOWN_ERROR = "shutdown_error";
 const LEVEL_INFO = "info";
 const LEVEL_ERROR = "error";
 const PATH_API_HEALTH = "/api/health";
@@ -89,7 +94,12 @@ const QUERY_REFRESH = "refresh";
 const QUERY_DEBUG_MESSAGE_CAMEL = "debugMessage";
 const QUERY_DEBUG_MESSAGE_SNAKE = "debug_message";
 const HEADER_SET_COOKIE = "Set-Cookie";
+const HEADER_RETRY_AFTER = "Retry-After";
+const HEADER_X_FORWARDED_FOR = "x-forwarded-for";
+const HEADER_X_REAL_IP = "x-real-ip";
 const CODE_NOT_FOUND = "NOT_FOUND";
+const CODE_RATE_LIMITED = "RATE_LIMITED";
+const CODE_SHUTTING_DOWN = "SHUTTING_DOWN";
 const ERR_BUDGET_PROFILE_NOT_FOUND = "Budget profile not found";
 const ERR_BUDGET_PROFILE_PAYLOAD_REQUIRED = "Budget profile payload is required";
 const ERR_ANIME_SEARCH_QUERY_REQUIRED = "Anime search query is required";
@@ -102,6 +112,7 @@ const STATUS_NOT_FOUND = 404;
 const STATUS_SERVER_ERROR = 500;
 const STATUS_BAD_GATEWAY = 502;
 const STATUS_SERVICE_UNAVAILABLE = 503;
+const STATUS_TOO_MANY_REQUESTS = 429;
 const PROMPTS_CACHE_TTL_MS = 15000;
 const AI_CACHE_TTL_MS = 300000;
 const BLOG_CACHE_TTL_MS = 15000;
@@ -128,6 +139,8 @@ const COOKIE_ADMIN_TOKEN = "blog_admin_jwt";
 const ADMIN_SESSION_TTL_MS_DEFAULT = 900000;
 const ADMIN_SESSION_TTL_MS_DEV = 3600000;
 const LOG_BOOT_TEXT = "API server running on";
+const ERR_SERVER_SHUTTING_DOWN = "Server is restarting, please retry shortly";
+const ERR_RATE_LIMITED = "Too many requests";
 const ERR_ADMIN_PASSWORD_REQUIRED = "Admin password is required";
 const ERR_ADMIN_PASSWORD_INVALID = "Invalid admin password";
 const ERR_ADMIN_TOKEN_REQUIRED = "Admin token is required";
@@ -138,11 +151,36 @@ const ALLOWED_IMAGE_TYPES = new Set(["image/png", "image/jpeg", "image/jpg", "im
 const JWT_ALG = "HS256";
 const JWT_SECRET_FALLBACK = "local-blog-admin-jwt-secret-change-me";
 const ERR_ADMIN_JWT_SECRET_REQUIRED = "BLOG_ADMIN_JWT_SECRET is required in production";
+const RATE_LIMIT_SCOPE_AI = "ai";
+const RATE_LIMIT_SCOPE_REFRESH = "refresh";
+const RATE_LIMIT_SCOPE_LOGIN = "login";
+const RATE_LIMIT_KEY_UNKNOWN = "unknown";
+const RATE_LIMIT_WINDOW_AI_MS = 60_000;
+const RATE_LIMIT_WINDOW_REFRESH_MS = 60_000;
+const RATE_LIMIT_WINDOW_LOGIN_MS = 15 * 60_000;
+const RATE_LIMIT_MAX_AI = 15;
+const RATE_LIMIT_MAX_REFRESH = 12;
+const RATE_LIMIT_MAX_LOGIN = 10;
+const RATE_LIMIT_STORE_MAX = 5000;
+const SHUTDOWN_FORCE_EXIT_MS = 10_000;
+const SIGNAL_SIGINT = "SIGINT";
+const SIGNAL_SIGTERM = "SIGTERM";
+const TIMER_UNREF_FN = "unref";
 
 const app = new Hono();
 let isAnimeCronRunning = false;
+let animeCronTask = null;
+let isServerShuttingDown = false;
+let isShutdownInProgress = false;
+const rateLimitStore = new Map();
+
+app.use("*", secureHeaders());
 
 app.use("*", async (c, next) => {
+  if (isServerShuttingDown) {
+    c.header(CACHE_CONTROL, CACHE_NO_STORE);
+    return c.json({ message: ERR_SERVER_SHUTTING_DOWN, code: CODE_SHUTTING_DOWN }, STATUS_SERVICE_UNAVAILABLE);
+  }
   const requestId = c.req.header(HEADER_REQUEST_ID) || randomUUID();
   const startedAt = Date.now();
   c.set("requestId", requestId);
@@ -199,6 +237,14 @@ app.get(PATH_API_PROMPTS, (c) => {
 });
 
 app.post(PATH_API_AI, async (c) => {
+  const rateRes = enforceRateLimit(c, RATE_LIMIT_SCOPE_AI, RATE_LIMIT_MAX_AI, RATE_LIMIT_WINDOW_AI_MS);
+  if (rateRes.err) {
+    const publicErrRes = toPublicError(rateRes.err);
+    return c.json(publicErrRes.value, STATUS_SERVER_ERROR);
+  }
+  if (rateRes.value) {
+    return rateRes.value;
+  }
   const bodyRes = await fromPromise(c.req.json());
   if (bodyRes.err) {
     const publicErrRes = toPublicError(bodyRes.err);
@@ -236,6 +282,16 @@ app.post(PATH_API_AI, async (c) => {
 app.get(PATH_API_MOTD, async (c) => {
   const refreshRaw = String(c.req.query(QUERY_REFRESH) || "").trim().toLowerCase();
   const forceRefresh = refreshRaw === "1" || refreshRaw === "true" || refreshRaw === "yes";
+  if (forceRefresh) {
+    const rateRes = enforceRateLimit(c, RATE_LIMIT_SCOPE_REFRESH, RATE_LIMIT_MAX_REFRESH, RATE_LIMIT_WINDOW_REFRESH_MS);
+    if (rateRes.err) {
+      const publicErrRes = toPublicError(rateRes.err);
+      return c.json(publicErrRes.value, STATUS_SERVER_ERROR);
+    }
+    if (rateRes.value) {
+      return rateRes.value;
+    }
+  }
   const motdRes = await getMessageOfDay(forceRefresh);
   if (motdRes.err) {
     const publicErrRes = toPublicError(motdRes.err);
@@ -249,6 +305,16 @@ app.get(PATH_API_MOTD, async (c) => {
 app.get(PATH_API_HOME_CONTENT, async (c) => {
   const refreshRaw = String(c.req.query(QUERY_REFRESH) || "").trim().toLowerCase();
   const forceRefresh = refreshRaw === "1" || refreshRaw === "true" || refreshRaw === "yes";
+  if (forceRefresh) {
+    const rateRes = enforceRateLimit(c, RATE_LIMIT_SCOPE_REFRESH, RATE_LIMIT_MAX_REFRESH, RATE_LIMIT_WINDOW_REFRESH_MS);
+    if (rateRes.err) {
+      const publicErrRes = toPublicError(rateRes.err);
+      return c.json(publicErrRes.value, STATUS_SERVER_ERROR);
+    }
+    if (rateRes.value) {
+      return rateRes.value;
+    }
+  }
   const contentRes = await getHomePageContent(forceRefresh);
   if (contentRes.err) {
     const publicErrRes = toPublicError(contentRes.err);
@@ -290,6 +356,14 @@ app.get(PATH_API_BLOG_TAGS, (c) => {
 });
 
 app.post(PATH_API_BLOGS_ADMIN_LOGIN, async (c) => {
+  const rateRes = enforceRateLimit(c, RATE_LIMIT_SCOPE_LOGIN, RATE_LIMIT_MAX_LOGIN, RATE_LIMIT_WINDOW_LOGIN_MS);
+  if (rateRes.err) {
+    const publicErrRes = toPublicError(rateRes.err);
+    return c.json(publicErrRes.value, STATUS_SERVER_ERROR);
+  }
+  if (rateRes.value) {
+    return rateRes.value;
+  }
   const bodyRes = await fromPromise(c.req.json());
   if (bodyRes.err) {
     const publicErrRes = toPublicError(bodyRes.err);
@@ -956,7 +1030,7 @@ function isProductionEnv() {
 }
 
 const port = Number(process.env[ENV_API_PORT] || DEFAULT_API_PORT);
-serve({ fetch: app.fetch, port });
+const serverHandle = serve({ fetch: app.fetch, port });
 const bootLogRes = logEvent(LEVEL_INFO, EVENT_API_BOOT, { port });
 if (bootLogRes.err) {
   console.error(bootLogRes.err.message);
@@ -965,6 +1039,10 @@ console.log(`${LOG_BOOT_TEXT} ${port}`);
 const cronBootRes = startAnimeReleaseCron();
 if (cronBootRes.err) {
   console.error(cronBootRes.err.message);
+}
+const shutdownHandlersRes = registerShutdownHandlers(serverHandle);
+if (shutdownHandlersRes.err) {
+  console.error(shutdownHandlersRes.err.message);
 }
 
 /**
@@ -991,12 +1069,215 @@ function startAnimeReleaseCron() {
     return { value: null, err: new Error("Invalid cron schedule") };
   }
 
-  cron.schedule(schedule, () => {
+  animeCronTask = cron.schedule(schedule, () => {
     void runAnimeReleaseCronTick();
   }, { timezone });
   const logRes = logEvent(LEVEL_INFO, EVENT_ANIME_CRON_BOOT, { schedule, timezone });
   if (logRes.err) {
     console.error(logRes.err.message);
+  }
+  return { value: true, err: null };
+}
+
+/**
+ * Critical path: simple in-memory guardrail for AI/OpenAI-backed and auth endpoints.
+ * @param {import("hono").Context} c
+ * @param {string} scope
+ * @param {number} maxRequests
+ * @param {number} windowMs
+ * @returns {{ value: Response | null, err: Error | null }}
+ */
+function enforceRateLimit(c, scope, maxRequests, windowMs) {
+  const ipRes = getClientIp(c);
+  if (ipRes.err) {
+    return { value: null, err: ipRes.err };
+  }
+  const now = Date.now();
+  const cleanupRes = cleanupRateLimitStore(now);
+  if (cleanupRes.err) {
+    return { value: null, err: cleanupRes.err };
+  }
+  const key = `${scope}:${ipRes.value}`;
+  const checkRes = consumeRateLimitToken(key, maxRequests, windowMs, now);
+  if (checkRes.err) {
+    return { value: null, err: checkRes.err };
+  }
+  c.header(HEADER_RETRY_AFTER, String(checkRes.value.retryAfterSec));
+  if (checkRes.value.allowed) {
+    return { value: null, err: null };
+  }
+  const logRes = logEvent(LEVEL_INFO, EVENT_RATE_LIMIT_EXCEEDED, {
+    path: c.req.path,
+    method: c.req.method,
+    scope,
+    ip: ipRes.value,
+    limit: maxRequests,
+    windowMs,
+    retryAfterSec: checkRes.value.retryAfterSec
+  });
+  if (logRes.err) {
+    console.error(logRes.err.message);
+  }
+  c.header(CACHE_CONTROL, CACHE_NO_STORE);
+  return {
+    value: c.json(
+      { message: ERR_RATE_LIMITED, code: CODE_RATE_LIMITED, retryAfterSec: checkRes.value.retryAfterSec },
+      STATUS_TOO_MANY_REQUESTS
+    ),
+    err: null
+  };
+}
+
+/**
+ * @param {import("hono").Context} c
+ * @returns {{ value: string | null, err: Error | null }}
+ */
+function getClientIp(c) {
+  const forwarded = String(c.req.header(HEADER_X_FORWARDED_FOR) || "").trim();
+  if (forwarded) {
+    const first = forwarded.split(",")[0]?.trim();
+    return { value: first || RATE_LIMIT_KEY_UNKNOWN, err: null };
+  }
+  const realIp = String(c.req.header(HEADER_X_REAL_IP) || "").trim();
+  if (realIp) {
+    return { value: realIp, err: null };
+  }
+  return { value: RATE_LIMIT_KEY_UNKNOWN, err: null };
+}
+
+/**
+ * @param {number} now
+ * @returns {{ value: boolean | null, err: Error | null }}
+ */
+function cleanupRateLimitStore(now) {
+  if (rateLimitStore.size <= RATE_LIMIT_STORE_MAX) {
+    return { value: true, err: null };
+  }
+  for (const [key, value] of rateLimitStore.entries()) {
+    if (!value || value.resetAtMs <= now) {
+      rateLimitStore.delete(key);
+    }
+  }
+  return { value: true, err: null };
+}
+
+/**
+ * @param {string} key
+ * @param {number} maxRequests
+ * @param {number} windowMs
+ * @param {number} now
+ * @returns {{ value: { allowed: boolean, retryAfterSec: number } | null, err: Error | null }}
+ */
+function consumeRateLimitToken(key, maxRequests, windowMs, now) {
+  const current = rateLimitStore.get(key);
+  if (!current || current.resetAtMs <= now) {
+    rateLimitStore.set(key, { count: 1, resetAtMs: now + windowMs });
+    return { value: { allowed: true, retryAfterSec: Math.max(1, Math.ceil(windowMs / 1000)) }, err: null };
+  }
+  current.count += 1;
+  rateLimitStore.set(key, current);
+  const retryAfterSec = Math.max(1, Math.ceil((current.resetAtMs - now) / 1000));
+  if (current.count > maxRequests) {
+    return { value: { allowed: false, retryAfterSec }, err: null };
+  }
+  return { value: { allowed: true, retryAfterSec }, err: null };
+}
+
+/**
+ * @param {import("@hono/node-server").ServerType} server
+ * @returns {{ value: boolean | null, err: Error | null }}
+ */
+function registerShutdownHandlers(server) {
+  process.on(SIGNAL_SIGINT, () => {
+    void handleShutdownSignal(SIGNAL_SIGINT, server);
+  });
+  process.on(SIGNAL_SIGTERM, () => {
+    void handleShutdownSignal(SIGNAL_SIGTERM, server);
+  });
+  return { value: true, err: null };
+}
+
+/**
+ * Critical path: stop new traffic, stop cron scheduling, and close the Node server cleanly.
+ * @param {string} signal
+ * @param {import("@hono/node-server").ServerType} server
+ * @returns {Promise<{ value: boolean | null, err: Error | null }>}
+ */
+async function handleShutdownSignal(signal, server) {
+  if (isShutdownInProgress) {
+    return { value: true, err: null };
+  }
+  isShutdownInProgress = true;
+  isServerShuttingDown = true;
+
+  const logRes = logEvent(LEVEL_INFO, EVENT_SHUTDOWN_SIGNAL, { signal });
+  if (logRes.err) {
+    console.error(logRes.err.message);
+  }
+
+  stopAnimeReleaseCronTask();
+  const forceTimer = setTimeout(() => {
+    process.exit(1);
+  }, SHUTDOWN_FORCE_EXIT_MS);
+  if (forceTimer && typeof forceTimer[TIMER_UNREF_FN] === "function") {
+    forceTimer[TIMER_UNREF_FN]();
+  }
+
+  const closeRes = await closeNodeServer(server);
+  clearTimeout(forceTimer);
+  if (closeRes.err) {
+    const errLogRes = logEvent(LEVEL_ERROR, EVENT_SHUTDOWN_ERROR, { signal, error: closeRes.err.message });
+    if (errLogRes.err) {
+      console.error(errLogRes.err.message);
+    }
+    process.exit(1);
+    return { value: null, err: closeRes.err };
+  }
+
+  const doneLogRes = logEvent(LEVEL_INFO, EVENT_SHUTDOWN_COMPLETE, { signal });
+  if (doneLogRes.err) {
+    console.error(doneLogRes.err.message);
+  }
+  process.exit(0);
+  return { value: true, err: null };
+}
+
+/**
+ * @returns {{ value: boolean | null, err: Error | null }}
+ */
+function stopAnimeReleaseCronTask() {
+  if (!animeCronTask) {
+    return { value: true, err: null };
+  }
+  if (typeof animeCronTask.stop === "function") {
+    animeCronTask.stop();
+  }
+  if (typeof animeCronTask.destroy === "function") {
+    animeCronTask.destroy();
+  }
+  animeCronTask = null;
+  return { value: true, err: null };
+}
+
+/**
+ * @param {import("@hono/node-server").ServerType} server
+ * @returns {Promise<{ value: boolean | null, err: Error | null }>}
+ */
+async function closeNodeServer(server) {
+  if (!server || typeof server.close !== "function") {
+    return { value: true, err: null };
+  }
+  const closeRes = await fromPromise(new Promise((resolve, reject) => {
+    server.close((err) => {
+      if (err) {
+        reject(err);
+        return;
+      }
+      resolve(true);
+    });
+  }));
+  if (closeRes.err) {
+    return { value: null, err: closeRes.err };
   }
   return { value: true, err: null };
 }

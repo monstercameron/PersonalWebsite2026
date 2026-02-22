@@ -151,31 +151,40 @@ const SQL_GET_BUDGET_PROFILE_CURRENT = "SELECT profile_json, saved_at_iso FROM b
 const SQL_LIST_TRACKED_ANIME = "SELECT id, anilist_id, title, cover_image, anime_status, episodes, anime_format, season_year, site_url, created_at, updated_at FROM tracked_anime ORDER BY updated_at DESC, id DESC LIMIT 300";
 const SQL_UPSERT_TRACKED_ANIME = "INSERT INTO tracked_anime (anilist_id, title, cover_image, anime_status, episodes, anime_format, season_year, site_url, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(anilist_id) DO UPDATE SET title = excluded.title, cover_image = excluded.cover_image, anime_status = excluded.anime_status, episodes = excluded.episodes, anime_format = excluded.anime_format, season_year = excluded.season_year, site_url = excluded.site_url, updated_at = excluded.updated_at";
 const SQL_DELETE_TRACKED_ANIME_BY_ANILIST_ID = "DELETE FROM tracked_anime WHERE anilist_id = ?";
+const SQL_LIST_TRACKED_ANIME_RELEASE_CHECK = "SELECT id, anilist_id, title, episodes, anime_status FROM tracked_anime ORDER BY id ASC";
+const SQL_UPDATE_TRACKED_ANIME_RELEASE_CHECK = "UPDATE tracked_anime SET episodes = ?, anime_status = ?, updated_at = ? WHERE anilist_id = ?";
 const ERR_BUDGET_PROFILE_JSON_REQUIRED = "Budget profile json is required";
 const ERR_ANIME_QUERY_REQUIRED = "Anime search query is required";
 const ERR_ANILIST_ID_REQUIRED = "AniList id is required";
-const ERR_SLACKANIME_FEED_BASE_URL_REQUIRED = "SlackAnime feed base URL is required";
+const ERR_SLACKANIME_FEED_BASE_URL_REQUIRED = "Anime feed base URL is required";
+const ERR_ANILIST_REQUEST_FAILED_STATUS_PREFIX = "AniList request failed with status";
 const LOG_EVENT_ANIME_CACHE_HIT_HOT = "anime_cache_hit_hot";
 const LOG_EVENT_ANIME_CACHE_HIT_STALE = "anime_cache_hit_stale";
 const LOG_EVENT_ANIME_CACHE_REFRESH_START = "anime_cache_refresh_start";
 const LOG_EVENT_ANIME_CACHE_REFRESH_SUCCESS = "anime_cache_refresh_success";
 const LOG_EVENT_ANIME_CACHE_REFRESH_ERROR = "anime_cache_refresh_error";
 const LOG_EVENT_ANIME_CACHE_INFLIGHT_WAIT = "anime_cache_inflight_wait";
+const LOG_EVENT_ANIME_RELEASE_CHECK_START = "anime_release_check_start";
+const LOG_EVENT_ANIME_RELEASE_CHECK_COMPLETE = "anime_release_check_complete";
+const LOG_EVENT_ANIME_RELEASE_CHECK_UPDATE = "anime_release_check_update";
 const PATH_SLACKANIME_PAGE = "/slackanime";
 const RSS_DATE_FALLBACK = "date unavailable";
-const RSS_FEED_TITLE_TRACKED = "SlackAnime Tracked Releases Feed";
-const RSS_FEED_DESC_TRACKED = "Tracked anime updates and status snapshots.";
-const RSS_FEED_TITLE_QUESTION = "SlackAnime Daily Questions Feed";
-const RSS_FEED_DESC_QUESTION = "Daily anime discussion prompt feed.";
+const RSS_FEED_TITLE_TRACKED = "Anime Release Radar - Tracked Releases";
+const RSS_FEED_DESC_TRACKED = "Tracked show release updates and status snapshots.";
+const RSS_FEED_TITLE_QUESTION = "Anime Release Radar - Daily Prompts";
+const RSS_FEED_DESC_QUESTION = "Daily anime discussion prompts for engagement.";
 const RSS_GUID_PREFIX_TRACKED = "slackanime-tracked-";
 const RSS_GUID_PREFIX_QUESTION = "slackanime-question-";
 const RSS_GUID_PREFIX_DEBUG = "slackanime-debug-";
 const RSS_DEBUG_TITLE = "Debug Message";
 const ANILIST_API_URL = "https://graphql.anilist.co";
+const CONTENT_TYPE_JSON = "application/json";
 const ANILIST_GRAPHQL_QUERY = "query ($search: String) { Page(page: 1, perPage: 12) { media(search: $search, type: ANIME, sort: [POPULARITY_DESC, START_DATE_DESC]) { id title { romaji english native } coverImage { large medium } status episodes format seasonYear siteUrl } } }";
+const ANILIST_GRAPHQL_IDS_QUERY = "query ($ids: [Int]) { Page(page: 1, perPage: 50) { media(id_in: $ids, type: ANIME) { id status episodes } } }";
 const defaultAnimeSearchCacheTtlMs = 1_800_000;
 const defaultAnimeSearchStaleTtlMs = 86_400_000;
 const defaultAnimeQuestionCacheTtlMs = 3_600_000;
+const ANILIST_IDS_CHUNK_SIZE = 40;
 const ANIME_QUESTION_MAX_LEN = 220;
 const DAILY_ANIME_QUESTIONS = [
   "What currently airing anime has the strongest world-building this season?",
@@ -1029,7 +1038,7 @@ async function fetchAnimeRowsAndUpdateCache(normalizedQuery, cacheKey, ttlMs, st
   };
   const responseRes = await fromPromise(fetch(ANILIST_API_URL, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": CONTENT_TYPE_JSON },
     body: JSON.stringify(requestPayload)
   }));
   if (responseRes.err) {
@@ -1081,6 +1090,124 @@ async function fetchAnimeRowsAndUpdateCache(normalizedQuery, cacheKey, ttlMs, st
     return { value: null, err: deleteRes.err };
   }
   return { value: rows, err: null };
+}
+
+/**
+ * @param {Array<number>} ids
+ * @returns {Array<Array<number>>}
+ */
+function chunkAnimeIds(ids) {
+  const chunks = [];
+  let index = 0;
+  while (index < ids.length) {
+    chunks.push(ids.slice(index, index + ANILIST_IDS_CHUNK_SIZE));
+    index += ANILIST_IDS_CHUNK_SIZE;
+  }
+  return chunks;
+}
+
+/**
+ * @param {Array<number>} ids
+ * @returns {Promise<Result<Map<number, {status: string, episodes: number}>>>}
+ */
+async function fetchAniListAnimeReleaseStatesByIds(ids) {
+  const resultMap = new Map();
+  const chunks = chunkAnimeIds(ids);
+  for (const chunk of chunks) {
+    const responseRes = await fromPromise(fetch(ANILIST_API_URL, {
+      method: "POST",
+      headers: { "Content-Type": CONTENT_TYPE_JSON },
+      body: JSON.stringify({
+        query: ANILIST_GRAPHQL_IDS_QUERY,
+        variables: { ids: chunk }
+      })
+    }));
+    if (responseRes.err) {
+      return { value: null, err: responseRes.err };
+    }
+    if (!responseRes.value.ok) {
+      return { value: null, err: new Error(`${ERR_ANILIST_REQUEST_FAILED_STATUS_PREFIX} ${responseRes.value.status}`) };
+    }
+    const jsonRes = await fromPromise(responseRes.value.json());
+    if (jsonRes.err) {
+      return { value: null, err: jsonRes.err };
+    }
+    const mediaRows = Array.isArray(jsonRes.value?.data?.Page?.media) ? jsonRes.value.data.Page.media : [];
+    for (const row of mediaRows) {
+      const id = Number(row?.id || 0);
+      if (id <= 0) {
+        continue;
+      }
+      resultMap.set(id, {
+        status: String(row?.status || "").trim(),
+        episodes: Number(row?.episodes || 0)
+      });
+    }
+  }
+  return { value: resultMap, err: null };
+}
+
+/**
+ * @returns {Promise<Result<boolean>>}
+ */
+export async function runAnimeReleaseCheckJob() {
+  const startLogRes = logEvent(LOG_LEVEL_INFO, LOG_EVENT_ANIME_RELEASE_CHECK_START, { dbFile });
+  if (startLogRes.err) {
+    return { value: null, err: startLogRes.err };
+  }
+
+  const tracked = db.prepare(SQL_LIST_TRACKED_ANIME_RELEASE_CHECK).all();
+  if (!Array.isArray(tracked) || tracked.length < 1) {
+    const completeLogRes = logEvent(LOG_LEVEL_INFO, LOG_EVENT_ANIME_RELEASE_CHECK_COMPLETE, { checked: 0, updated: 0 });
+    if (completeLogRes.err) {
+      return { value: null, err: completeLogRes.err };
+    }
+    return { value: true, err: null };
+  }
+
+  const ids = tracked.map((row) => Number(row?.anilist_id || 0)).filter((id) => id > 0);
+  const remoteRes = await fetchAniListAnimeReleaseStatesByIds(ids);
+  if (remoteRes.err) {
+    return { value: null, err: remoteRes.err };
+  }
+
+  let updatedCount = 0;
+  const nowIso = new Date().toISOString();
+  const updateStmt = db.prepare(SQL_UPDATE_TRACKED_ANIME_RELEASE_CHECK);
+  for (const row of tracked) {
+    const anilistId = Number(row?.anilist_id || 0);
+    if (anilistId <= 0) {
+      continue;
+    }
+    const remote = remoteRes.value.get(anilistId);
+    if (!remote) {
+      continue;
+    }
+    const oldEpisodes = Number(row?.episodes || 0);
+    const oldStatus = String(row?.anime_status || "").trim();
+    const newEpisodes = Number(remote.episodes || 0);
+    const newStatus = String(remote.status || "").trim();
+    if (oldEpisodes === newEpisodes && oldStatus === newStatus) {
+      continue;
+    }
+    updateStmt.run(newEpisodes, newStatus, nowIso, anilistId);
+    updatedCount += 1;
+    const updateLogRes = logEvent(LOG_LEVEL_INFO, LOG_EVENT_ANIME_RELEASE_CHECK_UPDATE, {
+      anilistId,
+      title: String(row?.title || ""),
+      from: { episodes: oldEpisodes, status: oldStatus },
+      to: { episodes: newEpisodes, status: newStatus }
+    });
+    if (updateLogRes.err) {
+      return { value: null, err: updateLogRes.err };
+    }
+  }
+
+  const completeLogRes = logEvent(LOG_LEVEL_INFO, LOG_EVENT_ANIME_RELEASE_CHECK_COMPLETE, { checked: tracked.length, updated: updatedCount });
+  if (completeLogRes.err) {
+    return { value: null, err: completeLogRes.err };
+  }
+  return { value: true, err: null };
 }
 
 /**

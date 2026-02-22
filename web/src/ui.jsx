@@ -1,28 +1,7 @@
 import React, { Suspense, lazy, useEffect, useRef, useState } from "react";
 import { getYearLabel, buildNavItems, getDailyHomeContent } from "./core.pure.js";
-import { createBlog, createBlogCategory, deleteBlog, downloadResumePdf, fetchHomeContent, fetchMessageOfDay, fetchSlackAnimeQuestionOfDay, getBlog, getBlogAdminToken, getBlogsDashboard, getCurrentYear, getPublicBlog, getSlackAnimeFeedUrls, listBlogCategories, listBlogs, listBlogTags, listTrackedSlackAnime, loginBlogAdmin, logoutBlogAdmin, searchSlackAnime, setBlogPublished, trackSlackAnime, untrackSlackAnime, updateBlog, uploadBlogImage } from "./core.impure.js";
-import hljs from "highlight.js/lib/common";
-import "highlight.js/styles/github-dark.css";
+import { createBlog, createBlogCategory, deleteBlog, downloadResumePdf, fetchHomeContent, fetchMessageOfDay, fetchSlackAnimeQuestionOfDay, fromPromise, getBlog, getBlogAdminToken, getBlogsDashboard, getCurrentYear, getPublicBlog, getSlackAnimeFeedUrls, listBlogCategories, listBlogs, listBlogTags, listTrackedSlackAnime, loginBlogAdmin, logoutBlogAdmin, searchSlackAnime, setBlogPublished, trackSlackAnime, untrackSlackAnime, updateBlog, uploadBlogImage } from "./core.impure.js";
 import "./ui.css";
-import javascriptLang from "highlight.js/lib/languages/javascript";
-import typescriptLang from "highlight.js/lib/languages/typescript";
-import goLang from "highlight.js/lib/languages/go";
-import javaLang from "highlight.js/lib/languages/java";
-import csharpLang from "highlight.js/lib/languages/csharp";
-import cssLang from "highlight.js/lib/languages/css";
-import rustLang from "highlight.js/lib/languages/rust";
-
-hljs.registerLanguage("javascript", javascriptLang);
-hljs.registerLanguage("js", javascriptLang);
-hljs.registerLanguage("typescript", typescriptLang);
-hljs.registerLanguage("ts", typescriptLang);
-hljs.registerLanguage("go", goLang);
-hljs.registerLanguage("java", javaLang);
-hljs.registerLanguage("csharp", csharpLang);
-hljs.registerLanguage("cs", csharpLang);
-hljs.registerLanguage("c#", csharpLang);
-hljs.registerLanguage("css", cssLang);
-hljs.registerLanguage("zig", rustLang);
 
 const ARIA_PRIMARY = "Primary";
 const TEXT_INIT_ERROR = "Application failed to initialize.";
@@ -32,12 +11,28 @@ const TEXT_TAGLINE = "Designing buildable systems across software, hardware cons
 const TEXT_EMAIL = "cam@earlcameron.com";
 const LINK_LINKEDIN = "https://www.linkedin.com/in/earl-cameron/";
 const LINK_GITHUB = "https://github.com/monstercameron";
-const LINK_PROFILE_ANCHOR_IMAGE = "/images/profile-anchor.jpg";
+const LINK_PROFILE_ANCHOR_IMAGE = "/images/profile-anchor-720.jpg";
+const LINK_PROFILE_ANCHOR_IMAGE_WEBP = "/images/profile-anchor-720.webp";
+const LINK_PROFILE_ANCHOR_IMAGE_FULL = "/images/profile-anchor.jpg";
 const ALT_PROFILE_ANCHOR_IMAGE = "Earl Cameron in Tokyo at night";
 const LINK_YOUTUBE_VIDEO = "https://www.youtube.com/watch?v=N1dBCwI6A7M";
-const LINK_YOUTUBE_EMBED = "https://www.youtube.com/embed/N1dBCwI6A7M";
+const LINK_YOUTUBE_EMBED = "https://www.youtube-nocookie.com/embed/N1dBCwI6A7M";
+const LINK_YOUTUBE_EMBED_NOCOOKIE_PREFIX = "https://www.youtube-nocookie.com/embed/";
+const LINK_YOUTUBE_THUMB_PREFIX = "https://i.ytimg.com/vi/";
 const TEXT_MOTD_LOADING = "Generating today's message...";
 const TEXT_MOTD_FALLBACK = "Build with intention, ship with clarity, and keep improving one decision at a time.";
+const TEXT_VIDEO_LITE_TITLE = "Play latest YouTube video";
+const TEXT_VIDEO_LITE_CTA = "Load Video";
+const TEXT_CODE_LOADING = "Loading syntax highlighting...";
+const HLJS_STYLE_IMPORT = "highlight.js/styles/github-dark.css";
+const HLJS_CORE_IMPORT = "highlight.js/lib/core";
+const HLJS_JS_IMPORT = "highlight.js/lib/languages/javascript";
+const HLJS_TS_IMPORT = "highlight.js/lib/languages/typescript";
+const HLJS_GO_IMPORT = "highlight.js/lib/languages/go";
+const HLJS_JAVA_IMPORT = "highlight.js/lib/languages/java";
+const HLJS_CSHARP_IMPORT = "highlight.js/lib/languages/csharp";
+const HLJS_CSS_IMPORT = "highlight.js/lib/languages/css";
+const HLJS_RUST_IMPORT = "highlight.js/lib/languages/rust";
 
 const IconHome = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>;
 const IconResume = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>;
@@ -61,6 +56,31 @@ const IconEyeOff = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="n
 const IconTerminal = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>;
 const IconDollar = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>;
 const IconBot = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="10" rx="2"/><circle cx="12" cy="5" r="2"/><path d="M12 7v4"/><line x1="8" y1="16" x2="8" y2="16"/><line x1="16" y1="16" x2="16" y2="16"/></svg>;
+const IconSearch = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>;
+const IconLogIn = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>;
+const IconLogOut = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>;
+const IconBrandMark = () => (
+  <svg className="brand-mark-svg" viewBox="0 0 48 48" fill="none" aria-hidden="true">
+    <defs>
+      <linearGradient id="brandRingGradient" x1="8" y1="8" x2="40" y2="40" gradientUnits="userSpaceOnUse">
+        <stop offset="0%" stopColor="rgba(255,255,255,0.95)" />
+        <stop offset="55%" stopColor="rgba(255,255,255,0.55)" />
+        <stop offset="100%" stopColor="rgba(234,179,8,0.95)" />
+      </linearGradient>
+      <linearGradient id="brandScanGradient" x1="10" y1="0" x2="38" y2="48" gradientUnits="userSpaceOnUse">
+        <stop offset="0%" stopColor="rgba(234,179,8,0)" />
+        <stop offset="50%" stopColor="rgba(234,179,8,0.55)" />
+        <stop offset="100%" stopColor="rgba(234,179,8,0)" />
+      </linearGradient>
+    </defs>
+    <rect x="4" y="4" width="40" height="40" rx="11" className="brand-mark-bg" />
+    <circle cx="24" cy="24" r="17" className="brand-mark-ring brand-mark-ring-outer" />
+    <circle cx="24" cy="24" r="13.2" className="brand-mark-ring brand-mark-ring-inner" />
+    <path className="brand-scan-line" d="M9 31 C17 21, 31 21, 39 31" />
+    <text className="brand-mark-text-outline" x="24.5" y="24" textAnchor="middle">EC</text>
+    <text className="brand-mark-text" x="24.5" y="24" textAnchor="middle">EC</text>
+  </svg>
+);
 
 const ICON_MAP = {
   IconHome,
@@ -70,10 +90,14 @@ const ICON_MAP = {
   IconDollar,
   IconBlog,
   IconBot,
+  IconSearch,
+  IconLogIn,
+  IconLogOut,
   IconGitHub,
   IconLinkedIn,
   IconYouTube,
-  IconRSS
+  IconRSS,
+  IconExternal
 };
 
 const PATH_HOME = "/";
@@ -103,6 +127,64 @@ const TEXT_VLOG_URL_HELP = "Paste a full YouTube URL for this vlog entry.";
 const TEXT_VLOG_URL_INVALID = "Enter a valid YouTube URL to preview the embed.";
 const TEXT_BUDGET_LOADING = "Loading budget tool...";
 const BudgetToolPageLazy = lazy(() => import("./budget/entry.jsx"));
+let highlightRuntime = null;
+let highlightRuntimePromise = null;
+
+/**
+ * @returns {Promise<[any|null, Error|null]>}
+ */
+function loadHighlightRuntime() {
+  if (highlightRuntime) {
+    return Promise.resolve([highlightRuntime, null]);
+  }
+  if (highlightRuntimePromise) {
+    return highlightRuntimePromise;
+  }
+
+  highlightRuntimePromise = (async () => {
+    const modulesRes = await fromPromise(Promise.all([
+      import(HLJS_CORE_IMPORT),
+      import(HLJS_STYLE_IMPORT),
+      import(HLJS_JS_IMPORT),
+      import(HLJS_TS_IMPORT),
+      import(HLJS_GO_IMPORT),
+      import(HLJS_JAVA_IMPORT),
+      import(HLJS_CSHARP_IMPORT),
+      import(HLJS_CSS_IMPORT),
+      import(HLJS_RUST_IMPORT)
+    ]));
+    if (modulesRes.err) {
+      highlightRuntimePromise = null;
+      return [null, modulesRes.err];
+    }
+
+    const core = modulesRes.value[0].default;
+    const javascriptLang = modulesRes.value[2].default;
+    const typescriptLang = modulesRes.value[3].default;
+    const goLang = modulesRes.value[4].default;
+    const javaLang = modulesRes.value[5].default;
+    const csharpLang = modulesRes.value[6].default;
+    const cssLang = modulesRes.value[7].default;
+    const rustLang = modulesRes.value[8].default;
+
+    core.registerLanguage("javascript", javascriptLang);
+    core.registerLanguage("js", javascriptLang);
+    core.registerLanguage("typescript", typescriptLang);
+    core.registerLanguage("ts", typescriptLang);
+    core.registerLanguage("go", goLang);
+    core.registerLanguage("java", javaLang);
+    core.registerLanguage("csharp", csharpLang);
+    core.registerLanguage("cs", csharpLang);
+    core.registerLanguage("c#", csharpLang);
+    core.registerLanguage("css", cssLang);
+    core.registerLanguage("zig", rustLang);
+
+    highlightRuntime = core;
+    return [highlightRuntime, null];
+  })();
+
+  return highlightRuntimePromise;
+}
 
 /**
  * @param {string} text
@@ -184,7 +266,7 @@ export function App() {
 
       <header className="topbar">
         <div className="container topbar-inner">
-          <div className="brand-mark" aria-hidden="true">EC</div>
+          <div className="brand-mark" aria-hidden="true"><IconBrandMark /></div>
           <div>
             <h1 className="brand-name">{TEXT_NAME}</h1>
             <p className="brand-role">{TEXT_ROLE}</p>
@@ -223,10 +305,10 @@ export function App() {
             <div className="footer-title">{TEXT_NAME}</div>
             <div className="footer-sub">{TEXT_TAGLINE}</div>
             <div className="footer-links">
-              <a className="footer-link" href="https://github.com/monstercameron" target="_blank" rel="noreferrer noopener">GitHub</a>
-              <a className="footer-link" href="https://www.linkedin.com/in/earl-cameron/" target="_blank" rel="noreferrer noopener">LinkedIn</a>
-              <a className="footer-link" href="https://www.youtube.com/@EarlCameron007" target="_blank" rel="noreferrer noopener">YouTube</a>
-              <button className="footer-top-btn" onClick={handleScrollToTop} type="button">Top</button>
+              <a className="footer-link" href="https://github.com/monstercameron" target="_blank" rel="noreferrer noopener"><IconGitHub /> GitHub</a>
+              <a className="footer-link" href="https://www.linkedin.com/in/earl-cameron/" target="_blank" rel="noreferrer noopener"><IconLinkedIn /> LinkedIn</a>
+              <a className="footer-link" href="https://www.youtube.com/@EarlCameron007" target="_blank" rel="noreferrer noopener"><IconYouTube /> YouTube</a>
+              <button className="footer-top-btn" onClick={handleScrollToTop} type="button">Top <IconArrowRight /></button>
             </div>
           </div>
           <div className="footer-year">{yearLabelRes.value}</div>
@@ -257,7 +339,7 @@ function renderPage(pathname, onResumeDownload, motd, homeContent) {
 function BudgetToolRoutePage() {
   return (
     <div className="budget-route-shell">
-      <Suspense fallback={<section className="panel"><p>{TEXT_BUDGET_LOADING}</p></section>}>
+      <Suspense fallback={<section className="panel"><p><IconBot /> {TEXT_BUDGET_LOADING}</p></section>}>
         <BudgetToolPageLazy />
       </Suspense>
     </div>
@@ -307,7 +389,25 @@ function HomePage({ motd, homeContentOverride }) {
             </div>
           </div>
           <div className="hero-anchor-wrap">
-            <img className="home-anchor-image" src={LINK_PROFILE_ANCHOR_IMAGE} alt={ALT_PROFILE_ANCHOR_IMAGE} />
+            <picture>
+              <source
+                type="image/webp"
+                srcSet={LINK_PROFILE_ANCHOR_IMAGE_WEBP}
+                sizes="(max-width: 900px) 100vw, 520px"
+              />
+              <img
+                className="home-anchor-image"
+                src={LINK_PROFILE_ANCHOR_IMAGE}
+                srcSet={`${LINK_PROFILE_ANCHOR_IMAGE} 720w, ${LINK_PROFILE_ANCHOR_IMAGE_FULL} 876w`}
+                sizes="(max-width: 900px) 100vw, 520px"
+                alt={ALT_PROFILE_ANCHOR_IMAGE}
+                width="576"
+                height="768"
+                loading="eager"
+                decoding="async"
+                fetchPriority="high"
+              />
+            </picture>
             <p className="hero-caption">{homeContent.heroCaption}</p>
           </div>
         </div>
@@ -350,14 +450,7 @@ function HomePage({ motd, homeContentOverride }) {
           <h3>Latest Video</h3>
           <p>{homeContent.youtubeLead}</p>
           <div className="video-wrap">
-            <iframe
-              className="video-frame"
-              src={LINK_YOUTUBE_EMBED}
-              title="Earl Cameron YouTube video"
-              loading="lazy"
-              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-              allowFullScreen
-            />
+            <LiteYouTubeEmbed videoUrl={LINK_YOUTUBE_VIDEO} title="Earl Cameron YouTube video" />
           </div>
           <p>
             <a href={LINK_YOUTUBE_VIDEO} target="_blank" rel="noreferrer noopener"><IconYouTube /> Watch on YouTube</a>
@@ -484,7 +577,7 @@ function ProjectsPage() {
       <div className="cards">
         <article className="card">
           <div className="project-card-head">
-            <h3><a href="https://github.com/monstercameron/Zerver" target="_blank" rel="noreferrer noopener">Zerver</a></h3>
+            <h3><a href="https://github.com/monstercameron/Zerver" target="_blank" rel="noreferrer noopener" className="project-link"><IconGitHub /> Zerver</a></h3>
             <span className="chip chip-zero">Zig</span>
           </div>
           <p><strong>The Build:</strong> A backend framework built around pure-step request pipelines, explicit side effects, and built-in tracing.</p>
@@ -493,7 +586,7 @@ function ProjectsPage() {
 
         <article className="card">
           <div className="project-card-head">
-            <h3><a href="https://github.com/monstercameron/SchemaFlow" target="_blank" rel="noreferrer noopener">SchemaFlow</a></h3>
+            <h3><a href="https://github.com/monstercameron/SchemaFlow" target="_blank" rel="noreferrer noopener" className="project-link"><IconGitHub /> SchemaFlow</a></h3>
             <span className="chip chip-zero">Go</span>
           </div>
           <p><strong>The Build:</strong> A library for type-safe LLM extraction and structured output validation.</p>
@@ -502,7 +595,7 @@ function ProjectsPage() {
 
         <article className="card">
           <div className="project-card-head">
-            <h3><a href="https://github.com/monstercameron/pi-camera-gui" target="_blank" rel="noreferrer noopener">Pi Camera Rig</a></h3>
+            <h3><a href="https://github.com/monstercameron/pi-camera-gui" target="_blank" rel="noreferrer noopener" className="project-link"><IconGitHub /> Pi Camera Rig</a></h3>
             <span className="chip chip-zero">Python / Hardware</span>
           </div>
           <p><strong>The Build:</strong> A Pygame-based GUI that turns a bare Raspberry Pi HQ camera setup into a menu-driven, standalone camera experience.</p>
@@ -511,7 +604,7 @@ function ProjectsPage() {
 
         <article className="card">
           <div className="project-card-head">
-            <h3><a href="https://github.com/monstercameron/LatentSpaceBrowser" target="_blank" rel="noreferrer noopener">Latent Space Browser</a></h3>
+            <h3><a href="https://github.com/monstercameron/LatentSpaceBrowser" target="_blank" rel="noreferrer noopener" className="project-link"><IconGitHub /> Latent Space Browser</a></h3>
             <span className="chip chip-zero">React / LLMs</span>
           </div>
           <p><strong>The Build:</strong> A generative encyclopedia UI where every linked term recursively generates new, context-aware AI content.</p>
@@ -520,7 +613,7 @@ function ProjectsPage() {
 
         <article className="card">
           <div className="project-card-head">
-            <h3><a href="https://github.com/monstercameron/GoScript" target="_blank" rel="noreferrer noopener">GoScript</a></h3>
+            <h3><a href="https://github.com/monstercameron/GoScript" target="_blank" rel="noreferrer noopener" className="project-link"><IconGitHub /> GoScript</a></h3>
             <span className="chip chip-zero">Go / WebAssembly</span>
           </div>
           <p><strong>The Build:</strong> A browser-based Go environment running the real Go compiler entirely client-side via WebAssembly.</p>
@@ -529,7 +622,7 @@ function ProjectsPage() {
 
         <article className="card">
           <div className="project-card-head">
-            <h3><a href="https://github.com/monstercameron/MetaHumanServer" target="_blank" rel="noreferrer noopener">MetaHuman Server</a></h3>
+            <h3><a href="https://github.com/monstercameron/MetaHumanServer" target="_blank" rel="noreferrer noopener" className="project-link"><IconGitHub /> MetaHuman Server</a></h3>
             <span className="chip chip-zero">Python / Audio</span>
           </div>
           <p><strong>The Build:</strong> A voice-interactive chatbot server that combines NLP and real-time audio processing pipelines.</p>
@@ -538,7 +631,7 @@ function ProjectsPage() {
 
         <article className="card">
           <div className="project-card-head">
-            <h3><a href="https://github.com/monstercameron/mdchem" target="_blank" rel="noreferrer noopener">MDChem Backend</a></h3>
+            <h3><a href="https://github.com/monstercameron/mdchem" target="_blank" rel="noreferrer noopener" className="project-link"><IconGitHub /> MDChem Backend</a></h3>
             <span className="chip chip-zero">Node.js / REST</span>
           </div>
           <p><strong>The Build:</strong> Backend services for an educational chemistry game, handling data capture, reporting workflows, and educator access.</p>
@@ -547,7 +640,7 @@ function ProjectsPage() {
 
         <article className="card">
           <div className="project-card-head">
-            <h3><a href="https://github.com/monstercameron/Budgetting_tool_vibecoded" target="_blank" rel="noreferrer noopener">Personal Finance Dashboard</a></h3>
+            <h3><a href="https://github.com/monstercameron/Budgetting_tool_vibecoded" target="_blank" rel="noreferrer noopener" className="project-link"><IconGitHub /> Personal Finance Dashboard</a></h3>
             <span className="chip chip-zero">React / Vite</span>
           </div>
           <p><strong>The Build:</strong> A fast, client-side budgeting app for tracking income, expenses, debt, and goal progress.</p>
@@ -605,7 +698,7 @@ function SlackAnimePage() {
       return;
     }
     setPassword("");
-    setStatus({ text: "SlackAnime session connected.", error: false });
+    setStatus({ text: "Airing Radar session connected.", error: false });
     setIsAdmin(true);
   };
 
@@ -619,13 +712,13 @@ function SlackAnimePage() {
     setResults([]);
     setTracked([]);
     setDailyQuestion("");
-    setStatus({ text: "SlackAnime session disconnected.", error: false });
+    setStatus({ text: "Airing Radar session disconnected.", error: false });
   };
 
   const onSearch = async (event) => {
     event.preventDefault();
     if (!isAdmin) {
-      setStatus({ text: "Connect first using admin password.", error: true });
+      setStatus({ text: "Connect first using the admin password.", error: true });
       return;
     }
     const q = String(query || "").trim();
@@ -668,20 +761,20 @@ function SlackAnimePage() {
     <section className="panel slackanime-shell">
       {isAdmin ? (
         <div className="slackanime-top-actions">
-          <button className="cta-link cta-button cta-danger slackanime-btn" type="button" onClick={() => { void disconnect(); }}>Disconnect</button>
+          <button className="cta-link cta-button cta-danger slackanime-btn" type="button" onClick={() => { void disconnect(); }}><IconLogOut /> Disconnect</button>
         </div>
       ) : null}
-      <p className="eyebrow">SLACKANIME PORT</p>
-      <h2>Anime Tracker</h2>
+      <p className="eyebrow">AIRING RADAR</p>
+      <h2>Anime Release Radar</h2>
       <p className="projects-intro slackanime-intro">
-        Ported from the Go project into this site stack. Search AniList and maintain a tracked anime list in local SQLite.
+        Monitor tracked shows, scan AniList quickly, and maintain a local release radar with SQLite plus RSS feeds for updates and prompts.
       </p>
 
       {!isAdmin ? (
         <section className="slackanime-auth-card">
           <div className="slackanime-auth-head">
-            <h3 className="slackanime-auth-title">SlackAnime Auth</h3>
-            <p className="slackanime-auth-subtitle">Admin session required to manage tracked anime.</p>
+            <h3 className="slackanime-auth-title">Radar Admin Access</h3>
+            <p className="slackanime-auth-subtitle">Admin session required to manage tracked shows.</p>
           </div>
           <div className="slackanime-auth-form">
             <label>
@@ -689,7 +782,7 @@ function SlackAnimePage() {
               <input className="slackanime-input" type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Enter admin password" />
             </label>
             <div className="slackanime-auth-actions">
-              <button className="cta-link cta-button slackanime-btn" type="button" onClick={() => { void connect(); }}>Connect</button>
+              <button className="cta-link cta-button slackanime-btn" type="button" onClick={() => { void connect(); }}><IconLogIn /> Connect</button>
             </div>
             <p className="slackanime-auth-state">Auth: Disconnected</p>
           </div>
@@ -698,13 +791,13 @@ function SlackAnimePage() {
 
       {dailyQuestion ? (
         <p className="slackanime-daily">
-          <strong>Daily Question:</strong> {dailyQuestion}
+          <strong>Daily Anime Prompt:</strong> {dailyQuestion}
         </p>
       ) : null}
 
       <div className="slackanime-rss-row">
-        <a className="cta-link" href={feedUrls.tracked} target="_blank" rel="noreferrer noopener">Tracked Releases RSS</a>
-        <a className="cta-link" href={feedUrls.questions} target="_blank" rel="noreferrer noopener">Daily Questions RSS</a>
+        <a className="cta-link" href={feedUrls.tracked} target="_blank" rel="noreferrer noopener"><IconRSS /> Release Feed RSS</a>
+        <a className="cta-link" href={feedUrls.questions} target="_blank" rel="noreferrer noopener"><IconRSS /> Prompt Feed RSS</a>
       </div>
 
       <form className="slackanime-search-form" onSubmit={onSearch}>
@@ -715,14 +808,14 @@ function SlackAnimePage() {
           value={query}
           onChange={(event) => setQuery(event.target.value)}
         />
-        <button className="cta-link cta-button slackanime-btn" type="submit">{busy ? "Searching..." : "Search"}</button>
+        <button className="cta-link cta-button slackanime-btn" type="submit"><IconSearch /> {busy ? "Searching..." : "Search"}</button>
       </form>
 
       {status.text ? <p className={status.error ? "slackanime-error" : "slackanime-success"}>{status.text}</p> : null}
 
-      <h3 className="slackanime-section-title">Tracked Anime</h3>
+      <h3 className="slackanime-section-title">Tracked Shows</h3>
       <div className="slackanime-grid">
-        {tracked.length < 1 ? <p className="slackanime-empty">No tracked anime yet.</p> : null}
+        {tracked.length < 1 ? <p className="slackanime-empty">No tracked shows yet.</p> : null}
         {tracked.map((anime) => (
           <article className="slackanime-card" key={`tracked-${anime.anilistId}`}>
             <div className="slackanime-card-head">
@@ -731,15 +824,15 @@ function SlackAnimePage() {
             </div>
             <p className="slackanime-card-meta">{anime.format || "ANIME"}{anime.seasonYear ? ` � ${anime.seasonYear}` : ""}{anime.episodes ? ` � ${anime.episodes} eps` : ""}</p>
             <div className="slackanime-card-actions">
-              <button className="cta-link cta-button cta-danger slackanime-btn" type="button" onClick={() => { void onUntrack(anime); }}>Untrack</button>
+              <button className="cta-link cta-button cta-danger slackanime-btn" type="button" onClick={() => { void onUntrack(anime); }}><IconTrash /> Remove</button>
             </div>
           </article>
         ))}
       </div>
 
-      <h3 className="slackanime-section-title">Search Results</h3>
+      <h3 className="slackanime-section-title">AniList Search Results</h3>
       <div className="slackanime-grid">
-        {results.length < 1 ? <p className="slackanime-empty">Run a search to load results.</p> : null}
+        {results.length < 1 ? <p className="slackanime-empty">Search AniList to load results.</p> : null}
         {results.map((anime) => (
           <article className="slackanime-card" key={`result-${anime.anilistId}`}>
             <div className="slackanime-card-head">
@@ -748,7 +841,7 @@ function SlackAnimePage() {
             </div>
             <p className="slackanime-card-meta">{anime.format || "ANIME"}{anime.seasonYear ? ` � ${anime.seasonYear}` : ""}{anime.episodes ? ` � ${anime.episodes} eps` : ""}</p>
             <div className="slackanime-card-actions">
-              <button className="cta-link cta-button slackanime-btn" type="button" onClick={() => { void onTrack(anime); }}>Track</button>
+              <button className="cta-link cta-button slackanime-btn" type="button" onClick={() => { void onTrack(anime); }}><IconPlus /> Add to Radar</button>
             </div>
           </article>
         ))}
@@ -774,7 +867,7 @@ function NotFoundPage() {
   return (
     <section className="panel">
       <p className="eyebrow">NOT FOUND</p>
-      <h2>404 - Page Not Found</h2>
+      <h2><IconBot /> 404 - Page Not Found</h2>
       <p>This route has not been mapped yet.</p>
     </section>
   );
@@ -1523,8 +1616,65 @@ function parseYouTubeVideoId(url) {
  * @param {string} id
  * @returns {string}
  */
+function buildYouTubeThumbUrl(id) {
+  return `${LINK_YOUTUBE_THUMB_PREFIX}${encodeURIComponent(id)}/hqdefault.jpg`;
+}
+
+/**
+ * @param {string} id
+ * @returns {string}
+ */
 function buildYouTubeEmbedUrl(id) {
-  return `https://www.youtube.com/embed/${encodeURIComponent(id)}`;
+  return `${LINK_YOUTUBE_EMBED_NOCOOKIE_PREFIX}${encodeURIComponent(id)}`;
+}
+
+/**
+ * @param {{ videoUrl: string, title: string }} props
+ * @returns {JSX.Element}
+ */
+function LiteYouTubeEmbed(props) {
+  const [isLoaded, setIsLoaded] = useState(false);
+  const videoId = parseYouTubeVideoId(props.videoUrl);
+  const embedUrl = videoId ? `${LINK_YOUTUBE_EMBED_NOCOOKIE_PREFIX}${encodeURIComponent(videoId)}` : LINK_YOUTUBE_EMBED;
+  const thumbUrl = videoId ? buildYouTubeThumbUrl(videoId) : "";
+
+  if (isLoaded) {
+    return (
+      <iframe
+        className="video-frame"
+        src={embedUrl}
+        title={props.title}
+        loading="lazy"
+        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+        allowFullScreen
+      />
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      className="video-lite-shell"
+      onClick={() => setIsLoaded(true)}
+      aria-label={TEXT_VIDEO_LITE_TITLE}
+    >
+      {thumbUrl ? (
+        <img
+          className="video-lite-thumb"
+          src={thumbUrl}
+          alt=""
+          loading="lazy"
+          decoding="async"
+          width="480"
+          height="360"
+        />
+      ) : null}
+      <span className="video-lite-overlay">
+        <span className="video-lite-play" aria-hidden="true">▶</span>
+        <span className="video-lite-label">{TEXT_VIDEO_LITE_CTA}</span>
+      </span>
+    </button>
+  );
 }
 
 /**
@@ -1549,7 +1699,7 @@ function renderRichContent(content) {
           const imageMatch = part.match(/^!\[img\]\(([^|)]+)\|?(\d{1,3})?\)$/);
           if (imageMatch) {
             const widthPct = Number(imageMatch[2] || 60);
-            return <img key={`img-${partIndex}`} src={imageMatch[1]} className="rich-image" style={{ width: `${Math.max(10, Math.min(100, widthPct))}%` }} alt="System Log Artifact" />;
+            return <img key={`img-${partIndex}`} src={imageMatch[1]} className="rich-image" style={{ width: `${Math.max(10, Math.min(100, widthPct))}%` }} alt="System Log Artifact" loading="lazy" decoding="async" />;
           }
           const tokens = part.split(/(\*\*[^*]+\*\*|__[^_]+__|\[tc\][\s\S]*?\[\/tc\])/g).filter(Boolean);
           return <p key={`line-${partIndex}`} className="rich-p">{tokens.map((token, tokenIndex) => token.startsWith("**") && token.endsWith("**") ? <strong key={tokenIndex} className="rich-strong">{token.slice(2, -2)}</strong> : token.startsWith("__") && token.endsWith("__") ? <u key={tokenIndex} className="rich-u">{token.slice(2, -2)}</u> : token.startsWith("[tc]") && token.endsWith("[/tc]") ? <span key={tokenIndex} className="text-center-block rich-tc">{token.slice(4, -5)}</span> : <span key={tokenIndex}>{token}</span>)}</p>;
@@ -1565,9 +1715,25 @@ function renderRichContent(content) {
  */
 function CodeBlock(props) {
   const [copied, setCopied] = useState(false);
+  const [hlApi, setHlApi] = useState(null);
   const normalizedCode = String(props.code || "").replace(/\r\n/g, "\n");
   const lines = normalizedCode.split("\n");
-  const lang = props.language && hljs.getLanguage(props.language) ? props.language : "";
+  const lang = hlApi && props.language && hlApi.getLanguage(props.language) ? props.language : "";
+
+  useEffect(() => {
+    let active = true;
+    const load = async () => {
+      const [api, err] = await loadHighlightRuntime();
+      if (!active || err || !api) {
+        return;
+      }
+      setHlApi(api);
+    };
+    load();
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const onCopy = async () => {
     const [, err] = await copyToClipboard(normalizedCode);
@@ -1586,13 +1752,14 @@ function CodeBlock(props) {
         <button className={`code-copy-btn ${copied ? "is-copied" : ""}`} type="button" onClick={onCopy}>{copied ? TEXT_CODE_COPIED : TEXT_CODE_COPY}</button>
       </div>
       <div className="code-body">
+        {!hlApi ? <div className="code-loading">{TEXT_CODE_LOADING}</div> : null}
         {lines.map((line, index) => {
           const rawLine = line || " ";
-          const highlighted = lang ? hljs.highlight(rawLine, { language: lang }).value : hljs.highlightAuto(rawLine).value;
+          const highlighted = hlApi ? (lang ? hlApi.highlight(rawLine, { language: lang }).value : hlApi.highlightAuto(rawLine).value) : "";
           return (
             <div className="code-line" key={`line-${index}`}>
               <span className="line-no">{index + 1}</span>
-              <code className="hljs" dangerouslySetInnerHTML={{ __html: highlighted }} />
+              {hlApi ? <code className="hljs" dangerouslySetInnerHTML={{ __html: highlighted }} /> : <code>{rawLine}</code>}
             </div>
           );
         })}

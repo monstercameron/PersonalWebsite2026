@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "build:nginx": "vite build",
     "preview": "vite preview",
     "lint": "eslint .",
     "test": "vitest run"

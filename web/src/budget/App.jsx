@@ -56,6 +56,21 @@ import {
   pullCompleteFinancialProfileFromFirebaseForAuthenticatedUser
 } from './core/impure.js'
 
+const IconPlus = () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+const IconUsers = () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+const IconDownload = () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+const IconUpload = () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+const IconMoon = () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+const IconSun = () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+const IconZoomIn = () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg>
+const IconZoomOut = () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="8" y1="11" x2="14" y2="11"/></svg>
+const IconRefresh = (props) => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+const IconEdit = () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+const IconTrash = () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
+const IconFileText = () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+const IconCheck = () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+const IconX = () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+
 const DASHBOARD_CURRENCY_FORMATTER = new Intl.NumberFormat('en-US', {
   style: 'currency',
   currency: 'USD',
@@ -448,9 +463,9 @@ function formatProjectedPayoffDateFromMonthsOffset(monthsOffset) {
 }
 
 function renderIconGlyphForAction(actionName) {
-  if (actionName === 'edit') return 'E'
-  if (actionName === 'notes') return 'N'
-  if (actionName === 'delete') return '🗑'
+  if (actionName === 'edit') return <IconEdit />
+  if (actionName === 'notes') return <IconFileText />
+  if (actionName === 'delete') return <IconTrash />
   return '•'
 }
 
@@ -2862,10 +2877,10 @@ export default function App() {
         <div className="mb-2 flex items-center justify-between gap-2">
           <h1 className="truncate text-sm font-bold text-slate-900 md:text-base">Financial Flight Deck</h1>
           <div className="flex items-center gap-1">
-            <button className="rounded-lg border border-white/30 bg-white/85 px-2 py-1 text-[11px] font-semibold text-slate-700" onClick={toggleThemeNameBetweenLightAndDark} type="button">{themeName === 'dark' ? 'Dark' : 'Light'}</button>
-            <button className="rounded-lg border border-white/30 bg-white/85 px-2 py-1 text-[11px] font-semibold text-slate-700" onClick={() => void updateGlobalTextScaleByDelta(0.05)} type="button">A+</button>
-            <button className="rounded-lg border border-white/30 bg-white/85 px-2 py-1 text-[11px] font-semibold text-slate-700" onClick={() => void updateGlobalTextScaleByDelta(-0.05)} type="button">A-</button>
-            <button className="rounded-lg border border-white/30 bg-white/85 px-2 py-1 text-[11px] font-semibold text-slate-700" onClick={resetGlobalTextScaleToDefault} type="button">Reset</button>
+            <button className="inline-flex items-center gap-1 rounded-lg border border-white/30 bg-white/85 px-2 py-1 text-[11px] font-semibold text-slate-700" onClick={toggleThemeNameBetweenLightAndDark} type="button">{themeName === 'dark' ? <><IconMoon /> Dark</> : <><IconSun /> Light</>}</button>
+            <button className="inline-flex items-center gap-1 rounded-lg border border-white/30 bg-white/85 px-2 py-1 text-[11px] font-semibold text-slate-700" onClick={() => void updateGlobalTextScaleByDelta(0.05)} type="button"><IconZoomIn /> A+</button>
+            <button className="inline-flex items-center gap-1 rounded-lg border border-white/30 bg-white/85 px-2 py-1 text-[11px] font-semibold text-slate-700" onClick={() => void updateGlobalTextScaleByDelta(-0.05)} type="button"><IconZoomOut /> A-</button>
+            <button className="inline-flex items-center gap-1 rounded-lg border border-white/30 bg-white/85 px-2 py-1 text-[11px] font-semibold text-slate-700" onClick={resetGlobalTextScaleToDefault} type="button"><IconRefresh /> Reset</button>
           </div>
         </div>
         <div className="no-scrollbar mb-2 flex flex-nowrap items-center gap-1.5 overflow-x-auto pb-1">
@@ -2885,11 +2900,11 @@ export default function App() {
           ))}
         </div>
         <div className="no-scrollbar flex flex-nowrap items-center gap-1.5 overflow-x-auto pb-1">
-          <button className="rounded-lg border border-white/30 bg-teal-600 px-2.5 py-1.5 text-[11px] font-semibold text-white" onClick={() => setIsAddRecordModalOpen(true)} type="button">+ Record</button>
-          <button className="rounded-lg border border-white/30 bg-sky-600 px-2.5 py-1.5 text-[11px] font-semibold text-white" onClick={() => setIsAddGoalModalOpen(true)} type="button">+ Goal</button>
-          <button className="rounded-lg border border-white/30 bg-violet-600 px-2.5 py-1.5 text-[11px] font-semibold text-white" onClick={openManagePersonasModal} type="button">Personas</button>
-          <button className="rounded-lg border border-white/30 bg-indigo-600 px-2.5 py-1.5 text-[11px] font-semibold text-white" onClick={() => void openProfileTransferModalForMode('import')} type="button">Import</button>
-          <button className="rounded-lg border border-white/30 bg-indigo-700 px-2.5 py-1.5 text-[11px] font-semibold text-white" onClick={() => void openProfileTransferModalForMode('export')} type="button">Export</button>
+          <button className="inline-flex items-center gap-1.5 rounded-lg border border-white/30 bg-teal-600 px-2.5 py-1.5 text-[11px] font-semibold text-white" onClick={() => setIsAddRecordModalOpen(true)} type="button"><IconPlus /> Record</button>
+          <button className="inline-flex items-center gap-1.5 rounded-lg border border-white/30 bg-sky-600 px-2.5 py-1.5 text-[11px] font-semibold text-white" onClick={() => setIsAddGoalModalOpen(true)} type="button"><IconPlus /> Goal</button>
+          <button className="inline-flex items-center gap-1.5 rounded-lg border border-white/30 bg-violet-600 px-2.5 py-1.5 text-[11px] font-semibold text-white" onClick={openManagePersonasModal} type="button"><IconUsers /> Personas</button>
+          <button className="inline-flex items-center gap-1.5 rounded-lg border border-white/30 bg-indigo-600 px-2.5 py-1.5 text-[11px] font-semibold text-white" onClick={() => void openProfileTransferModalForMode('import')} type="button"><IconDownload /> Import</button>
+          <button className="inline-flex items-center gap-1.5 rounded-lg border border-white/30 bg-indigo-700 px-2.5 py-1.5 text-[11px] font-semibold text-white" onClick={() => void openProfileTransferModalForMode('export')} type="button"><IconUpload /> Export</button>
         </div>
       </section>
 
@@ -3141,10 +3156,7 @@ export default function App() {
               aria-label="Reload risk checks"
               title="Reload risk checks"
             >
-              <svg className={`h-4 w-4 ${isRiskLoading ? 'animate-spin' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-                <path d="M20 12a8 8 0 1 1-2.34-5.66" />
-                <path d="M20 4v6h-6" />
-              </svg>
+              <IconRefresh className={isRiskLoading ? 'animate-spin' : ''} />
             </button>
             <span className="text-xs text-slate-500">{isRiskLoading ? 'running checks...' : `${riskFindings.length} active checks`}</span>
           </div>
@@ -3178,7 +3190,7 @@ export default function App() {
       <section id="goals" className="section-tight glass-panel-soft squircle-md z-layer-section mb-4 scroll-mt-40 p-4 md:mb-6 md:p-6" style={{ order: 12 }}>
         <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
           <h2 className="text-lg font-bold text-slate-900">Power Goals</h2>
-          <button className="rounded-2xl bg-sky-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-sky-700" onClick={() => setIsAddGoalModalOpen(true)} type="button">Add Goals Here</button>
+          <button className="inline-flex items-center gap-2 rounded-2xl bg-sky-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-sky-700" onClick={() => setIsAddGoalModalOpen(true)} type="button"><IconPlus /> Add Goals Here</button>
         </div>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
           <article className="squircle-sm border border-slate-200/90 bg-white/90 p-3"><p className="text-xs uppercase tracking-[0.12em] text-slate-500">Completed</p><p className="text-2xl font-bold text-emerald-700">{powerGoalsFormulaSummary.completedCount}</p><p className="text-xs text-slate-500">Formula: status equals completed</p></article>
@@ -3220,7 +3232,7 @@ export default function App() {
             <h2 className="text-lg font-bold text-slate-900">Debts / Loans</h2>
             <div className="flex items-center gap-2">
               <span className="text-xs text-slate-500">Add Debts here</span>
-              <button className="rounded-xl border border-white/30 bg-amber-600 px-3 py-2 text-xs font-semibold text-white" onClick={() => openAddRecordModalWithPresetTypeAndCategory('debt', 'Debt Payment')} type="button">+ Quick Add</button>
+              <button className="inline-flex items-center gap-1.5 rounded-xl border border-white/30 bg-amber-600 px-3 py-2 text-xs font-semibold text-white" onClick={() => openAddRecordModalWithPresetTypeAndCategory('debt', 'Debt Payment')} type="button"><IconPlus /> Quick Add</button>
             </div>
           </div>
           <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
@@ -3300,7 +3312,7 @@ export default function App() {
             <h2 className="text-lg font-bold text-slate-900">Credit Accounts</h2>
             <div className="flex items-center gap-2">
               <span className="text-xs text-slate-500">Utilization and payoff planning</span>
-              <button className="rounded-xl border border-white/30 bg-rose-600 px-3 py-2 text-xs font-semibold text-white" onClick={() => openAddRecordModalWithPresetTypeAndCategory('credit_card', 'Credit Card')} type="button">+ Quick Add</button>
+              <button className="inline-flex items-center gap-1.5 rounded-xl border border-white/30 bg-rose-600 px-3 py-2 text-xs font-semibold text-white" onClick={() => openAddRecordModalWithPresetTypeAndCategory('credit_card', 'Credit Card')} type="button"><IconPlus /> Quick Add</button>
             </div>
           </div>
           <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
@@ -3340,7 +3352,7 @@ export default function App() {
             <h2 className="text-lg font-bold text-slate-900">Monthly Savings Storage</h2>
             <div className="flex items-center gap-2">
               <span className="text-xs text-slate-500">Where monthly savings are being held</span>
-              <button className="rounded-xl border border-white/30 bg-emerald-600 px-3 py-2 text-xs font-semibold text-white" onClick={() => openAddRecordModalWithPresetTypeAndCategory('savings', 'Savings')} type="button">+ Quick Add</button>
+              <button className="inline-flex items-center gap-1.5 rounded-xl border border-white/30 bg-emerald-600 px-3 py-2 text-xs font-semibold text-white" onClick={() => openAddRecordModalWithPresetTypeAndCategory('savings', 'Savings')} type="button"><IconPlus /> Quick Add</button>
             </div>
           </div>
           <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
@@ -3416,7 +3428,7 @@ export default function App() {
         <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
           <h2 className="text-lg font-bold text-slate-900">Assets</h2>
           <div className="flex items-center gap-2">
-            <button className="rounded-xl border border-white/30 bg-cyan-600 px-3 py-2 text-xs font-semibold text-white" onClick={() => setIsAddAssetModalOpen(true)} type="button">+ Add Asset</button>
+            <button className="inline-flex items-center gap-1.5 rounded-xl border border-white/30 bg-cyan-600 px-3 py-2 text-xs font-semibold text-white" onClick={() => setIsAddAssetModalOpen(true)} type="button"><IconPlus /> Add Asset</button>
           </div>
         </div>
         <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -3573,7 +3585,7 @@ export default function App() {
       </section>
 
       <section id="records" className="section-tight glass-panel-soft squircle-md z-layer-section mb-4 scroll-mt-40 p-4 md:mb-6 md:p-6" style={{ order: 5 }}>
-        <div className="mb-4 flex flex-wrap items-center justify-between gap-3"><h2 className="text-lg font-bold text-slate-900">Recent Income, Expense, and Savings Records</h2><div className="flex flex-wrap items-center gap-2"><button className="rounded-xl border border-white/30 bg-emerald-600 px-3 py-2 text-xs font-semibold text-white" onClick={() => openAddRecordModalWithPresetTypeAndCategory('income', 'Income')} type="button">+ Income</button><button className="rounded-xl border border-white/30 bg-rose-600 px-3 py-2 text-xs font-semibold text-white" onClick={() => openAddRecordModalWithPresetTypeAndCategory('expense', 'Miscellaneous')} type="button">+ Expense</button><button className="rounded-xl border border-white/30 bg-sky-600 px-3 py-2 text-xs font-semibold text-white" onClick={() => openAddRecordModalWithPresetTypeAndCategory('savings', 'Savings')} type="button">+ Savings</button><button className="rounded-xl border border-slate-300 bg-white/85 px-3 py-2 text-xs font-semibold text-slate-700 disabled:cursor-not-allowed disabled:opacity-40" disabled={transactionUndoDepth <= 0} onClick={() => { void undoMostRecentTransactionChangeFromUndoStack() }} type="button">Undo Transaction</button><span className="rounded-full bg-slate-100/90 px-3 py-1 text-xs font-semibold text-slate-600 backdrop-blur">{incomeAndExpenseRows.length} records</span></div></div>
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3"><h2 className="text-lg font-bold text-slate-900">Recent Income, Expense, and Savings Records</h2><div className="flex flex-wrap items-center gap-2"><button className="inline-flex items-center gap-1.5 rounded-xl border border-white/30 bg-emerald-600 px-3 py-2 text-xs font-semibold text-white" onClick={() => openAddRecordModalWithPresetTypeAndCategory('income', 'Income')} type="button"><IconPlus /> Income</button><button className="inline-flex items-center gap-1.5 rounded-xl border border-white/30 bg-rose-600 px-3 py-2 text-xs font-semibold text-white" onClick={() => openAddRecordModalWithPresetTypeAndCategory('expense', 'Miscellaneous')} type="button"><IconPlus /> Expense</button><button className="inline-flex items-center gap-1.5 rounded-xl border border-white/30 bg-sky-600 px-3 py-2 text-xs font-semibold text-white" onClick={() => openAddRecordModalWithPresetTypeAndCategory('savings', 'Savings')} type="button"><IconPlus /> Savings</button><button className="inline-flex items-center gap-1.5 rounded-xl border border-slate-300 bg-white/85 px-3 py-2 text-xs font-semibold text-slate-700 disabled:cursor-not-allowed disabled:opacity-40" disabled={transactionUndoDepth <= 0} onClick={() => { void undoMostRecentTransactionChangeFromUndoStack() }} type="button"><IconRefresh /> Undo Transaction</button><span className="rounded-full bg-slate-100/90 px-3 py-1 text-xs font-semibold text-slate-600 backdrop-blur">{incomeAndExpenseRows.length} records</span></div></div>
         <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
           <article className="squircle-sm border border-slate-200/90 bg-white/90 p-3"><p className="text-xs uppercase tracking-[0.12em] text-slate-500">Total In</p><p className="text-xl font-bold text-emerald-700">{formatCurrencyValueForDashboard(recordsFlowSummary.totalIn)}</p></article>
           <article className="squircle-sm border border-slate-200/90 bg-white/90 p-3"><p className="text-xs uppercase tracking-[0.12em] text-slate-500">Total Out</p><p className="text-xl font-bold text-rose-700">{formatCurrencyValueForDashboard(recordsFlowSummary.totalOut)}</p></article>
@@ -3638,7 +3650,7 @@ export default function App() {
         <section className="fixed inset-0 z-[5000] flex items-center justify-center p-3 sm:p-4" role="dialog" aria-modal="true" aria-label="Add Income Or Expense Modal">
           <button className="absolute inset-0 bg-slate-950/55 backdrop-blur-sm" onClick={() => setIsAddRecordModalOpen(false)} type="button" aria-label="Close add record modal backdrop" />
           <div className="relative z-[5001] w-full max-w-2xl rounded-3xl border border-white/40 bg-white p-4 shadow-2xl sm:p-6">
-            <div className="mb-4 flex items-center justify-between gap-3"><h3 className="text-lg font-bold text-slate-900">Add Income or Expense</h3><button className="rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700" onClick={() => setIsAddRecordModalOpen(false)} type="button">Close</button></div>
+            <div className="mb-4 flex items-center justify-between gap-3"><h3 className="text-lg font-bold text-slate-900">Add Income or Expense</h3><button className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700" onClick={() => setIsAddRecordModalOpen(false)} type="button"><IconX /> Close</button></div>
             <form className="grid grid-cols-1 gap-4 sm:grid-cols-2" onSubmit={submitNewIncomeOrExpenseRecord}>
               <label className="text-sm font-medium text-slate-700">Person<select className="mt-1 h-11 w-full rounded-2xl border border-slate-200/90 bg-slate-50/90 px-3 text-slate-900 outline-none transition focus:border-teal-400 focus:bg-white" value={entryFormState.person} onChange={(event) => updateEntryFormFieldValue('person', event.target.value)}>{personaSelectOptions.map((personaOption) => <option key={personaOption.value} value={personaOption.value}>{personaOption.label}</option>)}<option value="__custom__">Custom person...</option></select></label>
               <label className="text-sm font-medium text-slate-700">Type<select className="mt-1 h-11 w-full rounded-2xl border border-slate-200/90 bg-slate-50/90 px-3 text-slate-900 outline-none transition focus:border-teal-400 focus:bg-white" value={entryFormState.recordType} onChange={(event) => updateEntryFormFieldValue('recordType', event.target.value)}><option value="expense">Expense</option><option value="income">Income</option><option value="savings">Savings</option><option value="asset">Asset</option><option value="debt">Debt</option><option value="loan">Loan</option><option value="credit_card">Credit Account</option></select></label>
@@ -3683,7 +3695,7 @@ export default function App() {
               ) : null}
               <label className="text-sm font-medium text-slate-700">Date<input className="mt-1 h-11 w-full rounded-2xl border border-slate-200/90 bg-slate-50/90 px-3 text-slate-900 outline-none transition focus:border-teal-400 focus:bg-white" type="date" value={entryFormState.date} onChange={(event) => updateEntryFormFieldValue('date', event.target.value)} /></label>
               <label className="text-sm font-medium text-slate-700 sm:col-span-2">Description<input className="mt-1 h-11 w-full rounded-2xl border border-slate-200/90 bg-slate-50/90 px-3 text-slate-900 outline-none transition focus:border-teal-400 focus:bg-white" type="text" value={entryFormState.description} onChange={(event) => updateEntryFormFieldValue('description', event.target.value)} /></label>
-              <div className="sm:col-span-2 flex flex-wrap justify-end gap-2"><button className="rounded-2xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700" onClick={() => setIsAddRecordModalOpen(false)} type="button">Cancel</button><button className="rounded-2xl bg-teal-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-teal-700" type="submit">Save Record</button></div>
+              <div className="sm:col-span-2 flex flex-wrap justify-end gap-2"><button className="inline-flex items-center gap-1.5 rounded-2xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700" onClick={() => setIsAddRecordModalOpen(false)} type="button"><IconX /> Cancel</button><button className="rounded-2xl bg-teal-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-teal-700 inline-flex items-center gap-1.5" type="submit"><IconCheck /> Save Record</button></div>
             </form>
           </div>
         </section>
@@ -3693,13 +3705,13 @@ export default function App() {
         <section className="fixed inset-0 z-[5000] flex items-center justify-center p-3 sm:p-4" role="dialog" aria-modal="true" aria-label="Add Goal Modal">
           <button className="absolute inset-0 bg-slate-950/55 backdrop-blur-sm" onClick={() => setIsAddGoalModalOpen(false)} type="button" aria-label="Close add goal modal backdrop" />
           <div className="relative z-[5001] w-full max-w-2xl rounded-3xl border border-white/40 bg-white p-4 shadow-2xl sm:p-6">
-            <div className="mb-4 flex items-center justify-between gap-3"><h3 className="text-lg font-bold text-slate-900">Add Goal</h3><button className="rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700" onClick={() => setIsAddGoalModalOpen(false)} type="button">Close</button></div>
+            <div className="mb-4 flex items-center justify-between gap-3"><h3 className="text-lg font-bold text-slate-900">Add Goal</h3><button className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700" onClick={() => setIsAddGoalModalOpen(false)} type="button"><IconX /> Close</button></div>
             <form className="grid grid-cols-1 gap-4 sm:grid-cols-2" onSubmit={submitNewGoalRecord}>
               <label className="text-sm font-medium text-slate-700 sm:col-span-2">Item<input className="mt-1 h-11 w-full rounded-2xl border border-slate-200/90 bg-slate-50/90 px-3 text-slate-900 outline-none transition focus:border-sky-400 focus:bg-white" type="text" value={goalEntryFormState.title} onChange={(event) => updateGoalEntryFormFieldValue('title', event.target.value)} /></label>
               <label className="text-sm font-medium text-slate-700">Status<select className="mt-1 h-11 w-full rounded-2xl border border-slate-200/90 bg-slate-50/90 px-3 text-slate-900 outline-none transition focus:border-sky-400 focus:bg-white" value={goalEntryFormState.status} onChange={(event) => updateGoalEntryFormFieldValue('status', event.target.value)}><option value="not started">Not started</option><option value="in progress">In progress</option><option value="completed">Completed</option></select></label>
               <label className="text-sm font-medium text-slate-700">Timeframe(months)<input className="mt-1 h-11 w-full rounded-2xl border border-slate-200/90 bg-slate-50/90 px-3 text-slate-900 outline-none transition focus:border-sky-400 focus:bg-white" type="number" min="0" step="1" value={goalEntryFormState.timeframeMonths} onChange={(event) => updateGoalEntryFormFieldValue('timeframeMonths', event.target.value)} /></label>
               <label className="text-sm font-medium text-slate-700 sm:col-span-2">Description<textarea className="mt-1 min-h-[90px] w-full rounded-2xl border border-slate-200/90 bg-slate-50/90 px-3 py-2 text-slate-900 outline-none transition focus:border-sky-400 focus:bg-white" value={goalEntryFormState.description} onChange={(event) => updateGoalEntryFormFieldValue('description', event.target.value)} /></label>
-              <div className="sm:col-span-2 flex flex-wrap justify-end gap-2"><button className="rounded-2xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700" onClick={() => setIsAddGoalModalOpen(false)} type="button">Cancel</button><button className="rounded-2xl bg-sky-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-sky-700" type="submit">Save Goal</button></div>
+              <div className="sm:col-span-2 flex flex-wrap justify-end gap-2"><button className="inline-flex items-center gap-1.5 rounded-2xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700" onClick={() => setIsAddGoalModalOpen(false)} type="button"><IconX /> Cancel</button><button className="rounded-2xl bg-sky-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-sky-700 inline-flex items-center gap-1.5" type="submit"><IconCheck /> Save Goal</button></div>
             </form>
           </div>
         </section>
@@ -3709,7 +3721,7 @@ export default function App() {
         <section className="fixed inset-0 z-[5000] flex items-center justify-center p-3 sm:p-4" role="dialog" aria-modal="true" aria-label="Add Asset Modal">
           <button className="absolute inset-0 bg-slate-950/55 backdrop-blur-sm" onClick={() => setIsAddAssetModalOpen(false)} type="button" aria-label="Close add asset modal backdrop" />
           <div className="relative z-[5001] w-full max-w-2xl rounded-3xl border border-white/40 bg-white p-4 shadow-2xl sm:p-6">
-            <div className="mb-4 flex items-center justify-between gap-3"><h3 className="text-lg font-bold text-slate-900">Add Asset</h3><button className="rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700" onClick={() => setIsAddAssetModalOpen(false)} type="button">Close</button></div>
+            <div className="mb-4 flex items-center justify-between gap-3"><h3 className="text-lg font-bold text-slate-900">Add Asset</h3><button className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700" onClick={() => setIsAddAssetModalOpen(false)} type="button"><IconX /> Close</button></div>
             <form className="grid grid-cols-1 gap-4 sm:grid-cols-2" onSubmit={submitNewAssetHoldingRecord}>
               <label className="text-sm font-medium text-slate-700">Person<select className="mt-1 h-11 w-full rounded-2xl border border-slate-200/90 bg-slate-50/90 px-3 text-slate-900 outline-none transition focus:border-cyan-400 focus:bg-white" value={assetHoldingEntryFormState.person} onChange={(event) => updateAssetHoldingEntryFormFieldValue('person', event.target.value)}>{personaSelectOptions.map((personaOption) => <option key={personaOption.value} value={personaOption.value}>{personaOption.label}</option>)}<option value="__custom__">Custom person...</option></select></label>
               {assetHoldingEntryFormState.person === '__custom__' ? <label className="text-sm font-medium text-slate-700">Custom Person<input className="mt-1 h-11 w-full rounded-2xl border border-slate-200/90 bg-slate-50/90 px-3 text-slate-900 outline-none transition focus:border-cyan-400 focus:bg-white" type="text" value={assetHoldingEntryFormState.customPerson} onChange={(event) => updateAssetHoldingEntryFormFieldValue('customPerson', event.target.value)} /></label> : null}
@@ -3718,7 +3730,7 @@ export default function App() {
               <label className="text-sm font-medium text-slate-700">Asset Market Value<input className="mt-1 h-11 w-full rounded-2xl border border-slate-200/90 bg-slate-50/90 px-3 text-slate-900 outline-none transition focus:border-cyan-400 focus:bg-white" type="number" min="0" step="0.01" value={assetHoldingEntryFormState.assetMarketValue} onChange={(event) => updateAssetHoldingEntryFormFieldValue('assetMarketValue', event.target.value)} /></label>
               <label className="text-sm font-medium text-slate-700">Date<input className="mt-1 h-11 w-full rounded-2xl border border-slate-200/90 bg-slate-50/90 px-3 text-slate-900 outline-none transition focus:border-cyan-400 focus:bg-white" type="date" value={assetHoldingEntryFormState.date} onChange={(event) => updateAssetHoldingEntryFormFieldValue('date', event.target.value)} /></label>
               <label className="text-sm font-medium text-slate-700 sm:col-span-2">Description<input className="mt-1 h-11 w-full rounded-2xl border border-slate-200/90 bg-slate-50/90 px-3 text-slate-900 outline-none transition focus:border-cyan-400 focus:bg-white" type="text" value={assetHoldingEntryFormState.description} onChange={(event) => updateAssetHoldingEntryFormFieldValue('description', event.target.value)} /></label>
-              <div className="sm:col-span-2 flex flex-wrap justify-end gap-2"><button className="rounded-2xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700" onClick={() => setIsAddAssetModalOpen(false)} type="button">Cancel</button><button className="rounded-2xl bg-cyan-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-cyan-700" type="submit">Save Asset</button></div>
+              <div className="sm:col-span-2 flex flex-wrap justify-end gap-2"><button className="inline-flex items-center gap-1.5 rounded-2xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700" onClick={() => setIsAddAssetModalOpen(false)} type="button"><IconX /> Cancel</button><button className="rounded-2xl bg-cyan-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-cyan-700 inline-flex items-center gap-1.5" type="submit"><IconCheck /> Save Asset</button></div>
             </form>
           </div>
         </section>
@@ -3728,7 +3740,7 @@ export default function App() {
         <section className="manage-personas-modal fixed inset-0 z-[5000] flex items-center justify-center p-3 sm:p-4" role="dialog" aria-modal="true" aria-label="Manage Personas Modal">
           <button className="absolute inset-0 bg-slate-950/55 backdrop-blur-sm" onClick={() => setIsAddPersonaModalOpen(false)} type="button" aria-label="Close manage personas modal backdrop" />
           <div className="manage-personas-shell relative z-[5001] w-full max-w-6xl rounded-3xl border border-white/40 bg-white p-4 shadow-2xl sm:p-6">
-            <div className="mb-4 flex items-center justify-between gap-3"><h3 className="text-lg font-bold text-slate-900">Manage Personas</h3><button className="rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700" onClick={() => setIsAddPersonaModalOpen(false)} type="button">Close</button></div>
+            <div className="mb-4 flex items-center justify-between gap-3"><h3 className="text-lg font-bold text-slate-900">Manage Personas</h3><button className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700" onClick={() => setIsAddPersonaModalOpen(false)} type="button"><IconX /> Close</button></div>
             <div className="grid grid-cols-1 gap-4 lg:grid-cols-[300px_minmax(0,1fr)]">
               <aside className="manage-personas-panel rounded-2xl border border-slate-200/90 bg-slate-50/80 p-3">
                 <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Existing Personas</p>
@@ -3746,7 +3758,7 @@ export default function App() {
                   <div className="manage-personas-warning mt-3 rounded-xl border border-amber-300/80 bg-amber-50/80 p-3">
                     <p className="text-xs font-semibold uppercase tracking-[0.12em] text-amber-700">Backup Available</p>
                     <p className="mt-1 text-xs text-amber-800">Destructive change backup from {personaDangerBackupState.at}.</p>
-                    <button className="mt-2 rounded-lg border border-amber-400 bg-amber-100 px-3 py-2 text-xs font-semibold text-amber-800" type="button" onClick={() => void restorePersonaDangerBackupIntoCollections()}>Restore Backup</button>
+                    <button className="inline-flex items-center gap-1.5 mt-2 rounded-lg border border-amber-400 bg-amber-100 px-3 py-2 text-xs font-semibold text-amber-800" type="button" onClick={() => void restorePersonaDangerBackupIntoCollections()}><IconRefresh /> Restore Backup</button>
                   </div>
                 ) : null}
               </aside>
@@ -3760,7 +3772,7 @@ export default function App() {
                     <label className="text-sm font-medium text-slate-700">Custom Emoji (Optional)<input className="mt-1 h-11 w-full rounded-2xl border border-slate-200/90 bg-white px-3 text-2xl text-slate-900 outline-none transition focus:border-violet-400" type="text" maxLength="4" value={personaEntryFormState.customEmoji} onChange={(event) => updatePersonaEntryFormFieldValue('customEmoji', event.target.value)} /></label>
                     <label className="text-sm font-medium text-slate-700">Note (Optional)<input className="mt-1 h-11 w-full rounded-2xl border border-slate-200/90 bg-white px-3 text-slate-900 outline-none transition focus:border-violet-400" type="text" value={personaEntryFormState.note} onChange={(event) => updatePersonaEntryFormFieldValue('note', event.target.value)} /></label>
                   </div>
-                  <div className="mt-3 flex justify-end gap-2"><button className="rounded-2xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700" type="button" onClick={() => setPersonaEntryFormState(buildInitialPersonaEntryFormState())}>Clear</button><button className="rounded-2xl bg-violet-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-violet-700" type="submit">Create Persona</button></div>
+                  <div className="mt-3 flex justify-end gap-2"><button className="inline-flex items-center gap-1.5 rounded-2xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700" type="button" onClick={() => setPersonaEntryFormState(buildInitialPersonaEntryFormState())}><IconX /> Clear</button><button className="inline-flex items-center gap-1.5 rounded-2xl bg-violet-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-violet-700" type="submit"><IconPlus /> Create Persona</button></div>
                 </form>
 
                 {personaCrudFormState.personaName ? (
@@ -3777,12 +3789,12 @@ export default function App() {
                       {personaCrudFormState.mode === 'edit' ? <label className="text-sm font-medium text-slate-700">Custom Emoji<input className="mt-1 h-11 w-full rounded-2xl border border-slate-200/90 bg-white px-3 text-2xl text-slate-900 outline-none transition focus:border-violet-400" type="text" maxLength="4" value={personaCrudFormState.nextCustomEmoji} onChange={(event) => updatePersonaCrudFormFieldValue('nextCustomEmoji', event.target.value)} /></label> : null}
                       {personaCrudFormState.mode === 'edit' ? <label className="text-sm font-medium text-slate-700">Note<input className="mt-1 h-11 w-full rounded-2xl border border-slate-200/90 bg-white px-3 text-slate-900 outline-none transition focus:border-violet-400" type="text" value={personaCrudFormState.nextNote} onChange={(event) => updatePersonaCrudFormFieldValue('nextNote', event.target.value)} /></label> : null}
                       {personaCrudFormState.mode === 'delete_reassign' ? <label className="text-sm font-medium text-slate-700 sm:col-span-2">Reassign all records to<select className="mt-1 h-11 w-full rounded-2xl border border-slate-200/90 bg-white px-3 text-slate-900 outline-none transition focus:border-violet-400" value={personaCrudFormState.reassignToPersonaName} onChange={(event) => updatePersonaCrudFormFieldValue('reassignToPersonaName', event.target.value)}>{reassignablePersonaOptions.map((personaName) => <option key={personaName} value={personaName}>{formatPersonaLabelWithEmoji(personaName, personaEmojiByName)}</option>)}</select></label> : null}
-                      {personaCrudFormState.mode === 'delete_reassign' && reassignablePersonaOptions.length === 0 ? <div className="sm:col-span-2 rounded-xl border border-amber-300 bg-amber-50/80 px-3 py-2 text-xs text-amber-900">No alternate persona exists to reassign records. To delete the default user profile, switch to <span className="font-semibold">Delete Cascade</span>.<button className="ml-2 rounded-md border border-rose-300 bg-rose-50 px-2 py-1 text-xs font-semibold text-rose-700" type="button" onClick={() => updatePersonaCrudFormFieldValue('mode', 'delete_cascade')}>Switch to Cascade</button></div> : null}
+                      {personaCrudFormState.mode === 'delete_reassign' && reassignablePersonaOptions.length === 0 ? <div className="sm:col-span-2 rounded-xl border border-amber-300 bg-amber-50/80 px-3 py-2 text-xs text-amber-900">No alternate persona exists to reassign records. To delete the default user profile, switch to <span className="font-semibold">Delete Cascade</span>.<button className="inline-flex items-center gap-1 ml-2 rounded-md border border-rose-300 bg-rose-50 px-2 py-1 text-xs font-semibold text-rose-700" type="button" onClick={() => updatePersonaCrudFormFieldValue('mode', 'delete_cascade')}><IconTrash /> Switch to Cascade</button></div> : null}
                       {personaCrudFormState.mode === 'delete_cascade' ? <label className="text-sm font-medium text-rose-700 sm:col-span-2">Type to confirm hard delete<input className="mt-1 h-11 w-full rounded-2xl border border-rose-300 bg-rose-50/70 px-3 text-slate-900 outline-none transition focus:border-rose-500" type="text" placeholder={`DELETE ${personaCrudFormState.personaName}`} value={personaCrudFormState.deleteConfirmText} onChange={(event) => updatePersonaCrudFormFieldValue('deleteConfirmText', event.target.value)} /></label> : null}
                     </div>
                     <div className="mt-3 flex flex-wrap justify-end gap-2">
-                      <button className="rounded-2xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700" type="button" onClick={() => setPersonaCrudFormState(buildInitialPersonaCrudFormState())}>Clear Selection</button>
-                      <button className={`rounded-2xl px-4 py-2 text-sm font-semibold text-white transition ${personaCrudFormState.mode === 'edit' ? 'bg-violet-600 hover:bg-violet-700' : 'bg-rose-600 hover:bg-rose-700'}`} type="submit">{personaCrudFormState.mode === 'edit' ? 'Save Persona' : 'Apply Delete Operation'}</button>
+                      <button className="inline-flex items-center gap-1.5 rounded-2xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700" type="button" onClick={() => setPersonaCrudFormState(buildInitialPersonaCrudFormState())}><IconX /> Clear Selection</button>
+                      <button className={`inline-flex items-center gap-1.5 rounded-2xl px-4 py-2 text-sm font-semibold text-white transition ${personaCrudFormState.mode === 'edit' ? 'bg-violet-600 hover:bg-violet-700' : 'bg-rose-600 hover:bg-rose-700'}`} type="submit">{personaCrudFormState.mode === 'edit' ? <><IconCheck /> Save Persona</> : <><IconTrash /> Apply Delete Operation</>}</button>
                     </div>
                   </form>
                 ) : (
@@ -3800,7 +3812,7 @@ export default function App() {
           <div className="profile-transfer-shell relative z-[5001] w-full max-w-3xl rounded-3xl border border-white/40 bg-white p-4 shadow-2xl sm:p-6">
             <div className="mb-4 flex items-center justify-between gap-3">
               <h3 className="text-lg font-bold text-slate-900">{profileTransferFormState.mode === 'import' ? 'Import Financial Profile JSON' : 'Export Financial Profile JSON'}</h3>
-              <button className="rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700" onClick={() => setIsProfileTransferModalOpen(false)} type="button">Close</button>
+              <button className="rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 inline-flex items-center gap-1.5" onClick={() => setIsProfileTransferModalOpen(false)} type="button"><IconX /> Close</button>
             </div>
             <div className="mb-3 rounded-2xl border border-slate-200/90 bg-slate-50/80 p-3">
               <React.Fragment>
@@ -3835,7 +3847,7 @@ export default function App() {
             <form className="grid grid-cols-1 gap-3" onSubmit={submitImportedProfileJson}>
               <textarea className="min-h-[280px] w-full rounded-2xl border border-slate-200/90 bg-slate-50/90 p-3 font-mono text-xs text-slate-900 outline-none transition focus:border-indigo-400 focus:bg-white" value={profileTransferFormState.jsonText} onChange={(event) => updateProfileTransferFormFieldValue('jsonText', event.target.value)} readOnly={profileTransferFormState.mode === 'export'} />
               <div className="flex flex-wrap justify-end gap-2">
-                <button className="rounded-2xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700" onClick={() => setIsProfileTransferModalOpen(false)} type="button">Cancel</button>
+                <button className="rounded-2xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 inline-flex items-center gap-1.5" onClick={() => setIsProfileTransferModalOpen(false)} type="button"><IconX /> Cancel</button>
                 <button className="rounded-2xl border border-indigo-300 bg-indigo-50 px-4 py-2 text-sm font-semibold text-indigo-700" onClick={() => { void copyProfileTransferJsonTextToClipboard() }} type="button">Copy JSON</button>
                 {profileTransferFormState.mode === 'export' ? (
                   <button className="rounded-2xl border border-rose-300 bg-rose-50 px-4 py-2 text-sm font-semibold text-rose-700" onClick={() => { void deleteAllLocalFinancialProfileDataWithUndoSnapshot() }} type="button">Delete Local Data</button>
@@ -3858,7 +3870,7 @@ export default function App() {
           <div className="relative z-[5001] w-full max-w-2xl rounded-3xl border border-white/40 bg-white p-4 shadow-2xl sm:p-6">
             <div className="mb-4 flex items-center justify-between gap-3">
               <h3 className="text-lg font-bold text-slate-900">Risk Flag Guidance</h3>
-              <button className="rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700" onClick={() => setSelectedRiskFinding(null)} type="button">Close</button>
+              <button className="rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 inline-flex items-center gap-1.5" onClick={() => setSelectedRiskFinding(null)} type="button"><IconX /> Close</button>
             </div>
             <div className="space-y-4">
               <article className={`risk-modal-selected rounded-2xl border p-3 ${
@@ -3898,7 +3910,7 @@ export default function App() {
           <div className="relative z-[5001] w-full max-w-xl rounded-3xl border border-white/40 bg-white p-4 shadow-2xl sm:p-6">
             <div className="mb-4 flex items-center justify-between gap-3">
               <h3 className="text-lg font-bold text-slate-900">Record Notes</h3>
-              <button className="rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700" onClick={() => setIsRecordNotesModalOpen(false)} type="button">Close</button>
+              <button className="rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 inline-flex items-center gap-1.5" onClick={() => setIsRecordNotesModalOpen(false)} type="button"><IconX /> Close</button>
             </div>
             <form className="space-y-4" onSubmit={submitRecordNotesFormChanges}>
               <p className="text-sm text-slate-600">Category: <span className="font-semibold text-slate-800">{recordNotesFormState.recordLabel || 'Record'}</span></p>
@@ -3911,7 +3923,7 @@ export default function App() {
                 />
               </label>
               <div className="flex justify-end gap-2">
-                <button className="rounded-2xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700" onClick={() => setIsRecordNotesModalOpen(false)} type="button">Cancel</button>
+                <button className="rounded-2xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 inline-flex items-center gap-1.5" onClick={() => setIsRecordNotesModalOpen(false)} type="button"><IconX /> Cancel</button>
                 <button className="rounded-2xl bg-sky-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-sky-700" type="submit">Save Notes</button>
               </div>
             </form>
@@ -3923,7 +3935,7 @@ export default function App() {
         <section className="fixed inset-0 z-[5000] flex items-center justify-center p-3 sm:p-4" role="dialog" aria-modal="true" aria-label="Edit Record Modal">
           <button className="absolute inset-0 bg-slate-950/55 backdrop-blur-sm" onClick={() => setIsEditRecordModalOpen(false)} type="button" aria-label="Close edit record modal backdrop" />
           <div className="relative z-[5001] w-full max-w-2xl rounded-3xl border border-white/40 bg-white p-4 shadow-2xl sm:p-6">
-            <div className="mb-4 flex items-center justify-between gap-3"><h3 className="text-lg font-bold text-slate-900">Edit Record</h3><button className="rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700" onClick={() => setIsEditRecordModalOpen(false)} type="button">Close</button></div>
+            <div className="mb-4 flex items-center justify-between gap-3"><h3 className="text-lg font-bold text-slate-900">Edit Record</h3><button className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700" onClick={() => setIsEditRecordModalOpen(false)} type="button"><IconX /> Close</button></div>
             <form className="grid grid-cols-1 gap-4 sm:grid-cols-2" onSubmit={submitEditedRecordChanges}>
               <label className="text-sm font-medium text-slate-700">Person<select className="mt-1 h-11 w-full rounded-2xl border border-slate-200/90 bg-slate-50/90 px-3 text-slate-900 outline-none transition focus:border-teal-400 focus:bg-white" value={editRecordFormState.person} onChange={(event) => updateEditRecordFormFieldValue('person', event.target.value)}>{personaSelectOptions.map((personaOption) => <option key={personaOption.value} value={personaOption.value}>{personaOption.label}</option>)}<option value="__custom__">Custom person...</option></select></label>
               {editRecordFormState.person === '__custom__' ? (
@@ -3987,7 +3999,7 @@ export default function App() {
               ) : null}
               <label className="text-sm font-medium text-slate-700">Date<input className="mt-1 h-11 w-full rounded-2xl border border-slate-200/90 bg-slate-50/90 px-3 text-slate-900 outline-none transition focus:border-teal-400 focus:bg-white" type="date" value={editRecordFormState.date} onChange={(event) => updateEditRecordFormFieldValue('date', event.target.value)} /></label>
               <label className="text-sm font-medium text-slate-700 sm:col-span-2">Description<input className="mt-1 h-11 w-full rounded-2xl border border-slate-200/90 bg-slate-50/90 px-3 text-slate-900 outline-none transition focus:border-teal-400 focus:bg-white" type="text" value={editRecordFormState.description} onChange={(event) => updateEditRecordFormFieldValue('description', event.target.value)} /></label>
-              <div className="sm:col-span-2 flex flex-wrap justify-end gap-2"><button className="rounded-2xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700" onClick={() => setIsEditRecordModalOpen(false)} type="button">Cancel</button>{editRecordFormState.collectionName === 'assetHoldings' ? <button className="rounded-2xl border border-rose-300 bg-rose-50 px-4 py-2 text-sm font-semibold text-rose-700" onClick={() => { void deleteRecordFromCollectionByCollectionNameAndId('assetHoldings', editRecordFormState.recordId); setIsEditRecordModalOpen(false) }} type="button"><span aria-hidden="true" className="mr-1">{renderIconGlyphForAction('delete')}</span>Delete Asset</button> : null}<button className="rounded-2xl bg-teal-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-teal-700" type="submit">Save Changes</button></div>
+              <div className="sm:col-span-2 flex flex-wrap justify-end gap-2"><button className="inline-flex items-center gap-1.5 rounded-2xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700" onClick={() => setIsEditRecordModalOpen(false)} type="button"><IconX /> Cancel</button>{editRecordFormState.collectionName === 'assetHoldings' ? <button className="inline-flex items-center gap-1.5 rounded-2xl border border-rose-300 bg-rose-50 px-4 py-2 text-sm font-semibold text-rose-700" onClick={() => { void deleteRecordFromCollectionByCollectionNameAndId('assetHoldings', editRecordFormState.recordId); setIsEditRecordModalOpen(false) }} type="button"><IconTrash /> Delete Asset</button> : null}<button className="rounded-2xl bg-teal-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-teal-700 inline-flex items-center gap-1.5" type="submit"><IconCheck /> Save Changes</button></div>
             </form>
           </div>
         </section>

@@ -12,12 +12,16 @@
     "dev:bg:stop": "powershell -ExecutionPolicy Bypass -File ./scripts/dev-stop.ps1",
     "dev:bg:logs": "powershell -ExecutionPolicy Bypass -File ./scripts/dev-logs.ps1",
     "build": "npm run build -w web && npm run build -w api",
+    "build:web:nginx": "npm run build -w web && node ./scripts/precompress-static.js web/dist",
+    "build:prod:droplet": "npm run build:web:nginx && npm run build -w api",
     "lint": "npm run lint -w web && npm run lint -w api",
     "test": "npm run test -w web && npm run test -w api",
     "check:error-strings": "node ./scripts/check-error-literals.js"
   },
   "devDependencies": {
+    "chrome-launcher": "^1.2.1",
     "concurrently": "^9.2.1",
+    "lighthouse": "^13.0.3",
     "playwright": "^1.58.2"
   }
 }

@@ -4,6 +4,7 @@
  */
 
 const apiCache = new Map();
+const apiInflight = new Map();
 const METHOD_GET = "GET";
 const EMPTY_STRING = "";
 const ERR_REQUEST_STATUS = "Request failed with status";
@@ -31,6 +32,9 @@ const API_SLACKANIME_FEED_PATH = "/api/slackanime/feed.xml";
 const API_SLACKANIME_FEED_TRACKED_PATH = "/api/slackanime/feed/tracked.xml";
 const API_SLACKANIME_FEED_QUESTIONS_PATH = "/api/slackanime/feed/questions.xml";
 const MESSAGE_CACHE_TTL_MS = 60_000;
+const HOME_DAILY_CACHE_VERSION = "v1";
+const STORAGE_MOTD_DAILY_CACHE = `home_motd_daily_${HOME_DAILY_CACHE_VERSION}`;
+const STORAGE_HOME_CONTENT_DAILY_CACHE = `home_content_daily_${HOME_DAILY_CACHE_VERSION}`;
 const BLOG_CACHE_TTL_MS = 15_000;
 const ANIME_CACHE_TTL_MS = 30_000;
 const METHOD_POST = "POST";
@@ -51,6 +55,9 @@ const ERR_IMAGE_ENCODE_FAILED = "Failed to encode image";
 const ERR_RESUME_ELEMENT_NOT_FOUND = "Resume element not found";
 const MIME_IMAGE_JPEG = "image/jpeg";
 const MIME_IMAGE_PNG = "image/png";
+const KEY_DATE = "dateKey";
+const KEY_VALUE = "value";
+const TYPE_UNDEFINED = "undefined";
 
 /**
  * @returns {Result<number>}
@@ -97,13 +104,120 @@ export async function apiRequestCached(url, options, ttlMs = DEFAULT_CACHE_TTL_M
     return { value: cached.value, err: null };
   }
 
-  const resultRes = await apiRequest(url, options);
-  if (resultRes.err) {
-    return { value: null, err: resultRes.err };
+  const inflight = apiInflight.get(cacheKey);
+  if (inflight) {
+    return inflight;
   }
 
-  apiCache.set(cacheKey, { value: resultRes.value, expiresAt: now + ttlMs });
-  return { value: resultRes.value, err: null };
+  const inflightPromise = (async () => {
+    const resultRes = await apiRequest(url, options);
+    if (resultRes.err) {
+      return { value: null, err: resultRes.err };
+    }
+
+    apiCache.set(cacheKey, { value: resultRes.value, expiresAt: Date.now() + ttlMs });
+    return { value: resultRes.value, err: null };
+  })().finally(() => {
+    apiInflight.delete(cacheKey);
+  });
+
+  apiInflight.set(cacheKey, inflightPromise);
+  return inflightPromise;
+}
+
+/**
+ * @returns {Result<string>}
+ */
+function getUtcDateKey() {
+  return { value: new Date().toISOString().slice(0, 10), err: null };
+}
+
+/**
+ * @param {string} key
+ * @returns {Result<boolean>}
+ */
+function removeStorageItemSafe(key) {
+  if (typeof window === TYPE_UNDEFINED || !window.localStorage) {
+    return { value: false, err: null };
+  }
+  return { value: (window.localStorage.removeItem(key), true), err: null };
+}
+
+/**
+ * @param {string} key
+ * @returns {Promise<Result<any>>}
+ */
+async function readStorageJsonSafe(key) {
+  if (typeof window === TYPE_UNDEFINED || !window.localStorage) {
+    return { value: null, err: null };
+  }
+  const rawRes = await fromPromise(Promise.resolve().then(() => window.localStorage.getItem(key)));
+  if (rawRes.err || !rawRes.value) {
+    return { value: null, err: rawRes.err };
+  }
+  const parsedRes = await fromPromise(Promise.resolve().then(() => JSON.parse(rawRes.value)));
+  if (parsedRes.err) {
+    removeStorageItemSafe(key);
+    return { value: null, err: null };
+  }
+  return { value: parsedRes.value, err: null };
+}
+
+/**
+ * @param {string} key
+ * @param {any} value
+ * @returns {Promise<Result<boolean>>}
+ */
+async function writeStorageJsonSafe(key, value) {
+  if (typeof window === TYPE_UNDEFINED || !window.localStorage) {
+    return { value: false, err: null };
+  }
+  const payloadRes = await fromPromise(Promise.resolve().then(() => JSON.stringify(value)));
+  if (payloadRes.err) {
+    return { value: null, err: payloadRes.err };
+  }
+  const setRes = await fromPromise(Promise.resolve().then(() => window.localStorage.setItem(key, payloadRes.value)));
+  if (setRes.err) {
+    return { value: null, err: null };
+  }
+  return { value: true, err: null };
+}
+
+/**
+ * @template T
+ * @param {string} storageKey
+ * @returns {Promise<Result<T>>}
+ */
+async function readDailyValueCache(storageKey) {
+  const dateKeyRes = getUtcDateKey();
+  if (dateKeyRes.err) {
+    return { value: null, err: dateKeyRes.err };
+  }
+  const rowRes = await readStorageJsonSafe(storageKey);
+  if (rowRes.err || !rowRes.value || typeof rowRes.value !== "object") {
+    return { value: null, err: rowRes.err };
+  }
+  if (String(rowRes.value[KEY_DATE] || EMPTY_STRING) !== dateKeyRes.value) {
+    return { value: null, err: null };
+  }
+  if (!(KEY_VALUE in rowRes.value)) {
+    return { value: null, err: null };
+  }
+  return { value: rowRes.value[KEY_VALUE], err: null };
+}
+
+/**
+ * @template T
+ * @param {string} storageKey
+ * @param {T} value
+ * @returns {Promise<Result<boolean>>}
+ */
+async function writeDailyValueCache(storageKey, value) {
+  const dateKeyRes = getUtcDateKey();
+  if (dateKeyRes.err) {
+    return { value: null, err: dateKeyRes.err };
+  }
+  return writeStorageJsonSafe(storageKey, { [KEY_DATE]: dateKeyRes.value, [KEY_VALUE]: value });
 }
 
 /**
@@ -111,6 +225,12 @@ export async function apiRequestCached(url, options, ttlMs = DEFAULT_CACHE_TTL_M
  * @returns {Promise<Result<string>>}
  */
 export async function fetchMessageOfDay(forceRefresh = false) {
+  if (!forceRefresh) {
+    const cachedRes = await readDailyValueCache(STORAGE_MOTD_DAILY_CACHE);
+    if (!cachedRes.err && typeof cachedRes.value === "string" && cachedRes.value.trim()) {
+      return { value: cachedRes.value, err: null };
+    }
+  }
   const motdUrl = forceRefresh
     ? `${API_MESSAGE_OF_DAY_PATH}?refresh=1&t=${Date.now()}`
     : API_MESSAGE_OF_DAY_PATH;
@@ -123,6 +243,10 @@ export async function fetchMessageOfDay(forceRefresh = false) {
 
   if (!motdRes.value || typeof motdRes.value.quote !== "string") {
     return { value: null, err: new Error(ERR_INVALID_MOTD_RESPONSE) };
+  }
+
+  if (!forceRefresh) {
+    await writeDailyValueCache(STORAGE_MOTD_DAILY_CACHE, motdRes.value.quote);
   }
 
   return { value: motdRes.value.quote, err: null };
@@ -145,6 +269,12 @@ export async function fetchMessageOfDay(forceRefresh = false) {
  * }>>}
  */
 export async function fetchHomeContent(forceRefresh = false) {
+  if (!forceRefresh) {
+    const cachedRes = await readDailyValueCache(STORAGE_HOME_CONTENT_DAILY_CACHE);
+    if (!cachedRes.err && cachedRes.value && typeof cachedRes.value === "object") {
+      return { value: cachedRes.value, err: null };
+    }
+  }
   const homeUrl = forceRefresh
     ? `${API_HOME_CONTENT_PATH}?refresh=1&t=${Date.now()}`
     : API_HOME_CONTENT_PATH;
@@ -156,6 +286,9 @@ export async function fetchHomeContent(forceRefresh = false) {
   }
   if (!homeRes.value || typeof homeRes.value !== "object" || !homeRes.value.content || typeof homeRes.value.content !== "object") {
     return { value: null, err: new Error(ERR_INVALID_HOME_RESPONSE) };
+  }
+  if (!forceRefresh) {
+    await writeDailyValueCache(STORAGE_HOME_CONTENT_DAILY_CACHE, homeRes.value.content);
   }
   return { value: homeRes.value.content, err: null };
 }
@@ -641,12 +774,18 @@ export async function uploadBlogImage(file) {
 export function invalidateApiCache(prefix = EMPTY_STRING) {
   if (!prefix) {
     apiCache.clear();
+    apiInflight.clear();
     return { value: true, err: null };
   }
 
   for (const key of apiCache.keys()) {
     if (key.includes(prefix)) {
       apiCache.delete(key);
+    }
+  }
+  for (const key of apiInflight.keys()) {
+    if (key.includes(prefix)) {
+      apiInflight.delete(key);
     }
   }
 

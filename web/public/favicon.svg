@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <defs>
+    <linearGradient id="g" x1="8" y1="8" x2="56" y2="56" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="1" stop-color="#eab308"/>
+    </linearGradient>
+  </defs>
+  <rect x="4" y="4" width="56" height="56" rx="14" fill="#0b0b0b" stroke="rgba(255,255,255,0.12)"/>
+  <circle cx="32" cy="32" r="21" fill="none" stroke="url(#g)" stroke-width="2.5" stroke-dasharray="48 18" opacity="0.9"/>
+  <text x="32.5" y="34" text-anchor="middle" dominant-baseline="central"
+    font-family="Inter, Segoe UI, Arial, sans-serif" font-size="19" font-weight="700"
+    letter-spacing="-0.06em" fill="#f5f5f5">EC</text>
+</svg>
