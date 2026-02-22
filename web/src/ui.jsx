@@ -205,9 +205,11 @@ function renderPage(pathname, onResumeDownload, motd) {
 
 function BudgetToolRoutePage() {
   return (
-    <Suspense fallback={<section className="panel"><p>{TEXT_BUDGET_LOADING}</p></section>}>
-      <BudgetToolPageLazy />
-    </Suspense>
+    <div className="budget-route-shell">
+      <Suspense fallback={<section className="panel"><p>{TEXT_BUDGET_LOADING}</p></section>}>
+        <BudgetToolPageLazy />
+      </Suspense>
+    </div>
   );
 }
 

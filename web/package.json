@@ -10,7 +10,6 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@supabase/supabase-js": "^2.97.0",
     "firebase": "^12.9.0",
     "highlight.js": "^11.11.1",
     "html2canvas": "^1.4.1",

@@ -82,6 +82,20 @@ const SQLITE_BLOG_TAG_MAP_SCHEMA = `
     PRIMARY KEY (blog_id, tag_id)
   )
 `;
+const SQLITE_BUDGET_PROFILE_CURRENT_SCHEMA = `
+  CREATE TABLE IF NOT EXISTS budget_profile_current (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    profile_json TEXT NOT NULL,
+    saved_at_iso TEXT NOT NULL
+  )
+`;
+const SQLITE_BUDGET_PROFILE_HISTORY_SCHEMA = `
+  CREATE TABLE IF NOT EXISTS budget_profile_history (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    profile_json TEXT NOT NULL,
+    saved_at_iso TEXT NOT NULL
+  )
+`;
 const SQL_INSERT_PROMPT = "INSERT INTO prompts (prompt, reply, created_at) VALUES (?, ?, ?)";
 const SQL_SELECT_PROMPTS = "SELECT id, prompt, reply, created_at FROM prompts ORDER BY id DESC LIMIT 20";
 const SQL_LIST_BLOGS = "SELECT id, title, slug, summary, content, variant, published, created_at, updated_at FROM blogs ORDER BY updated_at DESC LIMIT 100";
@@ -112,6 +126,10 @@ const SQL_BLOG_TAG_ROWS = `
   FROM blog_tag_map btm
   JOIN blog_tags bt ON bt.id = btm.tag_id
 `;
+const SQL_UPSERT_BUDGET_PROFILE_CURRENT = "INSERT INTO budget_profile_current (id, profile_json, saved_at_iso) VALUES (1, ?, ?) ON CONFLICT(id) DO UPDATE SET profile_json = excluded.profile_json, saved_at_iso = excluded.saved_at_iso";
+const SQL_INSERT_BUDGET_PROFILE_HISTORY = "INSERT INTO budget_profile_history (profile_json, saved_at_iso) VALUES (?, ?)";
+const SQL_GET_BUDGET_PROFILE_CURRENT = "SELECT profile_json, saved_at_iso FROM budget_profile_current WHERE id = 1";
+const ERR_BUDGET_PROFILE_JSON_REQUIRED = "Budget profile json is required";
 const OPENAI_MODEL = "gpt-4.1-mini";
 const OPENAI_KEY_ENV = "OPENAI_API_KEY";
 const ERR_EMPTY_OUTPUT = "Model returned empty output";
@@ -213,6 +231,8 @@ db.exec(SQLITE_BLOG_CATEGORIES_SCHEMA);
 db.exec(SQLITE_BLOG_TAGS_SCHEMA);
 db.exec(SQLITE_BLOG_CATEGORY_MAP_SCHEMA);
 db.exec(SQLITE_BLOG_TAG_MAP_SCHEMA);
+db.exec(SQLITE_BUDGET_PROFILE_CURRENT_SCHEMA);
+db.exec(SQLITE_BUDGET_PROFILE_HISTORY_SCHEMA);
 ensureBlogVariantColumn();
 
 const openai = new OpenAI({ apiKey: process.env[OPENAI_KEY_ENV] });
@@ -671,6 +691,38 @@ export function getBlogDashboardCached(ttlMs = defaultPromptsCacheTtlMs) {
   }
 
   return { value: dashboardRes.value, err: null };
+}
+
+/**
+ * @param {string} profileJsonText
+ * @returns {Result<{savedAtIso: string}>}
+ */
+export function saveBudgetProfileJson(profileJsonText) {
+  const normalized = typeof profileJsonText === "string" ? profileJsonText.trim() : "";
+  if (!normalized) {
+    return { value: null, err: new Error(ERR_BUDGET_PROFILE_JSON_REQUIRED) };
+  }
+  const savedAtIso = new Date().toISOString();
+  db.prepare(SQL_UPSERT_BUDGET_PROFILE_CURRENT).run(normalized, savedAtIso);
+  db.prepare(SQL_INSERT_BUDGET_PROFILE_HISTORY).run(normalized, savedAtIso);
+  return { value: { savedAtIso }, err: null };
+}
+
+/**
+ * @returns {Result<{profileJson: string, savedAtIso: string} | null>}
+ */
+export function getBudgetProfileJson() {
+  const row = db.prepare(SQL_GET_BUDGET_PROFILE_CURRENT).get();
+  if (!row) {
+    return { value: null, err: null };
+  }
+  return {
+    value: {
+      profileJson: String(row.profile_json || ""),
+      savedAtIso: String(row.saved_at_iso || "")
+    },
+    err: null
+  };
 }
 
 /**

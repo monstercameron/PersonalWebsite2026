@@ -28,7 +28,9 @@ import {
   listBlogTags,
   listPromptsCached,
   logEvent,
+  getBudgetProfileJson,
   saveUploadedImage,
+  saveBudgetProfileJson,
   savePromptOnly,
   setBlogPublished,
   updateBlog
@@ -58,6 +60,11 @@ const PATH_API_BLOG_TAGS = "/api/blogs/tags";
 const PATH_API_BLOGS_ADMIN_LOGIN = "/api/blogs/admin/login";
 const PATH_API_BLOGS_ADMIN_LOGOUT = "/api/blogs/admin/logout";
 const PATH_API_BLOGS_UPLOAD_IMAGE = "/api/blogs/upload-image";
+const PATH_API_BUDGET_PROFILE = "/api/budget/profile";
+const HEADER_SET_COOKIE = "Set-Cookie";
+const CODE_NOT_FOUND = "NOT_FOUND";
+const ERR_BUDGET_PROFILE_NOT_FOUND = "Budget profile not found";
+const ERR_BUDGET_PROFILE_PAYLOAD_REQUIRED = "Budget profile payload is required";
 const STATUS_BAD_REQUEST = 400;
 const STATUS_UNAUTHORIZED = 401;
 const STATUS_NOT_FOUND = 404;
@@ -252,15 +259,62 @@ app.post(PATH_API_BLOGS_ADMIN_LOGIN, async (c) => {
     return c.json(publicErrRes.value, STATUS_SERVER_ERROR);
   }
   const expiresAt = Date.now() + ttlMs;
-  c.header("Set-Cookie", buildAdminCookie(tokenRes.value, ttlMs));
+  c.header(HEADER_SET_COOKIE, buildAdminCookie(tokenRes.value, ttlMs));
   c.header(CACHE_CONTROL, CACHE_NO_STORE);
   return c.json({ expiresAt, user: process.env[ENV_BLOG_ADMIN_USER] || DEFAULT_BLOG_ADMIN_USER });
 });
 
 app.post(PATH_API_BLOGS_ADMIN_LOGOUT, (c) => {
-  c.header("Set-Cookie", buildClearAdminCookie());
+  c.header(HEADER_SET_COOKIE, buildClearAdminCookie());
   c.header(CACHE_CONTROL, CACHE_NO_STORE);
   return c.json({ ok: true });
+});
+
+app.get(PATH_API_BUDGET_PROFILE, async (c) => {
+  const authRes = requireAdminSession(c);
+  if (authRes.err) {
+    return c.json({ message: authRes.err.message, code: "UNAUTHORIZED" }, STATUS_UNAUTHORIZED);
+  }
+  const profileRes = getBudgetProfileJson();
+  if (profileRes.err) {
+    const publicErrRes = toPublicError(profileRes.err);
+    return c.json(publicErrRes.value, STATUS_SERVER_ERROR);
+  }
+  if (!profileRes.value) {
+    return c.json({ message: ERR_BUDGET_PROFILE_NOT_FOUND, code: CODE_NOT_FOUND }, STATUS_NOT_FOUND);
+  }
+  const parsedRes = await fromPromise(Promise.resolve().then(() => JSON.parse(profileRes.value.profileJson)));
+  if (parsedRes.err) {
+    const publicErrRes = toPublicError(parsedRes.err);
+    return c.json(publicErrRes.value, STATUS_SERVER_ERROR);
+  }
+  c.header(CACHE_CONTROL, CACHE_NO_STORE);
+  return c.json({ profilePayload: parsedRes.value, savedAtIso: profileRes.value.savedAtIso });
+});
+
+app.put(PATH_API_BUDGET_PROFILE, async (c) => {
+  const authRes = requireAdminSession(c);
+  if (authRes.err) {
+    return c.json({ message: authRes.err.message, code: "UNAUTHORIZED" }, STATUS_UNAUTHORIZED);
+  }
+  const bodyRes = await fromPromise(c.req.json());
+  if (bodyRes.err) {
+    const publicErrRes = toPublicError(bodyRes.err);
+    return c.json(publicErrRes.value, STATUS_BAD_REQUEST);
+  }
+  const profilePayload = bodyRes.value?.profilePayload;
+  const jsonRes = await fromPromise(Promise.resolve().then(() => JSON.stringify(profilePayload)));
+  if (jsonRes.err || !jsonRes.value) {
+    const publicErrRes = toPublicError(jsonRes.err || new Error(ERR_BUDGET_PROFILE_PAYLOAD_REQUIRED));
+    return c.json(publicErrRes.value, STATUS_BAD_REQUEST);
+  }
+  const saveRes = saveBudgetProfileJson(jsonRes.value);
+  if (saveRes.err) {
+    const publicErrRes = toPublicError(saveRes.err);
+    return c.json(publicErrRes.value, STATUS_SERVER_ERROR);
+  }
+  c.header(CACHE_CONTROL, CACHE_NO_STORE);
+  return c.json({ saved: true, savedAtIso: saveRes.value.savedAtIso });
 });
 
 app.post(PATH_API_BLOG_CATEGORIES, async (c) => {

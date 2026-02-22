@@ -11,6 +11,9 @@
   --accent: #eab308;
   --accent-soft: #fef08a;
   --glow: rgba(234, 179, 8, 0.15);
+  --site-header-offset: 96px;
+  --budget-nav-link-item-offset: 3px;
+  --budget-anchor-scroll-offset: 260px;
 }
 * { box-sizing: border-box; }
 body { 
@@ -42,6 +45,11 @@ body {
 
 /* Main */
 .main-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 24px; padding: 40px 0 60px; flex: 1; align-content: start; }
+.budget-route-shell { margin-top: 24px; }
+.budget-sticky-toolbar { top: calc(var(--site-header-offset) + 4px); z-index: 60; }
+.budget-nav-link-item { position: relative; top: var(--budget-nav-link-item-offset); }
+/* Budget in-page anchor targets should land lower to clear stacked sticky navs. */
+.app-shell section[id] { scroll-margin-top: var(--budget-anchor-scroll-offset) !important; }
 
 /* Panels */
 .panel { background: var(--panel); backdrop-filter: blur(16px); border: 1px solid var(--line); padding: 32px; border-radius: 16px; box-shadow: 0 8px 32px -12px rgba(0,0,0,0.5); transition: transform 100ms ease, border-color 100ms ease; }

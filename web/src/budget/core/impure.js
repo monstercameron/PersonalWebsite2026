@@ -12,6 +12,34 @@
  */
 import { extractFinancialRiskFindingsFromCurrentCollectionsState } from './pure.js'
 
+const API_BLOG_ADMIN_LOGIN_PATH = '/api/blogs/admin/login'
+const API_BLOG_ADMIN_LOGOUT_PATH = '/api/blogs/admin/logout'
+const API_BLOG_DASHBOARD_PATH = '/api/blogs/dashboard'
+const API_BUDGET_PROFILE_PATH = '/api/budget/profile'
+const API_HTTP_METHOD_POST = 'POST'
+const API_HTTP_METHOD_PUT = 'PUT'
+const API_HTTP_HEADER_CONTENT_TYPE = 'Content-Type'
+const API_HTTP_CONTENT_TYPE_JSON = 'application/json'
+const API_KIND_VALIDATION = 'VALIDATION'
+const API_KIND_NETWORK = 'NETWORK'
+const API_KIND_NOT_FOUND = 'NOT_FOUND'
+const API_KIND_LOCAL_STORAGE = 'LOCAL_STORAGE'
+const API_ERR_CACHED_CONFIG_OBJECT = 'cached api sync config must be an object'
+const API_ERR_CONFIG_OBJECT = 'api sync config must be an object'
+const API_ERR_ENABLED_BOOLEAN = 'api sync enabled must be boolean'
+const API_ERR_PERSIST_CONFIG = 'failed to persist api sync config'
+const API_ERR_SYNC_DISABLED = 'api sync is disabled'
+const API_ERR_REQUEST_FAILED = 'api request failed'
+const API_ERR_RESPONSE_MISSING = 'api response missing'
+const API_ERR_RESPONSE_READ_FAILED = 'api response read failed'
+const API_ERR_SYNC_BUNDLE_MISSING = 'api sync bundle missing'
+const API_ERR_LOGIN_PASSWORD_REQUIRED = 'login password is required'
+const API_ERR_PROFILE_EXPORT_EMPTY = 'profile json export is empty'
+const API_ERR_PROFILE_NOT_FOUND = 'no api profile snapshot exists'
+const API_ERR_PROFILE_JSON_EMPTY = 'api profile json is unexpectedly empty'
+const API_DEFAULT_ADMIN_USER = 'admin'
+const API_SYNC_DEFAULT_BASE_URL = ''
+
 /**
  * Creates a normalized application error object for tuple-based error flow.
  * @param {string} errorKind
@@ -1258,383 +1286,213 @@ export async function pullCompleteFinancialProfileFromFirebaseForAuthenticatedUs
 }
 
 /**
- * Loads Supabase web config from localStorage cache.
+ * Loads API sync config from localStorage cache.
  * Returns defaults when cache is missing.
- * @returns {Promise<Result<{enabled: boolean, supabaseUrl: string, supabaseAnonKey: string, email: string, otpPendingEmail: string, otpRequestedAtIso: string}>>}
+ * @returns {Promise<Result<{enabled: boolean}>>}
  */
 export async function loadSupabaseWebConfigFromLocalStorageCache() {
   const [cachedValue, cachedValueError] = await safelyReadJsonSnapshotFromBrowserLocalStorageByKey(LOCAL_SUPABASE_WEB_CONFIG_STORAGE_KEY)
   if (cachedValueError) return [null, cachedValueError]
   if (cachedValue === null) {
-    return [{ enabled: false, supabaseUrl: '', supabaseAnonKey: '', email: '', otpPendingEmail: '', otpRequestedAtIso: '' }, null]
+    return [{ enabled: false }, null]
   }
   if (Array.isArray(cachedValue) || typeof cachedValue !== 'object') {
-    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext('VALIDATION', 'cached supabase config must be an object', true)
+    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext(API_KIND_VALIDATION, API_ERR_CACHED_CONFIG_OBJECT, true)
     if (createErrorFailure) return [null, createErrorFailure]
     return [null, errorValue]
   }
-  return [{
-    enabled: cachedValue.enabled === true,
-    supabaseUrl: typeof cachedValue.supabaseUrl === 'string' ? cachedValue.supabaseUrl : '',
-    supabaseAnonKey: typeof cachedValue.supabaseAnonKey === 'string' ? cachedValue.supabaseAnonKey : '',
-    email: typeof cachedValue.email === 'string' ? cachedValue.email : '',
-    otpPendingEmail: typeof cachedValue.otpPendingEmail === 'string' ? cachedValue.otpPendingEmail : '',
-    otpRequestedAtIso: typeof cachedValue.otpRequestedAtIso === 'string' ? cachedValue.otpRequestedAtIso : ''
-  }, null]
+  return [{ enabled: cachedValue.enabled === true }, null]
 }
 
-/**
- * Persists Supabase web config into localStorage cache.
- * @param {{enabled: boolean, supabaseUrl: string, supabaseAnonKey: string, email?: string, otpPendingEmail?: string, otpRequestedAtIso?: string}} supabaseWebConfig
- * @returns {Promise<Result<true>>}
- */
 export async function persistSupabaseWebConfigIntoLocalStorageCache(supabaseWebConfig) {
   if (!supabaseWebConfig || typeof supabaseWebConfig !== 'object' || Array.isArray(supabaseWebConfig)) {
-    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext('VALIDATION', 'supabase web config must be an object', true)
+    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext(API_KIND_VALIDATION, API_ERR_CONFIG_OBJECT, true)
     if (createErrorFailure) return [null, createErrorFailure]
     return [null, errorValue]
   }
   if (typeof supabaseWebConfig.enabled !== 'boolean') {
-    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext('VALIDATION', 'supabase enabled must be boolean', true)
+    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext(API_KIND_VALIDATION, API_ERR_ENABLED_BOOLEAN, true)
     if (createErrorFailure) return [null, createErrorFailure]
     return [null, errorValue]
   }
-  if (typeof supabaseWebConfig.supabaseUrl !== 'string' || typeof supabaseWebConfig.supabaseAnonKey !== 'string') {
-    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext('VALIDATION', 'supabase url and anon key must be strings', true)
-    if (createErrorFailure) return [null, createErrorFailure]
-    return [null, errorValue]
-  }
-  const payload = {
-    enabled: supabaseWebConfig.enabled,
-    supabaseUrl: supabaseWebConfig.supabaseUrl.trim(),
-    supabaseAnonKey: supabaseWebConfig.supabaseAnonKey.trim(),
-    email: typeof supabaseWebConfig.email === 'string' ? supabaseWebConfig.email.trim() : '',
-    otpPendingEmail: typeof supabaseWebConfig.otpPendingEmail === 'string' ? supabaseWebConfig.otpPendingEmail.trim() : '',
-    otpRequestedAtIso: typeof supabaseWebConfig.otpRequestedAtIso === 'string' ? supabaseWebConfig.otpRequestedAtIso.trim() : ''
-  }
+  const payload = { enabled: supabaseWebConfig.enabled }
   const [persistSuccess, persistError] = await safelyWriteJsonSnapshotToBrowserLocalStorageByKey(LOCAL_SUPABASE_WEB_CONFIG_STORAGE_KEY, payload)
   if (persistError) return [null, persistError]
   if (!persistSuccess) {
-    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext('LOCAL_STORAGE', 'fallback localStorage write for supabase config did not return success flag', true)
+    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext(API_KIND_LOCAL_STORAGE, API_ERR_PERSIST_CONFIG, true)
     if (createErrorFailure) return [null, createErrorFailure]
     return [null, errorValue]
   }
   return [true, null]
 }
 
-let cachedSupabaseClientBundle = null
-
-/**
- * Initializes Supabase client from web config.
- * @param {{enabled: boolean, supabaseUrl: string, supabaseAnonKey: string}} supabaseWebConfig
- * @returns {Promise<Result<{client: import('@supabase/supabase-js').SupabaseClient}>>}
- */
 export async function initializeSupabaseClientFromWebConfig(supabaseWebConfig) {
   if (!supabaseWebConfig || typeof supabaseWebConfig !== 'object' || Array.isArray(supabaseWebConfig)) {
-    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext('VALIDATION', 'supabaseWebConfig must be an object', true)
+    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext(API_KIND_VALIDATION, API_ERR_CONFIG_OBJECT, true)
     if (createErrorFailure) return [null, createErrorFailure]
     return [null, errorValue]
   }
   if (supabaseWebConfig.enabled !== true) {
-    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext('VALIDATION', 'supabase sync is disabled', true)
+    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext(API_KIND_VALIDATION, API_ERR_SYNC_DISABLED, true)
     if (createErrorFailure) return [null, createErrorFailure]
     return [null, errorValue]
   }
-  if (!supabaseWebConfig.supabaseUrl || !supabaseWebConfig.supabaseAnonKey) {
-    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext('VALIDATION', 'supabase config is missing required fields', true)
-    if (createErrorFailure) return [null, createErrorFailure]
-    return [null, errorValue]
-  }
-  if (cachedSupabaseClientBundle) return [cachedSupabaseClientBundle, null]
-  const [supabaseModule, supabaseModuleError] = await import('@supabase/supabase-js')
-    .then((moduleValue) => /** @type {Result<any>} */ ([moduleValue, null]))
-    .catch((loadFailure) => {
-      const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext('NETWORK', 'failed to load supabase sdk module', true, { loadFailure })
-      if (createErrorFailure) return /** @type {Result<any>} */ ([null, createErrorFailure])
-      return /** @type {Result<any>} */ ([null, errorValue])
-    })
-  if (supabaseModuleError) return [null, supabaseModuleError]
-  if (!supabaseModule || typeof supabaseModule.createClient !== 'function') {
-    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext('VALIDATION', 'supabase module is unexpectedly empty', true)
-    if (createErrorFailure) return [null, createErrorFailure]
-    return [null, errorValue]
-  }
-  const client = supabaseModule.createClient(supabaseWebConfig.supabaseUrl, supabaseWebConfig.supabaseAnonKey)
-  cachedSupabaseClientBundle = { client }
-  return [cachedSupabaseClientBundle, null]
+  return [{ apiBaseUrl: API_SYNC_DEFAULT_BASE_URL }, null]
 }
 
-/**
- * Starts Supabase email OTP sign-in by requesting an email code.
- * @param {{enabled: boolean, supabaseUrl: string, supabaseAnonKey: string}} supabaseWebConfig
- * @param {string} emailAddress
- * @returns {Promise<Result<true>>}
- */
-export async function startSupabaseEmailOtpSignInWithRedirect(supabaseWebConfig, emailAddress) {
+function joinApiUrl(base, path) {
+  const normalizedBase = String(base || '').trim()
+  if (!normalizedBase) return path
+  return `${normalizedBase.replace(/\/+$/, '')}${path}`
+}
+
+async function requestBudgetApiJson(url, requestInit = {}) {
+  const [response, responseError] = await Promise.resolve()
+    .then(() => fetch(url, {
+      credentials: 'include',
+      ...requestInit
+    }))
+    .then((value) => [value, null])
+    .catch((networkFailure) => {
+      const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext(API_KIND_NETWORK, API_ERR_REQUEST_FAILED, true, { networkFailure, url })
+      if (createErrorFailure) return [null, createErrorFailure]
+      return [null, errorValue]
+    })
+  if (responseError) return [null, responseError]
+  if (!response) {
+    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext(API_KIND_NETWORK, API_ERR_RESPONSE_MISSING, true, { url })
+    if (createErrorFailure) return [null, createErrorFailure]
+    return [null, errorValue]
+  }
+  const [textValue, textError] = await Promise.resolve()
+    .then(() => response.text())
+    .then((value) => [value, null])
+    .catch((readFailure) => {
+      const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext(API_KIND_NETWORK, API_ERR_RESPONSE_READ_FAILED, true, { readFailure, url })
+      if (createErrorFailure) return [null, createErrorFailure]
+      return [null, errorValue]
+    })
+  if (textError) return [null, textError]
+  const [jsonValue, jsonError] = textValue
+    ? await safelyParseJsonTextIntoObjectUsingPromiseBoundary(textValue)
+    : [null, null]
+  if (jsonError) return [null, jsonError]
+  if (!response.ok) {
+    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext(API_KIND_NETWORK, `api status ${response.status}`, true, { url, status: response.status, responseBody: jsonValue })
+    if (createErrorFailure) return [null, createErrorFailure]
+    return [null, errorValue]
+  }
+  return [jsonValue, null]
+}
+
+export async function startSupabaseEmailOtpSignInWithRedirect(supabaseWebConfig) {
   const [clientBundle, clientBundleError] = await initializeSupabaseClientFromWebConfig(supabaseWebConfig)
   if (clientBundleError) return [null, clientBundleError]
   if (!clientBundle) {
-    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext('VALIDATION', 'supabase client bundle is unexpectedly empty', true)
-    if (createErrorFailure) return [null, createErrorFailure]
-    return [null, errorValue]
-  }
-  const normalizedEmailAddress = typeof emailAddress === 'string' ? emailAddress.trim() : ''
-  if (!normalizedEmailAddress || !normalizedEmailAddress.includes('@')) {
-    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext('VALIDATION', 'email is required for supabase magic link sign-in', true)
-    if (createErrorFailure) return [null, createErrorFailure]
-    return [null, errorValue]
-  }
-  const [signInData, signInError] = await clientBundle.client.auth.signInWithOtp({
-    email: normalizedEmailAddress
-  }).then((value) => /** @type {Result<any>} */ ([value, null]))
-    .catch((otpFailure) => {
-      const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext('AUTH', 'supabase email otp sign-in start failed', true, { otpFailure })
-      if (createErrorFailure) return /** @type {Result<any>} */ ([null, createErrorFailure])
-      return /** @type {Result<any>} */ ([null, errorValue])
-    })
-  if (signInError) return [null, signInError]
-  if (signInData && signInData.error) {
-    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext('AUTH', 'supabase email otp sign-in returned error', true, { otpError: signInData.error })
+    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext(API_KIND_VALIDATION, API_ERR_SYNC_BUNDLE_MISSING, true)
     if (createErrorFailure) return [null, createErrorFailure]
     return [null, errorValue]
   }
   return [true, null]
 }
 
-/**
- * Verifies Supabase email OTP code to create session.
- * @param {{enabled: boolean, supabaseUrl: string, supabaseAnonKey: string}} supabaseWebConfig
- * @param {string} emailAddress
- * @param {string} oneTimeCode
- * @returns {Promise<Result<{id: string, email: string}>>}
- */
-export async function verifySupabaseEmailOtpCodeAndCreateSession(supabaseWebConfig, emailAddress, oneTimeCode) {
+export async function verifySupabaseEmailOtpCodeAndCreateSession(supabaseWebConfig, _emailAddress, oneTimeCode) {
   const [clientBundle, clientBundleError] = await initializeSupabaseClientFromWebConfig(supabaseWebConfig)
   if (clientBundleError) return [null, clientBundleError]
   if (!clientBundle) {
-    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext('VALIDATION', 'supabase client bundle is unexpectedly empty', true)
+    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext(API_KIND_VALIDATION, API_ERR_SYNC_BUNDLE_MISSING, true)
     if (createErrorFailure) return [null, createErrorFailure]
     return [null, errorValue]
   }
-  const normalizedEmailAddress = typeof emailAddress === 'string' ? emailAddress.trim() : ''
-  const normalizedOneTimeCode = typeof oneTimeCode === 'string' ? oneTimeCode.trim() : ''
-  if (!normalizedEmailAddress || !normalizedEmailAddress.includes('@')) {
-    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext('VALIDATION', 'email is required to verify supabase otp', true)
+  const password = typeof oneTimeCode === 'string' ? oneTimeCode.trim() : ''
+  if (!password) {
+    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext(API_KIND_VALIDATION, API_ERR_LOGIN_PASSWORD_REQUIRED, true)
     if (createErrorFailure) return [null, createErrorFailure]
     return [null, errorValue]
   }
-  if (!normalizedOneTimeCode) {
-    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext('VALIDATION', 'otp code is required', true)
-    if (createErrorFailure) return [null, createErrorFailure]
-    return [null, errorValue]
-  }
-  const [verifyResult, verifyError] = await clientBundle.client.auth.verifyOtp({
-    email: normalizedEmailAddress,
-    token: normalizedOneTimeCode,
-    type: 'email'
-  }).then((value) => /** @type {Result<any>} */ ([value, null]))
-    .catch((otpVerificationFailure) => {
-      const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext('AUTH', 'supabase otp verification failed', true, { otpVerificationFailure })
-      if (createErrorFailure) return /** @type {Result<any>} */ ([null, createErrorFailure])
-      return /** @type {Result<any>} */ ([null, errorValue])
-    })
-  if (verifyError) return [null, verifyError]
-  if (verifyResult && verifyResult.error) {
-    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext('AUTH', 'supabase otp verification returned error', true, { otpVerificationError: verifyResult.error })
-    if (createErrorFailure) return [null, createErrorFailure]
-    return [null, errorValue]
-  }
-  const user = verifyResult?.data?.user
-  if (!user || typeof user.id !== 'string') {
-    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext('AUTH', 'supabase otp verification completed without a user session', true)
-    if (createErrorFailure) return [null, createErrorFailure]
-    return [null, errorValue]
-  }
-  return [{ id: user.id, email: typeof user.email === 'string' ? user.email : '' }, null]
+  const [loginResponse, loginError] = await requestBudgetApiJson(joinApiUrl(clientBundle.apiBaseUrl, API_BLOG_ADMIN_LOGIN_PATH), {
+    method: API_HTTP_METHOD_POST,
+    headers: { [API_HTTP_HEADER_CONTENT_TYPE]: API_HTTP_CONTENT_TYPE_JSON },
+    body: JSON.stringify({ password })
+  })
+  if (loginError) return [null, loginError]
+  return [{ id: String(loginResponse?.user || API_DEFAULT_ADMIN_USER), email: '' }, null]
 }
 
-/**
- * Reads current Supabase auth user summary from client session.
- * @param {{enabled: boolean, supabaseUrl: string, supabaseAnonKey: string}} supabaseWebConfig
- * @returns {Promise<Result<{id: string, email: string}|null>>}
- */
 export async function readSupabaseAuthenticatedUserSummary(supabaseWebConfig) {
   const [clientBundle, clientBundleError] = await initializeSupabaseClientFromWebConfig(supabaseWebConfig)
   if (clientBundleError) return [null, clientBundleError]
   if (!clientBundle) return [null, null]
-  const [userResult, userError] = await clientBundle.client.auth.getUser()
-    .then((value) => /** @type {Result<any>} */ ([value, null]))
-    .catch((readFailure) => {
-      const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext('AUTH', 'failed to read supabase authenticated user', true, { readFailure })
-      if (createErrorFailure) return /** @type {Result<any>} */ ([null, createErrorFailure])
-      return /** @type {Result<any>} */ ([null, errorValue])
-    })
-  if (userError) return [null, userError]
-  const user = userResult?.data?.user
-  if (!user) return [null, null]
-  return [{
-    id: typeof user.id === 'string' ? user.id : '',
-    email: typeof user.email === 'string' ? user.email : ''
-  }, null]
+  const [dashboardResponse, dashboardError] = await requestBudgetApiJson(joinApiUrl(clientBundle.apiBaseUrl, API_BLOG_DASHBOARD_PATH))
+  if (dashboardError) return [null, null]
+  if (!dashboardResponse || typeof dashboardResponse !== 'object') return [null, null]
+  return [{ id: API_DEFAULT_ADMIN_USER, email: '' }, null]
 }
 
-/**
- * Signs out current Supabase session.
- * @param {{enabled: boolean, supabaseUrl: string, supabaseAnonKey: string}} supabaseWebConfig
- * @returns {Promise<Result<true>>}
- */
 export async function signOutFromSupabaseCurrentSession(supabaseWebConfig) {
   const [clientBundle, clientBundleError] = await initializeSupabaseClientFromWebConfig(supabaseWebConfig)
   if (clientBundleError) return [null, clientBundleError]
   if (!clientBundle) {
-    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext('VALIDATION', 'supabase client bundle is unexpectedly empty', true)
+    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext(API_KIND_VALIDATION, API_ERR_SYNC_BUNDLE_MISSING, true)
     if (createErrorFailure) return [null, createErrorFailure]
     return [null, errorValue]
   }
-  const [signOutResult, signOutError] = await clientBundle.client.auth.signOut()
-    .then((value) => /** @type {Result<any>} */ ([value, null]))
-    .catch((signOutFailure) => {
-      const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext('AUTH', 'supabase sign-out failed', true, { signOutFailure })
-      if (createErrorFailure) return /** @type {Result<any>} */ ([null, createErrorFailure])
-      return /** @type {Result<any>} */ ([null, errorValue])
-    })
-  if (signOutError) return [null, signOutError]
-  if (signOutResult && signOutResult.error) {
-    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext('AUTH', 'supabase sign-out returned error', true, { signOutError: signOutResult.error })
-    if (createErrorFailure) return [null, createErrorFailure]
-    return [null, errorValue]
-  }
+  const [, logoutError] = await requestBudgetApiJson(joinApiUrl(clientBundle.apiBaseUrl, API_BLOG_ADMIN_LOGOUT_PATH), { method: API_HTTP_METHOD_POST })
+  if (logoutError) return [null, logoutError]
   return [true, null]
 }
 
-/**
- * Pushes complete financial profile into Supabase current + history tables for authenticated user.
- * @param {{enabled: boolean, supabaseUrl: string, supabaseAnonKey: string}} supabaseWebConfig
- * @param {Record<string, unknown>} budgetCollectionsState
- * @param {{themeName: 'light'|'dark', textScaleMultiplier: number, tableSortState?: Record<string, {key: string, direction: 'asc'|'desc'}>}} uiPreferences
- * @param {Array<Record<string, unknown>>} auditTimelineEntries
- * @returns {Promise<Result<{userId: string, savedAtIso: string}>>}
- */
 export async function pushCompleteFinancialProfileIntoSupabaseForAuthenticatedUser(supabaseWebConfig, budgetCollectionsState, uiPreferences, auditTimelineEntries) {
   const [clientBundle, clientBundleError] = await initializeSupabaseClientFromWebConfig(supabaseWebConfig)
   if (clientBundleError) return [null, clientBundleError]
   if (!clientBundle) {
-    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext('VALIDATION', 'supabase client bundle is unexpectedly empty', true)
-    if (createErrorFailure) return [null, createErrorFailure]
-    return [null, errorValue]
-  }
-  const [userSummary, userSummaryError] = await readSupabaseAuthenticatedUserSummary(supabaseWebConfig)
-  if (userSummaryError) return [null, userSummaryError]
-  if (!userSummary || !userSummary.id) {
-    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext('AUTH', 'supabase user must be signed in before sync', true)
+    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext(API_KIND_VALIDATION, API_ERR_SYNC_BUNDLE_MISSING, true)
     if (createErrorFailure) return [null, createErrorFailure]
     return [null, errorValue]
   }
   const [profileJsonText, profileJsonTextError] = await exportCompleteFinancialProfileAsJsonTextSnapshot(budgetCollectionsState, uiPreferences, auditTimelineEntries)
   if (profileJsonTextError) return [null, profileJsonTextError]
   if (!profileJsonText) {
-    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext('VALIDATION', 'profile json text is unexpectedly empty before supabase push', true)
+    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext(API_KIND_VALIDATION, API_ERR_PROFILE_EXPORT_EMPTY, true)
     if (createErrorFailure) return [null, createErrorFailure]
     return [null, errorValue]
   }
   const [profilePayload, profilePayloadError] = await safelyParseJsonTextIntoObjectUsingPromiseBoundary(profileJsonText)
   if (profilePayloadError) return [null, profilePayloadError]
-  if (!profilePayload || Array.isArray(profilePayload) || typeof profilePayload !== 'object') {
-    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext('VALIDATION', 'profile payload is malformed before supabase push', true)
-    if (createErrorFailure) return [null, createErrorFailure]
-    return [null, errorValue]
-  }
-  const savedAtIso = new Date().toISOString()
-  const [currentUpsertResult, currentUpsertError] = await clientBundle.client
-    .from('profile_current')
-    .upsert({ user_id: userSummary.id, profile_payload: profilePayload, saved_at_iso: savedAtIso }, { onConflict: 'user_id' })
-    .select('user_id')
-    .single()
-    .then((value) => /** @type {Result<any>} */ ([value, null]))
-    .catch((writeFailure) => {
-      const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext('NETWORK', 'failed to write profile_current in supabase', true, { writeFailure })
-      if (createErrorFailure) return /** @type {Result<any>} */ ([null, createErrorFailure])
-      return /** @type {Result<any>} */ ([null, errorValue])
-    })
-  if (currentUpsertError) return [null, currentUpsertError]
-  if (currentUpsertResult && currentUpsertResult.error) {
-    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext('NETWORK', 'supabase profile_current upsert returned error', true, { upsertError: currentUpsertResult.error })
-    if (createErrorFailure) return [null, createErrorFailure]
-    return [null, errorValue]
-  }
-  const [historyInsertResult, historyInsertError] = await clientBundle.client
-    .from('profile_history')
-    .insert({ user_id: userSummary.id, profile_payload: profilePayload, saved_at_iso: savedAtIso })
-    .then((value) => /** @type {Result<any>} */ ([value, null]))
-    .catch((insertFailure) => {
-      const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext('NETWORK', 'failed to write profile_history in supabase', true, { insertFailure })
-      if (createErrorFailure) return /** @type {Result<any>} */ ([null, createErrorFailure])
-      return /** @type {Result<any>} */ ([null, errorValue])
-    })
-  if (historyInsertError) return [null, historyInsertError]
-  if (historyInsertResult && historyInsertResult.error) {
-    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext('NETWORK', 'supabase profile_history insert returned error', true, { insertError: historyInsertResult.error })
-    if (createErrorFailure) return [null, createErrorFailure]
-    return [null, errorValue]
-  }
-  return [{ userId: userSummary.id, savedAtIso }, null]
+  const [pushResponse, pushError] = await requestBudgetApiJson(joinApiUrl(clientBundle.apiBaseUrl, API_BUDGET_PROFILE_PATH), {
+    method: API_HTTP_METHOD_PUT,
+    headers: { [API_HTTP_HEADER_CONTENT_TYPE]: API_HTTP_CONTENT_TYPE_JSON },
+    body: JSON.stringify({ profilePayload })
+  })
+  if (pushError) return [null, pushError]
+  return [{ userId: API_DEFAULT_ADMIN_USER, savedAtIso: typeof pushResponse?.savedAtIso === 'string' ? pushResponse.savedAtIso : new Date().toISOString() }, null]
 }
 
-/**
- * Pulls complete financial profile from Supabase current table for authenticated user.
- * @param {{enabled: boolean, supabaseUrl: string, supabaseAnonKey: string}} supabaseWebConfig
- * @returns {Promise<Result<{collections: Record<string, unknown>, uiPreferences: {themeName: 'light'|'dark', textScaleMultiplier: number, tableSortState?: Record<string, {key: string, direction: 'asc'|'desc'}>}|null, auditTimelineEntries: Array<Record<string, unknown>>}>>}
- */
 export async function pullCompleteFinancialProfileFromSupabaseForAuthenticatedUser(supabaseWebConfig) {
   const [clientBundle, clientBundleError] = await initializeSupabaseClientFromWebConfig(supabaseWebConfig)
   if (clientBundleError) return [null, clientBundleError]
   if (!clientBundle) {
-    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext('VALIDATION', 'supabase client bundle is unexpectedly empty', true)
+    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext(API_KIND_VALIDATION, API_ERR_SYNC_BUNDLE_MISSING, true)
     if (createErrorFailure) return [null, createErrorFailure]
     return [null, errorValue]
   }
-  const [userSummary, userSummaryError] = await readSupabaseAuthenticatedUserSummary(supabaseWebConfig)
-  if (userSummaryError) return [null, userSummaryError]
-  if (!userSummary || !userSummary.id) {
-    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext('AUTH', 'supabase user must be signed in before pull', true)
-    if (createErrorFailure) return [null, createErrorFailure]
-    return [null, errorValue]
-  }
-  const [pullResult, pullError] = await clientBundle.client
-    .from('profile_current')
-    .select('profile_payload')
-    .eq('user_id', userSummary.id)
-    .single()
-    .then((value) => /** @type {Result<any>} */ ([value, null]))
-    .catch((readFailure) => {
-      const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext('NETWORK', 'failed to read profile_current from supabase', true, { readFailure })
-      if (createErrorFailure) return /** @type {Result<any>} */ ([null, createErrorFailure])
-      return /** @type {Result<any>} */ ([null, errorValue])
-    })
+  const [pullResponse, pullError] = await requestBudgetApiJson(joinApiUrl(clientBundle.apiBaseUrl, API_BUDGET_PROFILE_PATH))
   if (pullError) return [null, pullError]
-  if (!pullResult || pullResult.error) {
-    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext('NETWORK', 'supabase profile pull returned error', true, { pullError: pullResult?.error })
-    if (createErrorFailure) return [null, createErrorFailure]
-    return [null, errorValue]
-  }
-  const profilePayload = pullResult.data && typeof pullResult.data.profile_payload === 'object'
-    ? pullResult.data.profile_payload
-    : null
+  const profilePayload = pullResponse && typeof pullResponse.profilePayload === 'object' ? pullResponse.profilePayload : null
   if (!profilePayload) {
-    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext('NOT_FOUND', 'no supabase profile snapshot exists for this user', true)
+    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext(API_KIND_NOT_FOUND, API_ERR_PROFILE_NOT_FOUND, true)
     if (createErrorFailure) return [null, createErrorFailure]
     return [null, errorValue]
   }
   const [profileJsonText, profileJsonTextError] = await safelyStringifyObjectIntoJsonTextUsingPromiseBoundary(profilePayload)
   if (profileJsonTextError) return [null, profileJsonTextError]
   if (!profileJsonText) {
-    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext('VALIDATION', 'supabase profile json is unexpectedly empty', true)
+    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext(API_KIND_VALIDATION, API_ERR_PROFILE_JSON_EMPTY, true)
     if (createErrorFailure) return [null, createErrorFailure]
     return [null, errorValue]
   }
   return importCompleteFinancialProfileFromJsonTextSnapshot(profileJsonText)
 }
-
 const LOCAL_BUDGET_STATE_CACHE_STORAGE_KEY = 'budgeting-tool-local-state-v1'
 const LOCAL_UI_PREFERENCES_CACHE_STORAGE_KEY = 'budgeting-tool-ui-preferences-v1'
 const LOCAL_AUDIT_TIMELINE_CACHE_STORAGE_KEY = 'budgeting-tool-audit-timeline-v1'
@@ -2318,3 +2176,4 @@ export async function computeFinancialRiskFindingsUsingBackgroundWorkerWhenAvail
     workerHandle.postMessage({ currentCollectionsState })
   })
 }
+
