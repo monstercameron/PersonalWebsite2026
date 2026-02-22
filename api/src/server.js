@@ -3,6 +3,8 @@ import "dotenv/config";
 import { Hono } from "hono";
 import { serve } from "@hono/node-server";
 import jwt from "jsonwebtoken";
+import cron from "node-cron";
+import { runAnimeReleaseCheckJob } from "./cron-anime-release-check.js";
 import {
   buildModelPrompt,
   toPublicError,
@@ -16,6 +18,8 @@ import {
 import {
   createBlogCategory,
   createBlogTag,
+  buildSlackAnimeQuestionRssFeedXml,
+  buildSlackAnimeRssFeedXml,
   createBlog,
   deleteBlog,
   fromPromise,
@@ -27,12 +31,17 @@ import {
   listBlogCategories,
   listBlogTags,
   listPromptsCached,
+  getDailyAnimeQuestionCached,
+  listTrackedAnime,
   logEvent,
+  removeTrackedAnime,
+  searchAniListAiringCached,
   getBudgetProfileJson,
   saveUploadedImage,
   saveBudgetProfileJson,
   savePromptOnly,
   setBlogPublished,
+  upsertTrackedAnime,
   updateBlog
 } from "./app.impure.js";
 
@@ -44,6 +53,12 @@ const EVENT_REQUEST_START = "request_start";
 const EVENT_REQUEST_COMPLETE = "request_complete";
 const EVENT_REQUEST_PIPELINE_ERROR = "request_pipeline_error";
 const EVENT_API_BOOT = "api_boot";
+const EVENT_ANIME_CRON_BOOT = "anime_cron_boot";
+const EVENT_ANIME_CRON_DISABLED = "anime_cron_disabled";
+const EVENT_ANIME_CRON_TICK_START = "anime_cron_tick_start";
+const EVENT_ANIME_CRON_TICK_COMPLETE = "anime_cron_tick_complete";
+const EVENT_ANIME_CRON_TICK_ERROR = "anime_cron_tick_error";
+const EVENT_ANIME_CRON_TICK_SKIPPED = "anime_cron_tick_skipped";
 const LEVEL_INFO = "info";
 const LEVEL_ERROR = "error";
 const PATH_API_HEALTH = "/api/health";
@@ -61,10 +76,24 @@ const PATH_API_BLOGS_ADMIN_LOGIN = "/api/blogs/admin/login";
 const PATH_API_BLOGS_ADMIN_LOGOUT = "/api/blogs/admin/logout";
 const PATH_API_BLOGS_UPLOAD_IMAGE = "/api/blogs/upload-image";
 const PATH_API_BUDGET_PROFILE = "/api/budget/profile";
+const PATH_API_ANIME_SEARCH = "/api/slackanime/search";
+const PATH_API_ANIME_TRACKED = "/api/slackanime/tracked";
+const PATH_API_ANIME_TRACKED_ID = "/api/slackanime/tracked/:anilistId";
+const PATH_API_ANIME_QUESTION = "/api/slackanime/question/today";
+const PATH_API_ANIME_FEED = "/api/slackanime/feed.xml";
+const PATH_API_ANIME_FEED_TRACKED = "/api/slackanime/feed/tracked.xml";
+const PATH_API_ANIME_FEED_QUESTIONS = "/api/slackanime/feed/questions.xml";
+const QUERY_REFRESH = "refresh";
+const QUERY_DEBUG_MESSAGE_CAMEL = "debugMessage";
+const QUERY_DEBUG_MESSAGE_SNAKE = "debug_message";
 const HEADER_SET_COOKIE = "Set-Cookie";
 const CODE_NOT_FOUND = "NOT_FOUND";
 const ERR_BUDGET_PROFILE_NOT_FOUND = "Budget profile not found";
 const ERR_BUDGET_PROFILE_PAYLOAD_REQUIRED = "Budget profile payload is required";
+const ERR_ANIME_SEARCH_QUERY_REQUIRED = "Anime search query is required";
+const ERR_ANIME_PAYLOAD_REQUIRED = "Anime payload is required";
+const ERR_ANIME_ANILIST_ID_REQUIRED = "AniList id is required";
+const CONTENT_TYPE_XML = "application/rss+xml; charset=utf-8";
 const STATUS_BAD_REQUEST = 400;
 const STATUS_UNAUTHORIZED = 401;
 const STATUS_NOT_FOUND = 404;
@@ -74,13 +103,21 @@ const STATUS_SERVICE_UNAVAILABLE = 503;
 const PROMPTS_CACHE_TTL_MS = 15000;
 const AI_CACHE_TTL_MS = 300000;
 const BLOG_CACHE_TTL_MS = 15000;
+const ANIME_SEARCH_CACHE_TTL_MS = 1_800_000;
+const ANIME_SEARCH_STALE_TTL_MS = 86_400_000;
 const MOTD_CACHE_HEADER = "public, max-age=3600, stale-while-revalidate=86400";
 const ENV_API_PORT = "API_PORT";
 const ENV_BLOG_ADMIN_PASSWORD = "BLOG_ADMIN_PASSWORD";
 const ENV_BLOG_ADMIN_USER = "BLOG_ADMIN_USER";
 const ENV_BLOG_ADMIN_JWT_SECRET = "BLOG_ADMIN_JWT_SECRET";
 const ENV_NODE_ENV = "NODE_ENV";
+const ENV_ANIME_RELEASE_CRON_ENABLED = "ANIME_RELEASE_CRON_ENABLED";
+const ENV_ANIME_RELEASE_CRON_SCHEDULE = "ANIME_RELEASE_CRON_SCHEDULE";
+const ENV_ANIME_RELEASE_CRON_TIMEZONE = "ANIME_RELEASE_CRON_TIMEZONE";
 const DEFAULT_API_PORT = 8787;
+const DEFAULT_ANIME_CRON_ENABLED = "true";
+const DEFAULT_ANIME_CRON_SCHEDULE = "*/15 * * * *";
+const DEFAULT_ANIME_CRON_TIMEZONE = "UTC";
 const DEFAULT_BLOG_ADMIN_USER = "admin";
 const HEADER_ADMIN_TOKEN = "x-admin-token";
 const HEADER_COOKIE = "cookie";
@@ -101,6 +138,7 @@ const JWT_SECRET_FALLBACK = "local-blog-admin-jwt-secret-change-me";
 const ERR_ADMIN_JWT_SECRET_REQUIRED = "BLOG_ADMIN_JWT_SECRET is required in production";
 
 const app = new Hono();
+let isAnimeCronRunning = false;
 
 app.use("*", async (c, next) => {
   const requestId = c.req.header(HEADER_REQUEST_ID) || randomUUID();
@@ -194,13 +232,15 @@ app.post(PATH_API_AI, async (c) => {
 });
 
 app.get(PATH_API_MOTD, async (c) => {
-  const motdRes = await getMessageOfDay();
+  const refreshRaw = String(c.req.query(QUERY_REFRESH) || "").trim().toLowerCase();
+  const forceRefresh = refreshRaw === "1" || refreshRaw === "true" || refreshRaw === "yes";
+  const motdRes = await getMessageOfDay(forceRefresh);
   if (motdRes.err) {
     const publicErrRes = toPublicError(motdRes.err);
     return c.json(publicErrRes.value, STATUS_SERVICE_UNAVAILABLE);
   }
 
-  c.header(CACHE_CONTROL, MOTD_CACHE_HEADER);
+  c.header(CACHE_CONTROL, forceRefresh ? CACHE_NO_STORE : MOTD_CACHE_HEADER);
   return c.json({ quote: motdRes.value });
 });
 
@@ -315,6 +355,131 @@ app.put(PATH_API_BUDGET_PROFILE, async (c) => {
   }
   c.header(CACHE_CONTROL, CACHE_NO_STORE);
   return c.json({ saved: true, savedAtIso: saveRes.value.savedAtIso });
+});
+
+app.get(PATH_API_ANIME_SEARCH, async (c) => {
+  const authRes = requireAdminSession(c);
+  if (authRes.err) {
+    return c.json({ message: authRes.err.message, code: "UNAUTHORIZED" }, STATUS_UNAUTHORIZED);
+  }
+  const queryText = String(c.req.query("q") || "").trim();
+  if (!queryText) {
+    return c.json({ message: ERR_ANIME_SEARCH_QUERY_REQUIRED, code: "BAD_REQUEST" }, STATUS_BAD_REQUEST);
+  }
+  const rowsRes = await searchAniListAiringCached(queryText, ANIME_SEARCH_CACHE_TTL_MS, ANIME_SEARCH_STALE_TTL_MS);
+  if (rowsRes.err) {
+    const publicErrRes = toPublicError(rowsRes.err);
+    return c.json(publicErrRes.value, STATUS_SERVER_ERROR);
+  }
+  c.header(CACHE_CONTROL, CACHE_PUBLIC_PROMPTS);
+  return c.json({ rows: rowsRes.value });
+});
+
+app.get(PATH_API_ANIME_TRACKED, (c) => {
+  const authRes = requireAdminSession(c);
+  if (authRes.err) {
+    return c.json({ message: authRes.err.message, code: "UNAUTHORIZED" }, STATUS_UNAUTHORIZED);
+  }
+  const rowsRes = listTrackedAnime();
+  if (rowsRes.err) {
+    const publicErrRes = toPublicError(rowsRes.err);
+    return c.json(publicErrRes.value, STATUS_SERVER_ERROR);
+  }
+  c.header(CACHE_CONTROL, CACHE_NO_STORE);
+  return c.json({ rows: rowsRes.value });
+});
+
+app.post(PATH_API_ANIME_TRACKED, async (c) => {
+  const authRes = requireAdminSession(c);
+  if (authRes.err) {
+    return c.json({ message: authRes.err.message, code: "UNAUTHORIZED" }, STATUS_UNAUTHORIZED);
+  }
+  const bodyRes = await fromPromise(c.req.json());
+  if (bodyRes.err) {
+    const publicErrRes = toPublicError(bodyRes.err);
+    return c.json(publicErrRes.value, STATUS_BAD_REQUEST);
+  }
+  if (!bodyRes.value || typeof bodyRes.value !== "object") {
+    return c.json({ message: ERR_ANIME_PAYLOAD_REQUIRED, code: "BAD_REQUEST" }, STATUS_BAD_REQUEST);
+  }
+  const saveRes = upsertTrackedAnime(bodyRes.value);
+  if (saveRes.err) {
+    const publicErrRes = toPublicError(saveRes.err);
+    return c.json(publicErrRes.value, STATUS_BAD_REQUEST);
+  }
+  c.header(CACHE_CONTROL, CACHE_NO_STORE);
+  return c.json({ saved: true });
+});
+
+app.delete(PATH_API_ANIME_TRACKED_ID, (c) => {
+  const authRes = requireAdminSession(c);
+  if (authRes.err) {
+    return c.json({ message: authRes.err.message, code: "UNAUTHORIZED" }, STATUS_UNAUTHORIZED);
+  }
+  const anilistId = Number(c.req.param("anilistId") || 0);
+  if (!Number.isInteger(anilistId) || anilistId <= 0) {
+    return c.json({ message: ERR_ANIME_ANILIST_ID_REQUIRED, code: "BAD_REQUEST" }, STATUS_BAD_REQUEST);
+  }
+  const removeRes = removeTrackedAnime(anilistId);
+  if (removeRes.err) {
+    const publicErrRes = toPublicError(removeRes.err);
+    return c.json(publicErrRes.value, STATUS_BAD_REQUEST);
+  }
+  c.header(CACHE_CONTROL, CACHE_NO_STORE);
+  return c.json({ removed: true });
+});
+
+app.get(PATH_API_ANIME_QUESTION, async (c) => {
+  const authRes = requireAdminSession(c);
+  if (authRes.err) {
+    return c.json({ message: authRes.err.message, code: "UNAUTHORIZED" }, STATUS_UNAUTHORIZED);
+  }
+  const questionRes = await getDailyAnimeQuestionCached();
+  if (questionRes.err) {
+    const publicErrRes = toPublicError(questionRes.err);
+    return c.json(publicErrRes.value, STATUS_SERVER_ERROR);
+  }
+  c.header(CACHE_CONTROL, CACHE_PUBLIC_PROMPTS);
+  return c.json({ row: questionRes.value });
+});
+
+app.get(PATH_API_ANIME_FEED, (c) => {
+  const origin = new URL(c.req.url).origin;
+  const debugMessage = String(c.req.query(QUERY_DEBUG_MESSAGE_CAMEL) || c.req.query(QUERY_DEBUG_MESSAGE_SNAKE) || "");
+  const xmlRes = buildSlackAnimeRssFeedXml(origin, debugMessage);
+  if (xmlRes.err) {
+    const publicErrRes = toPublicError(xmlRes.err);
+    return c.json(publicErrRes.value, STATUS_SERVER_ERROR);
+  }
+  c.header(CACHE_CONTROL, CACHE_NO_STORE);
+  c.header("Content-Type", CONTENT_TYPE_XML);
+  return c.body(xmlRes.value);
+});
+
+app.get(PATH_API_ANIME_FEED_TRACKED, (c) => {
+  const origin = new URL(c.req.url).origin;
+  const debugMessage = String(c.req.query(QUERY_DEBUG_MESSAGE_CAMEL) || c.req.query(QUERY_DEBUG_MESSAGE_SNAKE) || "");
+  const xmlRes = buildSlackAnimeRssFeedXml(origin, debugMessage);
+  if (xmlRes.err) {
+    const publicErrRes = toPublicError(xmlRes.err);
+    return c.json(publicErrRes.value, STATUS_SERVER_ERROR);
+  }
+  c.header(CACHE_CONTROL, CACHE_NO_STORE);
+  c.header("Content-Type", CONTENT_TYPE_XML);
+  return c.body(xmlRes.value);
+});
+
+app.get(PATH_API_ANIME_FEED_QUESTIONS, async (c) => {
+  const origin = new URL(c.req.url).origin;
+  const debugMessage = String(c.req.query(QUERY_DEBUG_MESSAGE_CAMEL) || c.req.query(QUERY_DEBUG_MESSAGE_SNAKE) || "");
+  const xmlRes = await buildSlackAnimeQuestionRssFeedXml(origin, debugMessage);
+  if (xmlRes.err) {
+    const publicErrRes = toPublicError(xmlRes.err);
+    return c.json(publicErrRes.value, STATUS_SERVER_ERROR);
+  }
+  c.header(CACHE_CONTROL, CACHE_NO_STORE);
+  c.header("Content-Type", CONTENT_TYPE_XML);
+  return c.body(xmlRes.value);
 });
 
 app.post(PATH_API_BLOG_CATEGORIES, async (c) => {
@@ -750,3 +915,71 @@ if (bootLogRes.err) {
   console.error(bootLogRes.err.message);
 }
 console.log(`${LOG_BOOT_TEXT} ${port}`);
+startAnimeReleaseCron();
+
+/**
+ * @returns {void}
+ */
+function startAnimeReleaseCron() {
+  const enabledRaw = String(process.env[ENV_ANIME_RELEASE_CRON_ENABLED] || DEFAULT_ANIME_CRON_ENABLED).trim().toLowerCase();
+  const isEnabled = enabledRaw === "1" || enabledRaw === "true" || enabledRaw === "yes" || enabledRaw === "on";
+  if (!isEnabled) {
+    const logRes = logEvent(LEVEL_INFO, EVENT_ANIME_CRON_DISABLED, { enabled: enabledRaw });
+    if (logRes.err) {
+      console.error(logRes.err.message);
+    }
+    return;
+  }
+
+  const schedule = String(process.env[ENV_ANIME_RELEASE_CRON_SCHEDULE] || DEFAULT_ANIME_CRON_SCHEDULE).trim();
+  const timezone = String(process.env[ENV_ANIME_RELEASE_CRON_TIMEZONE] || DEFAULT_ANIME_CRON_TIMEZONE).trim();
+  if (!cron.validate(schedule)) {
+    const logRes = logEvent(LEVEL_ERROR, EVENT_ANIME_CRON_TICK_ERROR, { message: "Invalid cron schedule", schedule, timezone });
+    if (logRes.err) {
+      console.error(logRes.err.message);
+    }
+    return;
+  }
+
+  cron.schedule(schedule, () => {
+    void runAnimeReleaseCronTick();
+  }, { timezone });
+  const logRes = logEvent(LEVEL_INFO, EVENT_ANIME_CRON_BOOT, { schedule, timezone });
+  if (logRes.err) {
+    console.error(logRes.err.message);
+  }
+}
+
+/**
+ * @returns {Promise<void>}
+ */
+async function runAnimeReleaseCronTick() {
+  if (isAnimeCronRunning) {
+    const logRes = logEvent(LEVEL_INFO, EVENT_ANIME_CRON_TICK_SKIPPED, { reason: "already_running" });
+    if (logRes.err) {
+      console.error(logRes.err.message);
+    }
+    return;
+  }
+
+  isAnimeCronRunning = true;
+  const startedAt = Date.now();
+  const startLogRes = logEvent(LEVEL_INFO, EVENT_ANIME_CRON_TICK_START, {});
+  if (startLogRes.err) {
+    console.error(startLogRes.err.message);
+  }
+  const runRes = await runAnimeReleaseCheckJob();
+  isAnimeCronRunning = false;
+
+  if (runRes.err) {
+    const errorLogRes = logEvent(LEVEL_ERROR, EVENT_ANIME_CRON_TICK_ERROR, { message: runRes.err.message, durationMs: Date.now() - startedAt });
+    if (errorLogRes.err) {
+      console.error(errorLogRes.err.message);
+    }
+    return;
+  }
+  const doneLogRes = logEvent(LEVEL_INFO, EVENT_ANIME_CRON_TICK_COMPLETE, { durationMs: Date.now() - startedAt });
+  if (doneLogRes.err) {
+    console.error(doneLogRes.err.message);
+  }
+}

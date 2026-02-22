@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "node --watch src/server.js",
     "start": "node src/server.js",
+    "cron:anime-release-check": "node src/cron-anime-release-check.js",
     "build": "node -e \"console.log('no build step for api')\"",
     "lint": "eslint .",
     "test": "vitest run"
@@ -15,6 +16,7 @@
     "dotenv": "^17.3.1",
     "hono": "^4.9.7",
     "jsonwebtoken": "^9.0.3",
+    "node-cron": "^4.2.1",
     "openai": "^5.12.2"
   },
   "devDependencies": {

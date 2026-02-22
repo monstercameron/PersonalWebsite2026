@@ -28,6 +28,8 @@ const CACHE_PREFIX_PROMPTS = "prompts:";
 const CACHE_PREFIX_AI_REPLY = "ai:reply:";
 const CACHE_PREFIX_MOTD = "motd:";
 const CACHE_PREFIX_BLOGS = "blogs:";
+const CACHE_PREFIX_ANIME_SEARCH = "anime:search:";
+const CACHE_PREFIX_ANIME_DAILY_QUESTION = "anime:question:day:";
 const CACHE_KEY_BLOGS_LIST = "blogs:list:latest";
 const CACHE_KEY_BLOGS_DASHBOARD = "blogs:dashboard:latest";
 const SAMPLE_POST_PUBLISHED = 1;
@@ -96,6 +98,21 @@ const SQLITE_BUDGET_PROFILE_HISTORY_SCHEMA = `
     saved_at_iso TEXT NOT NULL
   )
 `;
+const SQLITE_TRACKED_ANIME_SCHEMA = `
+  CREATE TABLE IF NOT EXISTS tracked_anime (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    anilist_id INTEGER NOT NULL UNIQUE,
+    title TEXT NOT NULL,
+    cover_image TEXT NOT NULL DEFAULT '',
+    anime_status TEXT NOT NULL DEFAULT '',
+    episodes INTEGER NOT NULL DEFAULT 0,
+    anime_format TEXT NOT NULL DEFAULT '',
+    season_year INTEGER NOT NULL DEFAULT 0,
+    site_url TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  )
+`;
 const SQL_INSERT_PROMPT = "INSERT INTO prompts (prompt, reply, created_at) VALUES (?, ?, ?)";
 const SQL_SELECT_PROMPTS = "SELECT id, prompt, reply, created_at FROM prompts ORDER BY id DESC LIMIT 20";
 const SQL_LIST_BLOGS = "SELECT id, title, slug, summary, content, variant, published, created_at, updated_at FROM blogs ORDER BY updated_at DESC LIMIT 100";
@@ -129,8 +146,68 @@ const SQL_BLOG_TAG_ROWS = `
 const SQL_UPSERT_BUDGET_PROFILE_CURRENT = "INSERT INTO budget_profile_current (id, profile_json, saved_at_iso) VALUES (1, ?, ?) ON CONFLICT(id) DO UPDATE SET profile_json = excluded.profile_json, saved_at_iso = excluded.saved_at_iso";
 const SQL_INSERT_BUDGET_PROFILE_HISTORY = "INSERT INTO budget_profile_history (profile_json, saved_at_iso) VALUES (?, ?)";
 const SQL_GET_BUDGET_PROFILE_CURRENT = "SELECT profile_json, saved_at_iso FROM budget_profile_current WHERE id = 1";
+const SQL_LIST_TRACKED_ANIME = "SELECT id, anilist_id, title, cover_image, anime_status, episodes, anime_format, season_year, site_url, created_at, updated_at FROM tracked_anime ORDER BY updated_at DESC, id DESC LIMIT 300";
+const SQL_UPSERT_TRACKED_ANIME = "INSERT INTO tracked_anime (anilist_id, title, cover_image, anime_status, episodes, anime_format, season_year, site_url, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(anilist_id) DO UPDATE SET title = excluded.title, cover_image = excluded.cover_image, anime_status = excluded.anime_status, episodes = excluded.episodes, anime_format = excluded.anime_format, season_year = excluded.season_year, site_url = excluded.site_url, updated_at = excluded.updated_at";
+const SQL_DELETE_TRACKED_ANIME_BY_ANILIST_ID = "DELETE FROM tracked_anime WHERE anilist_id = ?";
 const ERR_BUDGET_PROFILE_JSON_REQUIRED = "Budget profile json is required";
-const OPENAI_MODEL = "gpt-4.1-mini";
+const ERR_ANIME_QUERY_REQUIRED = "Anime search query is required";
+const ERR_ANILIST_ID_REQUIRED = "AniList id is required";
+const ERR_SLACKANIME_FEED_BASE_URL_REQUIRED = "SlackAnime feed base URL is required";
+const LOG_EVENT_ANIME_CACHE_HIT_HOT = "anime_cache_hit_hot";
+const LOG_EVENT_ANIME_CACHE_HIT_STALE = "anime_cache_hit_stale";
+const LOG_EVENT_ANIME_CACHE_REFRESH_START = "anime_cache_refresh_start";
+const LOG_EVENT_ANIME_CACHE_REFRESH_SUCCESS = "anime_cache_refresh_success";
+const LOG_EVENT_ANIME_CACHE_REFRESH_ERROR = "anime_cache_refresh_error";
+const LOG_EVENT_ANIME_CACHE_INFLIGHT_WAIT = "anime_cache_inflight_wait";
+const PATH_SLACKANIME_PAGE = "/slackanime";
+const RSS_DATE_FALLBACK = "date unavailable";
+const RSS_FEED_TITLE_TRACKED = "SlackAnime Tracked Releases Feed";
+const RSS_FEED_DESC_TRACKED = "Tracked anime updates and status snapshots.";
+const RSS_FEED_TITLE_QUESTION = "SlackAnime Daily Questions Feed";
+const RSS_FEED_DESC_QUESTION = "Daily anime discussion prompt feed.";
+const RSS_GUID_PREFIX_TRACKED = "slackanime-tracked-";
+const RSS_GUID_PREFIX_QUESTION = "slackanime-question-";
+const RSS_GUID_PREFIX_DEBUG = "slackanime-debug-";
+const RSS_DEBUG_TITLE = "Debug Message";
+const ANILIST_API_URL = "https://graphql.anilist.co";
+const ANILIST_GRAPHQL_QUERY = "query ($search: String) { Page(page: 1, perPage: 12) { media(search: $search, type: ANIME, sort: [POPULARITY_DESC, START_DATE_DESC]) { id title { romaji english native } coverImage { large medium } status episodes format seasonYear siteUrl } } }";
+const defaultAnimeSearchCacheTtlMs = 1_800_000;
+const defaultAnimeSearchStaleTtlMs = 86_400_000;
+const defaultAnimeQuestionCacheTtlMs = 3_600_000;
+const ANIME_QUESTION_MAX_LEN = 220;
+const DAILY_ANIME_QUESTIONS = [
+  "What currently airing anime has the strongest world-building this season?",
+  "Which anime character had the best growth arc this year?",
+  "What opening theme are you replaying most this week?",
+  "Which anime deserves a sequel right now?",
+  "What anime episode had the best pacing recently?",
+  "Which studio has the strongest lineup this season?",
+  "What under-watched anime should more people pick up?",
+  "Which fight scene had the best choreography lately?",
+  "What anime side character stole the show for you?",
+  "Which genre twist in anime surprised you most recently?",
+  "What anime has the strongest emotional payoff right now?",
+  "Which anime adaptation improved on its source material?",
+  "What anime ending song has been your favorite this month?",
+  "Which anime has the most interesting power system currently?",
+  "What anime recommendation would you give a non-anime watcher?",
+  "Which anime handled tension and suspense the best lately?",
+  "What anime character would make the best mentor and why?",
+  "Which anime episode had the most rewatch value this season?",
+  "What anime soundtrack has been the most memorable recently?",
+  "Which anime has the best balance of action and story right now?",
+  "What anime romance subplot actually works for you?",
+  "Which anime protagonist feels the most grounded and believable?",
+  "What anime has the strongest art direction this season?",
+  "Which anime reveal or twist landed perfectly for you?",
+  "What anime world would you most want to explore for a day?",
+  "Which anime had the cleanest first episode hook recently?",
+  "What anime deserves more discussion in your community?",
+  "Which anime antagonist is the most compelling this year?",
+  "What anime scene made you pause and think the longest?",
+  "Which anime has the best long-term story potential right now?"
+];
+const OPENAI_MODEL = "gpt-5-nano-2025-08-07";
 const OPENAI_KEY_ENV = "OPENAI_API_KEY";
 const ERR_EMPTY_OUTPUT = "Model returned empty output";
 const EMPTY_REPLY = "";
@@ -142,6 +219,8 @@ const defaultPromptsCacheTtlMs = 15000;
 const defaultAiReplyCacheTtlMs = 300000;
 const motdCacheTtlMs = 86_400_000;
 const MOTD_PROMPT_PREFIX = "Generate one short inspiring quote for software engineers. Keep it under 22 words. No markdown. No attribution line. Date key:";
+const ANIME_DAILY_QUESTION_PROMPT_PREFIX = "Generate one fun, concise anime community question for engagement.";
+const ANIME_DAILY_QUESTION_PROMPT_SUFFIX = "Return one line only, no numbering, no markdown, no emoji.";
 const SAMPLE_BLOG_POSTS = [
   {
     title: "Designing for Failure First",
@@ -233,10 +312,13 @@ db.exec(SQLITE_BLOG_CATEGORY_MAP_SCHEMA);
 db.exec(SQLITE_BLOG_TAG_MAP_SCHEMA);
 db.exec(SQLITE_BUDGET_PROFILE_CURRENT_SCHEMA);
 db.exec(SQLITE_BUDGET_PROFILE_HISTORY_SCHEMA);
+db.exec(SQLITE_TRACKED_ANIME_SCHEMA);
 ensureBlogVariantColumn();
 
 const openai = new OpenAI({ apiKey: process.env[OPENAI_KEY_ENV] });
 const memoryCache = new Map();
+const animeSearchStaleCache = new Map();
+const animeSearchInflight = new Map();
 const sampleSeedRes = ensureSampleBlogs();
 if (sampleSeedRes.err) {
   console.error("[seed_samples_failed]", sampleSeedRes.err.message);
@@ -342,25 +424,29 @@ export async function generateReply(modelPrompt) {
 }
 
 /**
+ * @param {boolean} [forceRefresh]
  * @returns {Promise<Result<string>>}
  */
-export async function getMessageOfDay() {
+export async function getMessageOfDay(forceRefresh = false) {
   const dateKey = new Date().toISOString().slice(0, 10);
   const cacheKey = `${CACHE_PREFIX_MOTD}${dateKey}`;
-  const cacheRes = readCache(cacheKey);
-  if (cacheRes.err) {
-    return { value: null, err: cacheRes.err };
-  }
-
-  if (cacheRes.value) {
-    const logRes = logEvent(LOG_LEVEL_INFO, LOG_EVENT_CACHE_HIT, { cacheKey });
-    if (logRes.err) {
-      return { value: null, err: logRes.err };
+  if (!forceRefresh) {
+    const cacheRes = readCache(cacheKey);
+    if (cacheRes.err) {
+      return { value: null, err: cacheRes.err };
     }
-    return { value: cacheRes.value, err: null };
+
+    if (cacheRes.value) {
+      const logRes = logEvent(LOG_LEVEL_INFO, LOG_EVENT_CACHE_HIT, { cacheKey });
+      if (logRes.err) {
+        return { value: null, err: logRes.err };
+      }
+      return { value: cacheRes.value, err: null };
+    }
   }
 
-  const replyRes = await generateReply(`${MOTD_PROMPT_PREFIX} ${dateKey}`);
+  const refreshSalt = forceRefresh ? ` refresh-seed:${Date.now()}` : "";
+  const replyRes = await generateReply(`${MOTD_PROMPT_PREFIX} ${dateKey}${refreshSalt}`);
   if (replyRes.err) {
     return { value: null, err: replyRes.err };
   }
@@ -726,6 +812,427 @@ export function getBudgetProfileJson() {
 }
 
 /**
+ * @param {string} query
+ * @param {number} [ttlMs]
+ * @param {number} [staleTtlMs]
+ * @returns {Promise<Result<Array<{anilistId: number, title: string, coverImage: string, status: string, episodes: number, format: string, seasonYear: number, siteUrl: string}>>>}
+ */
+export async function searchAniListAiringCached(query, ttlMs = defaultAnimeSearchCacheTtlMs, staleTtlMs = defaultAnimeSearchStaleTtlMs) {
+  const normalizedQuery = String(query || "").trim();
+  if (!normalizedQuery) {
+    return { value: null, err: new Error(ERR_ANIME_QUERY_REQUIRED) };
+  }
+  const now = Date.now();
+  const cacheKey = `${CACHE_PREFIX_ANIME_SEARCH}${normalizedQuery.toLowerCase()}`;
+  const cacheRes = readCache(cacheKey);
+  if (cacheRes.err) {
+    return { value: null, err: cacheRes.err };
+  }
+  if (cacheRes.value) {
+    const logRes = logEvent(LOG_LEVEL_INFO, LOG_EVENT_ANIME_CACHE_HIT_HOT, { cacheKey });
+    if (logRes.err) {
+      return { value: null, err: logRes.err };
+    }
+    return { value: cacheRes.value, err: null };
+  }
+
+  const staleEntry = animeSearchStaleCache.get(cacheKey);
+  const hasUsableStale = Boolean(staleEntry && staleEntry.staleUntil > now && Array.isArray(staleEntry.rows));
+  const inflightRes = readAnimeSearchInflight(cacheKey);
+  if (inflightRes.err) {
+    return { value: null, err: inflightRes.err };
+  }
+
+  if (inflightRes.value && hasUsableStale) {
+    const logRes = logEvent(LOG_LEVEL_INFO, LOG_EVENT_ANIME_CACHE_HIT_STALE, { cacheKey, mode: "stale_while_revalidate" });
+    if (logRes.err) {
+      return { value: null, err: logRes.err };
+    }
+    return { value: staleEntry.rows, err: null };
+  }
+
+  if (inflightRes.value) {
+    const waitLogRes = logEvent(LOG_LEVEL_INFO, LOG_EVENT_ANIME_CACHE_INFLIGHT_WAIT, { cacheKey });
+    if (waitLogRes.err) {
+      return { value: null, err: waitLogRes.err };
+    }
+    const awaitedRes = await inflightRes.value;
+    if (awaitedRes.err) {
+      if (hasUsableStale) {
+        const staleLogRes = logEvent(LOG_LEVEL_INFO, LOG_EVENT_ANIME_CACHE_HIT_STALE, { cacheKey, mode: "stale_after_inflight_error" });
+        if (staleLogRes.err) {
+          return { value: null, err: staleLogRes.err };
+        }
+        return { value: staleEntry.rows, err: null };
+      }
+      return { value: null, err: awaitedRes.err };
+    }
+    return { value: awaitedRes.value, err: null };
+  }
+
+  const startLogRes = logEvent(LOG_LEVEL_INFO, LOG_EVENT_ANIME_CACHE_REFRESH_START, { cacheKey, normalizedQuery });
+  if (startLogRes.err) {
+    return { value: null, err: startLogRes.err };
+  }
+  const requestPromise = fetchAnimeRowsAndUpdateCache(normalizedQuery, cacheKey, ttlMs, staleTtlMs);
+  const writeInflightRes = writeAnimeSearchInflight(cacheKey, requestPromise);
+  if (writeInflightRes.err) {
+    return { value: null, err: writeInflightRes.err };
+  }
+
+  if (hasUsableStale) {
+    requestPromise.then((refreshRes) => {
+      const logRes = refreshRes.err
+        ? logEvent(LOG_LEVEL_ERROR, LOG_EVENT_ANIME_CACHE_REFRESH_ERROR, { cacheKey, message: String(refreshRes.err?.message || "") })
+        : logEvent(LOG_LEVEL_INFO, LOG_EVENT_ANIME_CACHE_REFRESH_SUCCESS, { cacheKey, rows: Array.isArray(refreshRes.value) ? refreshRes.value.length : 0, mode: "background" });
+      if (logRes.err) {
+        return { value: null, err: logRes.err };
+      }
+      return { value: true, err: null };
+    });
+    const staleLogRes = logEvent(LOG_LEVEL_INFO, LOG_EVENT_ANIME_CACHE_HIT_STALE, { cacheKey, mode: "stale_while_revalidate" });
+    if (staleLogRes.err) {
+      return { value: null, err: staleLogRes.err };
+    }
+    return { value: staleEntry.rows, err: null };
+  }
+
+  const refreshRes = await requestPromise;
+  if (refreshRes.err) {
+    if (hasUsableStale) {
+      const staleLogRes = logEvent(LOG_LEVEL_INFO, LOG_EVENT_ANIME_CACHE_HIT_STALE, { cacheKey, mode: "stale_after_refresh_error" });
+      if (staleLogRes.err) {
+        return { value: null, err: staleLogRes.err };
+      }
+      return { value: staleEntry.rows, err: null };
+    }
+    return { value: null, err: refreshRes.err };
+  }
+  const successLogRes = logEvent(LOG_LEVEL_INFO, LOG_EVENT_ANIME_CACHE_REFRESH_SUCCESS, { cacheKey, rows: refreshRes.value.length, mode: "foreground" });
+  if (successLogRes.err) {
+    return { value: null, err: successLogRes.err };
+  }
+  return { value: refreshRes.value, err: null };
+}
+
+/**
+ * @param {string} normalizedQuery
+ * @param {string} cacheKey
+ * @param {number} ttlMs
+ * @param {number} staleTtlMs
+ * @returns {Promise<Result<Array<{anilistId: number, title: string, coverImage: string, status: string, episodes: number, format: string, seasonYear: number, siteUrl: string}>>>}
+ */
+async function fetchAnimeRowsAndUpdateCache(normalizedQuery, cacheKey, ttlMs, staleTtlMs) {
+  const requestPayload = {
+    query: ANILIST_GRAPHQL_QUERY,
+    variables: { search: normalizedQuery }
+  };
+  const responseRes = await fromPromise(fetch(ANILIST_API_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(requestPayload)
+  }));
+  if (responseRes.err) {
+    const deleteRes = deleteAnimeSearchInflight(cacheKey);
+    if (deleteRes.err) {
+      return { value: null, err: deleteRes.err };
+    }
+    return { value: null, err: responseRes.err };
+  }
+  const jsonRes = await fromPromise(responseRes.value.json());
+  if (jsonRes.err) {
+    const deleteRes = deleteAnimeSearchInflight(cacheKey);
+    if (deleteRes.err) {
+      return { value: null, err: deleteRes.err };
+    }
+    return { value: null, err: jsonRes.err };
+  }
+  const mediaRows = Array.isArray(jsonRes.value?.data?.Page?.media) ? jsonRes.value.data.Page.media : [];
+  const rows = mediaRows
+    .map((row) => ({
+      anilistId: Number(row?.id || 0),
+      title: String(row?.title?.english || row?.title?.romaji || row?.title?.native || "").trim(),
+      coverImage: String(row?.coverImage?.large || row?.coverImage?.medium || "").trim(),
+      status: String(row?.status || "").trim(),
+      episodes: Number(row?.episodes || 0),
+      format: String(row?.format || "").trim(),
+      seasonYear: Number(row?.seasonYear || 0),
+      siteUrl: String(row?.siteUrl || "").trim()
+    }))
+    .filter((row) => row.anilistId > 0 && row.title.length > 0);
+  const writeRes = writeCache(cacheKey, rows, ttlMs);
+  if (writeRes.err) {
+    const deleteRes = deleteAnimeSearchInflight(cacheKey);
+    if (deleteRes.err) {
+      return { value: null, err: deleteRes.err };
+    }
+    return { value: null, err: writeRes.err };
+  }
+  const staleWriteRes = writeAnimeSearchStale(cacheKey, rows, staleTtlMs);
+  if (staleWriteRes.err) {
+    const deleteRes = deleteAnimeSearchInflight(cacheKey);
+    if (deleteRes.err) {
+      return { value: null, err: deleteRes.err };
+    }
+    return { value: null, err: staleWriteRes.err };
+  }
+  const deleteRes = deleteAnimeSearchInflight(cacheKey);
+  if (deleteRes.err) {
+    return { value: null, err: deleteRes.err };
+  }
+  return { value: rows, err: null };
+}
+
+/**
+ * @param {string} key
+ * @param {Array<{anilistId: number, title: string, coverImage: string, status: string, episodes: number, format: string, seasonYear: number, siteUrl: string}>} rows
+ * @param {number} staleTtlMs
+ * @returns {Result<boolean>}
+ */
+function writeAnimeSearchStale(key, rows, staleTtlMs) {
+  animeSearchStaleCache.set(key, { rows, staleUntil: Date.now() + staleTtlMs });
+  return { value: true, err: null };
+}
+
+/**
+ * @param {string} key
+ * @returns {Result<Promise<Result<Array<{anilistId: number, title: string, coverImage: string, status: string, episodes: number, format: string, seasonYear: number, siteUrl: string}>>> | null>}
+ */
+function readAnimeSearchInflight(key) {
+  return { value: animeSearchInflight.get(key) || null, err: null };
+}
+
+/**
+ * @param {string} key
+ * @param {Promise<Result<Array<{anilistId: number, title: string, coverImage: string, status: string, episodes: number, format: string, seasonYear: number, siteUrl: string}>>>} promise
+ * @returns {Result<boolean>}
+ */
+function writeAnimeSearchInflight(key, promise) {
+  animeSearchInflight.set(key, promise);
+  return { value: true, err: null };
+}
+
+/**
+ * @param {string} key
+ * @returns {Result<boolean>}
+ */
+function deleteAnimeSearchInflight(key) {
+  animeSearchInflight.delete(key);
+  return { value: true, err: null };
+}
+
+/**
+ * @returns {Result<Array<{id: number, anilistId: number, title: string, coverImage: string, status: string, episodes: number, format: string, seasonYear: number, siteUrl: string, createdAt: string, updatedAt: string}>>}
+ */
+export function listTrackedAnime() {
+  const rows = db.prepare(SQL_LIST_TRACKED_ANIME).all();
+  return {
+    value: rows.map((row) => ({
+      id: Number(row.id),
+      anilistId: Number(row.anilist_id),
+      title: String(row.title || ""),
+      coverImage: String(row.cover_image || ""),
+      status: String(row.anime_status || ""),
+      episodes: Number(row.episodes || 0),
+      format: String(row.anime_format || ""),
+      seasonYear: Number(row.season_year || 0),
+      siteUrl: String(row.site_url || ""),
+      createdAt: String(row.created_at || ""),
+      updatedAt: String(row.updated_at || "")
+    })),
+    err: null
+  };
+}
+
+/**
+ * @param {{anilistId: number, title: string, coverImage?: string, status?: string, episodes?: number, format?: string, seasonYear?: number, siteUrl?: string}} anime
+ * @returns {Result<{saved: boolean}>}
+ */
+export function upsertTrackedAnime(anime) {
+  const anilistId = Number(anime?.anilistId || 0);
+  const title = String(anime?.title || "").trim();
+  if (anilistId <= 0 || !title) {
+    return { value: null, err: new Error(ERR_ANILIST_ID_REQUIRED) };
+  }
+  const now = new Date().toISOString();
+  db.prepare(SQL_UPSERT_TRACKED_ANIME).run(
+    anilistId,
+    title,
+    String(anime?.coverImage || "").trim(),
+    String(anime?.status || "").trim(),
+    Number(anime?.episodes || 0),
+    String(anime?.format || "").trim(),
+    Number(anime?.seasonYear || 0),
+    String(anime?.siteUrl || "").trim(),
+    now,
+    now
+  );
+  const invalidateRes = invalidateCacheByPrefix(CACHE_PREFIX_ANIME_SEARCH);
+  if (invalidateRes.err) {
+    return { value: null, err: invalidateRes.err };
+  }
+  return { value: { saved: true }, err: null };
+}
+
+/**
+ * @param {number} anilistId
+ * @returns {Result<{removed: boolean}>}
+ */
+export function removeTrackedAnime(anilistId) {
+  const normalizedId = Number(anilistId || 0);
+  if (normalizedId <= 0) {
+    return { value: null, err: new Error(ERR_ANILIST_ID_REQUIRED) };
+  }
+  db.prepare(SQL_DELETE_TRACKED_ANIME_BY_ANILIST_ID).run(normalizedId);
+  const invalidateRes = invalidateCacheByPrefix(CACHE_PREFIX_ANIME_SEARCH);
+  if (invalidateRes.err) {
+    return { value: null, err: invalidateRes.err };
+  }
+  return { value: { removed: true }, err: null };
+}
+
+/**
+ * @param {string} baseUrl
+ * @returns {Result<string>}
+ */
+export function buildSlackAnimeRssFeedXml(baseUrl, debugMessage = "") {
+  const normalizedBaseUrl = String(baseUrl || "").trim().replace(/\/+$/, "");
+  if (!normalizedBaseUrl) {
+    return { value: null, err: new Error(ERR_SLACKANIME_FEED_BASE_URL_REQUIRED) };
+  }
+  const trackedRes = listTrackedAnime();
+  if (trackedRes.err) {
+    return { value: null, err: trackedRes.err };
+  }
+  const nowRfc = new Date().toUTCString();
+  const itemsXml = trackedRes.value
+    .map((anime) => {
+      const title = escapeXml(anime.title);
+      const status = escapeXml(anime.status || "UNKNOWN");
+      const format = escapeXml(anime.format || "ANIME");
+      const episodes = anime.episodes > 0 ? `${anime.episodes} eps` : "episodes tbd";
+      const season = anime.seasonYear > 0 ? String(anime.seasonYear) : RSS_DATE_FALLBACK;
+      const siteUrl = anime.siteUrl ? escapeXml(anime.siteUrl) : `${normalizedBaseUrl}${PATH_SLACKANIME_PAGE}`;
+      const updatedAt = anime.updatedAt ? new Date(anime.updatedAt).toUTCString() : nowRfc;
+      const description = escapeXml(`${format} • ${status} • ${episodes} • ${season}`);
+      const guid = `${RSS_GUID_PREFIX_TRACKED}${anime.anilistId}`;
+      return `<item><title>${title}</title><link>${siteUrl}</link><description>${description}</description><guid isPermaLink="false">${guid}</guid><pubDate>${updatedAt}</pubDate></item>`;
+    })
+    .join("");
+  const debugItem = buildDebugRssItemXml(normalizedBaseUrl, debugMessage, nowRfc);
+  if (debugItem.err) {
+    return { value: null, err: debugItem.err };
+  }
+  const xml = `<?xml version="1.0" encoding="UTF-8"?><rss version="2.0"><channel><title>${RSS_FEED_TITLE_TRACKED}</title><link>${normalizedBaseUrl}${PATH_SLACKANIME_PAGE}</link><description>${RSS_FEED_DESC_TRACKED}</description><lastBuildDate>${nowRfc}</lastBuildDate>${debugItem.value}${itemsXml}</channel></rss>`;
+  return { value: xml, err: null };
+}
+
+/**
+ * @param {string} baseUrl
+ * @returns {Promise<Result<string>>}
+ */
+export async function buildSlackAnimeQuestionRssFeedXml(baseUrl, debugMessage = "") {
+  const normalizedBaseUrl = String(baseUrl || "").trim().replace(/\/+$/, "");
+  if (!normalizedBaseUrl) {
+    return { value: null, err: new Error(ERR_SLACKANIME_FEED_BASE_URL_REQUIRED) };
+  }
+  const questionRes = await getDailyAnimeQuestionCached();
+  if (questionRes.err) {
+    return { value: null, err: questionRes.err };
+  }
+  const row = questionRes.value;
+  const nowRfc = new Date().toUTCString();
+  const questionText = escapeXml(row?.question || "");
+  const dateKey = escapeXml(row?.dateKey || RSS_DATE_FALLBACK);
+  const guid = `${RSS_GUID_PREFIX_QUESTION}${dateKey}`;
+  const link = `${normalizedBaseUrl}${PATH_SLACKANIME_PAGE}`;
+  const item = `<item><title>Daily Anime Question - ${dateKey}</title><link>${link}</link><description>${questionText}</description><guid isPermaLink="false">${guid}</guid><pubDate>${nowRfc}</pubDate></item>`;
+  const debugItem = buildDebugRssItemXml(normalizedBaseUrl, debugMessage, nowRfc);
+  if (debugItem.err) {
+    return { value: null, err: debugItem.err };
+  }
+  const xml = `<?xml version="1.0" encoding="UTF-8"?><rss version="2.0"><channel><title>${RSS_FEED_TITLE_QUESTION}</title><link>${link}</link><description>${RSS_FEED_DESC_QUESTION}</description><lastBuildDate>${nowRfc}</lastBuildDate>${debugItem.value}${item}</channel></rss>`;
+  return { value: xml, err: null };
+}
+
+/**
+ * @param {string} baseUrl
+ * @param {string} debugMessage
+ * @param {string} nowRfc
+ * @returns {Result<string>}
+ */
+function buildDebugRssItemXml(baseUrl, debugMessage, nowRfc) {
+  const normalized = String(debugMessage || "").trim();
+  if (!normalized) {
+    return { value: "", err: null };
+  }
+  const escapedMessage = escapeXml(normalized);
+  const guid = `${RSS_GUID_PREFIX_DEBUG}${Date.now()}`;
+  const link = `${baseUrl}${PATH_SLACKANIME_PAGE}`;
+  const item = `<item><title>${RSS_DEBUG_TITLE}</title><link>${link}</link><description>${escapedMessage}</description><guid isPermaLink="false">${guid}</guid><pubDate>${nowRfc}</pubDate></item>`;
+  return { value: item, err: null };
+}
+
+/**
+ * @returns {Promise<Result<{dateKey: string, question: string, index: number, source?: string}>>}
+ */
+export async function getDailyAnimeQuestionCached() {
+  const date = new Date();
+  const dayKey = `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}-${String(date.getUTCDate()).padStart(2, "0")}`;
+  const cacheKey = `${CACHE_PREFIX_ANIME_DAILY_QUESTION}${dayKey}`;
+  const cacheRes = readCache(cacheKey);
+  if (cacheRes.err) {
+    return { value: null, err: cacheRes.err };
+  }
+  if (cacheRes.value) {
+    return { value: cacheRes.value, err: null };
+  }
+  const prompt = `${ANIME_DAILY_QUESTION_PROMPT_PREFIX} Date key: ${dayKey}. ${ANIME_DAILY_QUESTION_PROMPT_SUFFIX}`;
+  const generatedRes = await generateReply(prompt);
+  const cleanedRes = generatedRes.err ? { value: "", err: null } : normalizeAnimeQuestionText(generatedRes.value);
+  const fallbackRes = selectFallbackDailyAnimeQuestion(dayKey);
+  if (fallbackRes.err) {
+    return { value: null, err: fallbackRes.err };
+  }
+  const payload = cleanedRes.value
+    ? { dateKey: dayKey, question: cleanedRes.value, index: fallbackRes.value.index, source: "openai" }
+    : { dateKey: dayKey, question: fallbackRes.value.question, index: fallbackRes.value.index, source: "fallback" };
+  const writeRes = writeCache(cacheKey, payload, defaultAnimeQuestionCacheTtlMs);
+  if (writeRes.err) {
+    return { value: null, err: writeRes.err };
+  }
+  return { value: payload, err: null };
+}
+
+/**
+ * @param {string} dateKey
+ * @returns {Result<{question: string, index: number}>}
+ */
+function selectFallbackDailyAnimeQuestion(dateKey) {
+  const dayNumber = Math.floor(Date.parse(`${dateKey}T00:00:00Z`) / 86_400_000);
+  const questionIndex = Math.abs(dayNumber) % DAILY_ANIME_QUESTIONS.length;
+  return { value: { question: DAILY_ANIME_QUESTIONS[questionIndex], index: questionIndex }, err: null };
+}
+
+/**
+ * @param {string} value
+ * @returns {Result<string>}
+ */
+function normalizeAnimeQuestionText(value) {
+  const normalized = String(value || "").replace(/\s+/g, " ").trim();
+  if (!normalized) {
+    return { value: "", err: null };
+  }
+  const withoutQuotes = normalized.replace(/^["'`]+|["'`]+$/g, "");
+  const truncated = withoutQuotes.slice(0, ANIME_QUESTION_MAX_LEN).trim();
+  if (!truncated) {
+    return { value: "", err: null };
+  }
+  const question = /[?]$/.test(truncated) ? truncated : `${truncated}?`;
+  return { value: question, err: null };
+}
+
+/**
  * Adds missing sample posts once by title match so repeated restarts do not duplicate data.
  * @returns {Result<boolean>}
  */
@@ -747,6 +1254,19 @@ function ensureSampleBlogs() {
     existingTitles.add(sample.title);
   }
   return { value: true, err: null };
+}
+
+/**
+ * @param {string} value
+ * @returns {string}
+ */
+function escapeXml(value) {
+  return String(value || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&apos;");
 }
 
 /**
@@ -818,6 +1338,18 @@ export function invalidateCacheByPrefix(prefix) {
   for (const key of memoryCache.keys()) {
     if (key.startsWith(prefix)) {
       memoryCache.delete(key);
+    }
+  }
+  if (prefix.startsWith(CACHE_PREFIX_ANIME_SEARCH)) {
+    for (const key of animeSearchStaleCache.keys()) {
+      if (key.startsWith(prefix)) {
+        animeSearchStaleCache.delete(key);
+      }
+    }
+    for (const key of animeSearchInflight.keys()) {
+      if (key.startsWith(prefix)) {
+        animeSearchInflight.delete(key);
+      }
     }
   }
   return { value: true, err: null };

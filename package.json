@@ -13,7 +13,8 @@
     "dev:bg:logs": "powershell -ExecutionPolicy Bypass -File ./scripts/dev-logs.ps1",
     "build": "npm run build -w web && npm run build -w api",
     "lint": "npm run lint -w web && npm run lint -w api",
-    "test": "npm run test -w web && npm run test -w api"
+    "test": "npm run test -w web && npm run test -w api",
+    "check:error-strings": "node ./scripts/check-error-literals.js"
   },
   "devDependencies": {
     "concurrently": "^9.2.1",

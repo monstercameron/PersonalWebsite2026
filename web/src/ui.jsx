@@ -1,6 +1,6 @@
 import React, { Suspense, lazy, useEffect, useRef, useState } from "react";
 import { getYearLabel, buildNavItems } from "./core.pure.js";
-import { createBlog, createBlogCategory, deleteBlog, downloadResumePdf, fetchMessageOfDay, getBlog, getBlogAdminToken, getBlogsDashboard, getCurrentYear, getPublicBlog, listBlogCategories, listBlogs, listBlogTags, loginBlogAdmin, logoutBlogAdmin, setBlogPublished, updateBlog, uploadBlogImage } from "./core.impure.js";
+import { createBlog, createBlogCategory, deleteBlog, downloadResumePdf, fetchMessageOfDay, fetchSlackAnimeQuestionOfDay, getBlog, getBlogAdminToken, getBlogsDashboard, getCurrentYear, getPublicBlog, getSlackAnimeFeedUrls, listBlogCategories, listBlogs, listBlogTags, listTrackedSlackAnime, loginBlogAdmin, logoutBlogAdmin, searchSlackAnime, setBlogPublished, trackSlackAnime, untrackSlackAnime, updateBlog, uploadBlogImage } from "./core.impure.js";
 import hljs from "highlight.js/lib/common";
 import "highlight.js/styles/github-dark.css";
 import "./ui.css";
@@ -44,6 +44,7 @@ const PATH_RESUME = "/resume";
 const PATH_PROJECTS = "/projects";
 const PATH_RCTS = "/rcts";
 const PATH_BUDGET = "/budget";
+const PATH_SLACKANIME = "/slackanime";
 const PATH_BLOG = "/blog";
 const PATH_BLOG_PREFIX = "/blog/";
 const PATH_BLOG_DASHBOARD = "/blog/dashboard";
@@ -100,7 +101,7 @@ export function App() {
   useEffect(() => {
     let active = true;
     const loadMotd = async () => {
-      const motdRes = await fetchMessageOfDay();
+      const motdRes = await fetchMessageOfDay(true);
       if (!active) {
         return;
       }
@@ -201,6 +202,7 @@ function renderPage(pathname, onResumeDownload, motd) {
   if (pathname === PATH_HOME) return <HomePage motd={motd} />;
   if (pathname === PATH_RESUME) return <ResumePage onResumeDownload={onResumeDownload} />;
   if (pathname === PATH_BUDGET) return <BudgetToolRoutePage />;
+  if (pathname === PATH_SLACKANIME) return <SlackAnimePage />;
   if (pathname === PATH_PROJECTS || pathname === PATH_RCTS) return <ProjectsPage />;
   if (pathname === PATH_BLOG || pathname.startsWith(PATH_BLOG_PREFIX)) return <BlogPage />;
   if (pathname === PATH_AI_WORKSHOP) return <AiWorkshopPage />;
@@ -350,7 +352,7 @@ function ResumePage({ onResumeDownload }) {
           <h3>Core Skills</h3>
           <div className="chip-row">
             <span className="chip chip-label">Languages</span><span className="chip">JavaScript / ES6+</span><span className="chip">Go</span><span className="chip">Python</span><span className="chip">C (Systems)</span><span className="chip">SQL</span>
-            <span className="chip chip-label">Web / APIs</span><span className="chip">React</span><span className="chip">Vite</span><span className="chip">Node.js</span><span className="chip">REST APIs</span>
+            <span className="chip chip-label">Web / APIs</span><span className="chip">React</span><span className="chip">Angular</span><span className="chip">Vite</span><span className="chip">Node.js</span><span className="chip">HONO.js</span><span className="chip">HTMX</span><span className="chip">REST APIs</span>
             <span className="chip chip-label">AI</span><span className="chip">OpenAI API</span><span className="chip">LLM Application Development</span>
             <span className="chip chip-label">Ops / Platforms</span><span className="chip">WebAssembly</span><span className="chip">Observability / Reliability</span><span className="chip">CI/CD and Build Tooling</span><span className="chip">Linux</span><span className="chip">Raspberry Pi</span>
           </div>
@@ -364,10 +366,10 @@ function ResumePage({ onResumeDownload }) {
               <p className="xp-time">2020 - Present</p>
             </div>
             <ul className="list">
-              <li>Built an award-winning AI chatbot prototype recognized through internal innovation awards.</li>
-              <li>Led critical war-room response for infrastructure and product-impacting incidents.</li>
-              <li>Designed internal dashboards for development and infrastructure Jira case tracking.</li>
-              <li>Mentored interns and trained support teams on engineering workflows.</li>
+              <li>Engineered an award-winning AI chatbot prototype that reduced support case resolution time by 30%, recognized through internal innovation awards.</li>
+              <li>Spearheaded critical war-room response for infrastructure and product-impacting incidents, reducing mean time to resolution (MTTR) by 25%.</li>
+              <li>Developed internal dashboards using HONO.js JSX, HTMX, and MSSQL to streamline development and infrastructure Jira case tracking, improving team efficiency by 40%.</li>
+              <li>Mentored 5+ interns and conducted training sessions for support teams on engineering workflows, simplifying complex technical concepts for non-specialist audiences.</li>
             </ul>
           </article>
 
@@ -377,8 +379,10 @@ function ResumePage({ onResumeDownload }) {
               <p className="xp-time">Jan 2020 - Aug 2021</p>
             </div>
             <ul className="list">
-              <li>Guided students through full-stack web development foundations and project delivery.</li>
-              <li>Delivered structured training on practical engineering best practices.</li>
+              <li>Instructed and guided 50+ students through full-stack web development foundations and project delivery, achieving a 90% graduation rate.</li>
+              <li>Delivered structured training on practical engineering best practices, translating complex programming paradigms into accessible lessons.</li>
+              <li>Evaluated student projects and provided actionable code reviews to improve code quality and architecture understanding.</li>
+              <li>Collaborated with lead instructors to refine curriculum materials based on student feedback and industry trends.</li>
             </ul>
           </article>
 
@@ -388,8 +392,8 @@ function ResumePage({ onResumeDownload }) {
               <p className="xp-time">180+ Hours Tutored</p>
             </div>
             <ul className="list">
-              <li>Maintained a perfect 5.0 rating across student evaluations.</li>
-              <li>Provided personalized, outcome-focused instruction to 12 students.</li>
+              <li>Maintained a perfect 5.0 rating across student evaluations by providing personalized, outcome-focused instruction to 12 students.</li>
+              <li>Designed custom lesson plans to address individual learning gaps, resulting in a 100% pass rate for students' target exams or projects.</li>
             </ul>
           </article>
         </section>
@@ -397,11 +401,11 @@ function ResumePage({ onResumeDownload }) {
         <section className="resume-block resume-projects-block">
           <h3>Notable Projects</h3>
           <ul className="list">
-            <li><a href="https://github.com/monstercameron/GoWebComponents" target="_blank" rel="noreferrer noopener">GoWebComponents</a>: Go-powered component architecture focused on reusable frontend primitives.</li>
-            <li><a href="https://github.com/monstercameron/LatentSpaceBrowser" target="_blank" rel="noreferrer noopener">LatentSpaceBrowser</a>: Interactive AI exploration experience built around latent-space navigation.</li>
-            <li><a href="https://github.com/monstercameron/Zerver" target="_blank" rel="noreferrer noopener">Zerver</a>: C-based server project emphasizing low-level performance and runtime fundamentals.</li>
-            <li><a href="https://github.com/monstercameron/Budgetting_tool_vibecoded" target="_blank" rel="noreferrer noopener" title="Repo: Budgetting_tool_vibecoded">Budgeting Tool</a>: Finance tracking app for expenses, debt, and goal progress workflows.</li>
-            <li><a href="https://github.com/monstercameron/pi-camera-gui" target="_blank" rel="noreferrer noopener">Pi Camera GUI</a>: Python + Pygame interface for Raspberry Pi HQ camera controls and capture workflows.</li>
+            <li><a href="https://github.com/monstercameron/GoWebComponents" target="_blank" rel="noreferrer noopener">GoWebComponents</a>: Architected a Go-powered component architecture focused on reusable frontend primitives, utilizing TEMPL for type-safe HTML rendering.</li>
+            <li><a href="https://github.com/monstercameron/LatentSpaceBrowser" target="_blank" rel="noreferrer noopener">LatentSpaceBrowser</a>: Developed an interactive AI exploration experience built around latent-space navigation using SOTA AI/ML models.</li>
+            <li><a href="https://github.com/monstercameron/Zerver" target="_blank" rel="noreferrer noopener">Zerver</a>: Engineered a C-based server project emphasizing low-level performance and runtime fundamentals.</li>
+            <li><a href="https://github.com/monstercameron/Budgetting_tool_vibecoded" target="_blank" rel="noreferrer noopener" title="Repo: Budgetting_tool_vibecoded">Budgeting Tool</a>: Implemented a finance tracking app for expenses, debt, and goal progress workflows.</li>
+            <li><a href="https://github.com/monstercameron/pi-camera-gui" target="_blank" rel="noreferrer noopener">Pi Camera GUI</a>: Built a Python + Pygame interface for Raspberry Pi HQ camera controls and capture workflows.</li>
           </ul>
         </section>
 
@@ -429,6 +433,16 @@ function ProjectsPage() {
         A collection of tools built to solve specific problems, explore new architectures, or push hardware constraints. I focus on observability, performance, and practical utility over glossy features.
       </p>
       <div className="cards">
+        <article className="card">
+          <div className="project-card-head">
+            <h3><a href="/slackanime">SlackAnime Tracker Port</a></h3>
+            <span className="chip chip-zero">React / SQLite / AniList</span>
+          </div>
+          <p><strong>The Build:</strong> A JavaScript port of core SlackAnime workflows: airing-anime search, tracked list management, and local SQLite persistence via API.</p>
+          <p><strong>The Why:</strong> I wanted the tracker integrated into this website stack so it can be iterated quickly with shared auth, logging, and deployment patterns.</p>
+          <p><a href="https://github.com/monstercameron/SlackAnimeTracker" target="_blank" rel="noreferrer noopener">Original Go Project</a></p>
+        </article>
+
         <article className="card">
           <div className="project-card-head">
             <h3><a href="https://github.com/monstercameron/Zerver" target="_blank" rel="noreferrer noopener">Zerver</a></h3>
@@ -500,6 +514,205 @@ function ProjectsPage() {
           <p><strong>The Build:</strong> A fast, client-side budgeting app for tracking income, expenses, debt, and goal progress.</p>
           <p><strong>The Why:</strong> Off-the-shelf tools were too slow or lacked specific workflows. I built this to centralize my personal finance tracking with instant feedback and high-visibility metrics.</p>
         </article>
+      </div>
+    </section>
+  );
+}
+
+function SlackAnimePage() {
+  const [query, setQuery] = useState("");
+  const [results, setResults] = useState([]);
+  const [tracked, setTracked] = useState([]);
+  const [dailyQuestion, setDailyQuestion] = useState("");
+  const [password, setPassword] = useState("");
+  const [isAdmin, setIsAdmin] = useState(Boolean(getBlogAdminToken().value));
+  const [status, setStatus] = useState({ text: "", error: false });
+  const [busy, setBusy] = useState(false);
+  const feedUrlsRes = getSlackAnimeFeedUrls();
+  const feedUrls = feedUrlsRes.err
+    ? { tracked: "/api/slackanime/feed/tracked.xml", questions: "/api/slackanime/feed/questions.xml" }
+    : feedUrlsRes.value;
+
+  const loadTracked = async () => {
+    const trackedRes = await listTrackedSlackAnime();
+    if (trackedRes.err) {
+      setStatus({ text: trackedRes.err.message, error: true });
+      setIsAdmin(false);
+      return;
+    }
+    setIsAdmin(true);
+    setTracked(trackedRes.value || []);
+  };
+
+  useEffect(() => {
+    if (!isAdmin) {
+      return;
+    }
+    loadTracked();
+    const loadQuestion = async () => {
+      const questionRes = await fetchSlackAnimeQuestionOfDay();
+      if (questionRes.err || !questionRes.value || !questionRes.value.question) {
+        return;
+      }
+      setDailyQuestion(questionRes.value.question);
+    };
+    loadQuestion();
+  }, [isAdmin]);
+
+  const connect = async () => {
+    const loginRes = await loginBlogAdmin(password);
+    if (loginRes.err) {
+      setStatus({ text: loginRes.err.message, error: true });
+      return;
+    }
+    setPassword("");
+    setStatus({ text: "SlackAnime session connected.", error: false });
+    setIsAdmin(true);
+  };
+
+  const disconnect = async () => {
+    const logoutRes = await logoutBlogAdmin();
+    if (logoutRes.err) {
+      setStatus({ text: logoutRes.err.message, error: true });
+      return;
+    }
+    setIsAdmin(false);
+    setResults([]);
+    setTracked([]);
+    setDailyQuestion("");
+    setStatus({ text: "SlackAnime session disconnected.", error: false });
+  };
+
+  const onSearch = async (event) => {
+    event.preventDefault();
+    if (!isAdmin) {
+      setStatus({ text: "Connect first using admin password.", error: true });
+      return;
+    }
+    const q = String(query || "").trim();
+    if (!q) {
+      setResults([]);
+      return;
+    }
+    setBusy(true);
+    const searchRes = await searchSlackAnime(q);
+    setBusy(false);
+    if (searchRes.err) {
+      setStatus({ text: searchRes.err.message, error: true });
+      return;
+    }
+    setStatus({ text: "", error: false });
+    setResults(searchRes.value || []);
+  };
+
+  const onTrack = async (anime) => {
+    const saveRes = await trackSlackAnime(anime);
+    if (saveRes.err) {
+      setStatus({ text: saveRes.err.message, error: true });
+      return;
+    }
+    setStatus({ text: `Tracking ${anime.title}`, error: false });
+    await loadTracked();
+  };
+
+  const onUntrack = async (anime) => {
+    const removeRes = await untrackSlackAnime(anime.anilistId);
+    if (removeRes.err) {
+      setStatus({ text: removeRes.err.message, error: true });
+      return;
+    }
+    setStatus({ text: `Removed ${anime.title}`, error: false });
+    await loadTracked();
+  };
+
+  return (
+    <section className="panel slackanime-shell">
+      {isAdmin ? (
+        <div className="slackanime-top-actions">
+          <button className="cta-link cta-button cta-danger slackanime-btn" type="button" onClick={() => { void disconnect(); }}>Disconnect</button>
+        </div>
+      ) : null}
+      <p className="eyebrow">SLACKANIME PORT</p>
+      <h2>Anime Tracker</h2>
+      <p className="projects-intro slackanime-intro">
+        Ported from the Go project into this site stack. Search AniList and maintain a tracked anime list in local SQLite.
+      </p>
+
+      {!isAdmin ? (
+        <section className="slackanime-auth-card">
+          <div className="slackanime-auth-head">
+            <h3 className="slackanime-auth-title">SlackAnime Auth</h3>
+            <p className="slackanime-auth-subtitle">Admin session required to manage tracked anime.</p>
+          </div>
+          <div className="slackanime-auth-form">
+            <label>
+              Admin Password
+              <input className="slackanime-input" type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Enter admin password" />
+            </label>
+            <div className="slackanime-auth-actions">
+              <button className="cta-link cta-button slackanime-btn" type="button" onClick={() => { void connect(); }}>Connect</button>
+            </div>
+            <p className="slackanime-auth-state">Auth: Disconnected</p>
+          </div>
+        </section>
+      ) : null}
+
+      {dailyQuestion ? (
+        <p className="slackanime-daily">
+          <strong>Daily Question:</strong> {dailyQuestion}
+        </p>
+      ) : null}
+
+      <div className="slackanime-rss-row">
+        <a className="cta-link" href={feedUrls.tracked} target="_blank" rel="noreferrer noopener">Tracked Releases RSS</a>
+        <a className="cta-link" href={feedUrls.questions} target="_blank" rel="noreferrer noopener">Daily Questions RSS</a>
+      </div>
+
+      <form className="slackanime-search-form" onSubmit={onSearch}>
+        <input
+          className="slackanime-input"
+          type="search"
+          placeholder="Search anime..."
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+        />
+        <button className="cta-link cta-button slackanime-btn" type="submit">{busy ? "Searching..." : "Search"}</button>
+      </form>
+
+      {status.text ? <p className={status.error ? "slackanime-error" : "slackanime-success"}>{status.text}</p> : null}
+
+      <h3 className="slackanime-section-title">Tracked Anime</h3>
+      <div className="slackanime-grid">
+        {tracked.length < 1 ? <p className="slackanime-empty">No tracked anime yet.</p> : null}
+        {tracked.map((anime) => (
+          <article className="slackanime-card" key={`tracked-${anime.anilistId}`}>
+            <div className="slackanime-card-head">
+              <h3>{anime.siteUrl ? <a href={anime.siteUrl} target="_blank" rel="noreferrer noopener">{anime.title}</a> : anime.title}</h3>
+              <span className="chip slackanime-chip">{anime.status || "UNKNOWN"}</span>
+            </div>
+            <p className="slackanime-card-meta">{anime.format || "ANIME"}{anime.seasonYear ? ` � ${anime.seasonYear}` : ""}{anime.episodes ? ` � ${anime.episodes} eps` : ""}</p>
+            <div className="slackanime-card-actions">
+              <button className="cta-link cta-button cta-danger slackanime-btn" type="button" onClick={() => { void onUntrack(anime); }}>Untrack</button>
+            </div>
+          </article>
+        ))}
+      </div>
+
+      <h3 className="slackanime-section-title">Search Results</h3>
+      <div className="slackanime-grid">
+        {results.length < 1 ? <p className="slackanime-empty">Run a search to load results.</p> : null}
+        {results.map((anime) => (
+          <article className="slackanime-card" key={`result-${anime.anilistId}`}>
+            <div className="slackanime-card-head">
+              <h3>{anime.siteUrl ? <a href={anime.siteUrl} target="_blank" rel="noreferrer noopener">{anime.title}</a> : anime.title}</h3>
+              <span className="chip slackanime-chip">{anime.status || "UNKNOWN"}</span>
+            </div>
+            <p className="slackanime-card-meta">{anime.format || "ANIME"}{anime.seasonYear ? ` � ${anime.seasonYear}` : ""}{anime.episodes ? ` � ${anime.episodes} eps` : ""}</p>
+            <div className="slackanime-card-actions">
+              <button className="cta-link cta-button slackanime-btn" type="button" onClick={() => { void onTrack(anime); }}>Track</button>
+            </div>
+          </article>
+        ))}
       </div>
     </section>
   );
@@ -1348,3 +1561,4 @@ function CodeBlock(props) {
     </div>
   );
 }
+

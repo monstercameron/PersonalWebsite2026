@@ -443,6 +443,175 @@ h1, h2, h3, h4 { margin-top: 0; color: var(--ink); font-weight: 600; letter-spac
 .blog-card-vlog-video { margin: 0; border-radius: 10px; }
 .blog-card-vlog-missing { margin: 0; padding: 10px 12px; border: 1px dashed var(--line); border-radius: 10px; color: var(--muted); font-size: 0.9rem; }
 .blog-card-meta-vlog { margin-top: 0; padding-top: 10px; }
+
+/* SlackAnime page */
+.slackanime-shell {
+  display: grid;
+  gap: 18px;
+  position: relative;
+}
+.slackanime-top-actions {
+  position: absolute;
+  top: 0;
+  right: 0;
+}
+.slackanime-intro {
+  max-width: 80ch;
+}
+.slackanime-auth-card {
+  border: 1px solid rgba(59, 130, 246, 0.3);
+  background: linear-gradient(180deg, rgba(30, 41, 59, 0.8), rgba(15, 23, 42, 0.75));
+  border-radius: 14px;
+  padding: 18px;
+  display: grid;
+  gap: 14px;
+}
+.slackanime-auth-head {
+  display: grid;
+  gap: 4px;
+}
+.slackanime-auth-title {
+  margin: 0;
+  font-size: 1.05rem;
+}
+.slackanime-auth-subtitle {
+  margin: 0;
+  color: #93c5fd !important;
+  font-size: 0.88rem;
+}
+.slackanime-auth-form {
+  display: grid;
+  gap: 10px;
+}
+.slackanime-auth-form label {
+  display: grid;
+  gap: 8px;
+  font-size: 0.88rem;
+  color: var(--ink);
+}
+.slackanime-input {
+  width: 100%;
+  background: rgba(2, 6, 23, 0.75);
+  color: var(--ink);
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  border-radius: 9px;
+  padding: 10px 12px;
+  font: inherit;
+}
+.slackanime-input:focus {
+  outline: none;
+  border-color: rgba(96, 165, 250, 0.75);
+  box-shadow: 0 0 0 2px rgba(96, 165, 250, 0.2);
+}
+.slackanime-auth-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.slackanime-auth-state {
+  margin: 0;
+  font-size: 0.84rem;
+  color: var(--muted) !important;
+}
+.slackanime-btn {
+  border-radius: 10px;
+}
+.slackanime-daily {
+  margin: 0;
+  color: #bfdbfe !important;
+  background: rgba(30, 58, 138, 0.2);
+  border: 1px solid rgba(96, 165, 250, 0.35);
+  border-radius: 10px;
+  padding: 12px 14px;
+}
+.slackanime-rss-row {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.slackanime-search-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+}
+.slackanime-error {
+  color: #fecaca !important;
+  background: rgba(239, 68, 68, 0.14);
+  border: 1px solid rgba(248, 113, 113, 0.35);
+  border-radius: 10px;
+  padding: 10px 12px;
+  margin: 0;
+}
+.slackanime-success {
+  color: #bbf7d0 !important;
+  background: rgba(34, 197, 94, 0.14);
+  border: 1px solid rgba(74, 222, 128, 0.35);
+  border-radius: 10px;
+  padding: 10px 12px;
+  margin: 0;
+}
+.slackanime-section-title {
+  margin: 10px 0 0;
+  font-size: 1.08rem;
+}
+.slackanime-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  gap: 12px;
+}
+.slackanime-empty {
+  margin: 0;
+  grid-column: 1 / -1;
+  border: 1px dashed var(--line);
+  border-radius: 10px;
+  padding: 12px;
+  color: var(--muted) !important;
+}
+.slackanime-card {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.02);
+  padding: 14px;
+  display: grid;
+  gap: 10px;
+}
+.slackanime-card-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: flex-start;
+}
+.slackanime-card-head h3 {
+  margin: 0;
+  font-size: 0.99rem;
+}
+.slackanime-chip {
+  font-size: 0.68rem;
+  letter-spacing: 0.04em;
+}
+.slackanime-card-meta {
+  margin: 0;
+  color: var(--muted) !important;
+  font-size: 0.86rem;
+}
+.slackanime-card-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+@media (max-width: 768px) {
+  .slackanime-top-actions {
+    position: static;
+    justify-self: end;
+  }
+  .slackanime-search-form {
+    grid-template-columns: 1fr;
+  }
+  .slackanime-auth-actions {
+    width: 100%;
+  }
+}
 .draft-pill { border-color: var(--muted); color: var(--muted); margin: 0; }
 .admin-card-actions { margin-top: 16px; padding-top: 16px; border-top: 1px solid rgba(255,255,255,0.05); }
 .editor-back-row { margin-bottom: 24px; }
