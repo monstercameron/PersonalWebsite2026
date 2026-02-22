@@ -9,6 +9,9 @@ const NAV_ITEMS = [
   { label: "Projects", href: "/projects" },
   { label: "Blog", href: "/blog" },
   { label: "AI Workshop", href: "/aiworkshop" },
+  { label: "GitHub", href: "https://github.com/monstercameron", external: true },
+  { label: "LinkedIn", href: "https://www.linkedin.com/in/earl-cameron/", external: true },
+  { label: "YouTube", href: "https://www.youtube.com/@EarlCameron007", external: true },
   { label: "RSS", href: "http://reader.earlcameron.com/", external: true }
 ];
 const ERR_YEAR_NUMBER = "Year must be a number";
