@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { getYearLabel, buildNavItems } from "./core.pure.js";
-import { createBlog, createBlogCategory, deleteBlog, downloadResumePdf, fetchMessageOfDay, getBlogAdminToken, getBlogsDashboard, getCurrentYear, getPublicBlog, listBlogCategories, listBlogs, listBlogTags, loginBlogAdmin, logoutBlogAdmin, updateBlog, uploadBlogImage } from "./core.impure.js";
+import { createBlog, createBlogCategory, deleteBlog, downloadResumePdf, fetchMessageOfDay, getBlogAdminToken, getBlogsDashboard, getCurrentYear, getPublicBlog, listBlogCategories, listBlogs, listBlogTags, loginBlogAdmin, logoutBlogAdmin, setBlogPublished, updateBlog, uploadBlogImage } from "./core.impure.js";
 import hljs from "highlight.js/lib/common";
 import "highlight.js/styles/github-dark.css";
 import javascriptLang from "highlight.js/lib/languages/javascript";
@@ -602,14 +602,7 @@ function BlogPage() {
    * @returns {Promise<void>}
    */
   const onTogglePublish = async (row) => {
-    const res = await updateBlog(row.id, {
-      title: row.title || "",
-      summary: row.summary || "",
-      content: row.content || "",
-      published: row.published ? 0 : 1,
-      categoryId: row.category?.id ? Number(row.category.id) : null,
-      tags: Array.isArray(row.tags) ? row.tags.map((tag) => tag.name) : []
-    });
+    const res = await setBlogPublished(row.id, row.published ? 0 : 1);
     if (res.err) {
       setStatus({ text: res.err.message, error: true });
       return;

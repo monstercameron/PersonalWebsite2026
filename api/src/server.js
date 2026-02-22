@@ -8,6 +8,7 @@ import {
   validateCategoryBody,
   validateBlogBody,
   validateBlogId,
+  validatePublishBody,
   validateTagBody,
   validatePromptBody
 } from "./app.pure.js";
@@ -28,6 +29,7 @@ import {
   logEvent,
   saveUploadedImage,
   savePromptOnly,
+  setBlogPublished,
   updateBlog
 } from "./app.impure.js";
 
@@ -47,6 +49,7 @@ const PATH_API_AI = "/api/ai";
 const PATH_API_MOTD = "/api/message-of-day";
 const PATH_API_BLOGS = "/api/blogs";
 const PATH_API_BLOGS_ID = "/api/blogs/:id";
+const PATH_API_BLOGS_PUBLISH = "/api/blogs/:id/publish";
 const PATH_API_BLOGS_PUBLIC_ID = "/api/blogs/public/:id";
 const PATH_API_BLOGS_DASHBOARD = "/api/blogs/dashboard";
 const PATH_API_BLOG_CATEGORIES = "/api/blogs/categories";
@@ -453,6 +456,40 @@ app.put(PATH_API_BLOGS_ID, async (c) => {
 
   c.header(CACHE_CONTROL, CACHE_NO_STORE);
   return c.json({ updated: updateRes.value, id: idRes.value });
+});
+
+app.patch(PATH_API_BLOGS_PUBLISH, async (c) => {
+  const authRes = requireAdminSession(c);
+  if (authRes.err) {
+    return c.json({ message: authRes.err.message, code: "UNAUTHORIZED" }, STATUS_UNAUTHORIZED);
+  }
+
+  const idRes = validateBlogId(c.req.param("id"));
+  if (idRes.err) {
+    const publicErrRes = toPublicError(idRes.err);
+    return c.json(publicErrRes.value, STATUS_BAD_REQUEST);
+  }
+
+  const bodyRes = await fromPromise(c.req.json());
+  if (bodyRes.err) {
+    const publicErrRes = toPublicError(bodyRes.err);
+    return c.json(publicErrRes.value, STATUS_BAD_REQUEST);
+  }
+
+  const payloadRes = validatePublishBody(bodyRes.value);
+  if (payloadRes.err) {
+    const publicErrRes = toPublicError(payloadRes.err);
+    return c.json(publicErrRes.value, STATUS_BAD_REQUEST);
+  }
+
+  const updateRes = setBlogPublished(idRes.value, payloadRes.value.published);
+  if (updateRes.err) {
+    const publicErrRes = toPublicError(updateRes.err);
+    return c.json(publicErrRes.value, STATUS_SERVER_ERROR);
+  }
+
+  c.header(CACHE_CONTROL, CACHE_NO_STORE);
+  return c.json({ updated: updateRes.value, id: idRes.value, published: payloadRes.value.published });
 });
 
 app.delete(PATH_API_BLOGS_ID, (c) => {

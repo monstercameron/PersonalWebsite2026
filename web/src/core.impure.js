@@ -15,6 +15,7 @@ const PDF_MARGIN = 20;
 const PDF_FILENAME_DEFAULT = "EarlCameron-Resume.pdf";
 const API_MESSAGE_OF_DAY_PATH = "/api/message-of-day";
 const API_BLOGS_PATH = "/api/blogs";
+const API_BLOGS_PUBLISH_SUFFIX = "/publish";
 const API_BLOGS_PUBLIC_PATH = "/api/blogs/public";
 const API_BLOGS_DASHBOARD_PATH = "/api/blogs/dashboard";
 const API_BLOGS_ADMIN_LOGIN_PATH = "/api/blogs/admin/login";
@@ -25,6 +26,7 @@ const MESSAGE_CACHE_TTL_MS = 60_000;
 const BLOG_CACHE_TTL_MS = 15_000;
 const METHOD_POST = "POST";
 const METHOD_PUT = "PUT";
+const METHOD_PATCH = "PATCH";
 const METHOD_DELETE = "DELETE";
 const HEADER_CONTENT_TYPE = "Content-Type";
 const HEADER_ADMIN_TOKEN = "x-admin-token";
@@ -187,6 +189,32 @@ export async function updateBlog(id, payload) {
     method: METHOD_PUT,
     headers: { [HEADER_CONTENT_TYPE]: CONTENT_TYPE_JSON, [HEADER_ADMIN_TOKEN]: authRes.value },
     body: JSON.stringify(payload)
+  });
+  if (res.err) {
+    return { value: null, err: res.err };
+  }
+  invalidateApiCache("/api/blogs");
+  return { value: res.value, err: null };
+}
+
+/**
+ * @param {number} id
+ * @param {number} published
+ * @returns {Promise<Result<{updated: boolean, id: number, published: number}>>}
+ */
+export async function setBlogPublished(id, published) {
+  const authRes = getBlogAdminToken();
+  if (authRes.err) {
+    return { value: null, err: authRes.err };
+  }
+  if (!authRes.value) {
+    return { value: null, err: new Error("Admin login required") };
+  }
+
+  const res = await apiRequest(`${API_BLOGS_PATH}/${id}${API_BLOGS_PUBLISH_SUFFIX}`, {
+    method: METHOD_PATCH,
+    headers: { [HEADER_CONTENT_TYPE]: CONTENT_TYPE_JSON, [HEADER_ADMIN_TOKEN]: authRes.value },
+    body: JSON.stringify({ published: published ? 1 : 0 })
   });
   if (res.err) {
     return { value: null, err: res.err };

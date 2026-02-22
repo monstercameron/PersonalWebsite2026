@@ -86,6 +86,7 @@ const SQL_LIST_BLOGS = "SELECT id, title, slug, summary, content, published, cre
 const SQL_GET_BLOG = "SELECT id, title, slug, summary, content, published, created_at, updated_at FROM blogs WHERE id = ?";
 const SQL_INSERT_BLOG = "INSERT INTO blogs (title, slug, summary, content, published, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)";
 const SQL_UPDATE_BLOG = "UPDATE blogs SET title = ?, slug = ?, summary = ?, content = ?, published = ?, updated_at = ? WHERE id = ?";
+const SQL_UPDATE_BLOG_PUBLISHED = "UPDATE blogs SET published = ?, updated_at = ? WHERE id = ?";
 const SQL_DELETE_BLOG = "DELETE FROM blogs WHERE id = ?";
 const SQL_COUNT_BLOGS = "SELECT COUNT(1) AS total FROM blogs";
 const SQL_COUNT_PUBLISHED = "SELECT COUNT(1) AS total FROM blogs WHERE published = 1";
@@ -507,6 +508,21 @@ export function updateBlog(id, payload) {
   if (mapRes.err) {
     return { value: null, err: mapRes.err };
   }
+  const invalidateRes = invalidateCacheByPrefix(CACHE_PREFIX_BLOGS);
+  if (invalidateRes.err) {
+    return { value: null, err: invalidateRes.err };
+  }
+  return { value: true, err: null };
+}
+
+/**
+ * @param {number} id
+ * @param {number} published
+ * @returns {Result<boolean>}
+ */
+export function setBlogPublished(id, published) {
+  const stmt = db.prepare(SQL_UPDATE_BLOG_PUBLISHED);
+  stmt.run(published ? 1 : 0, new Date().toISOString(), id);
   const invalidateRes = invalidateCacheByPrefix(CACHE_PREFIX_BLOGS);
   if (invalidateRes.err) {
     return { value: null, err: invalidateRes.err };

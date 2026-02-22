@@ -8,6 +8,8 @@ const ERR_PROMPT_REQUIRED = "Prompt is required";
 const ERR_USER_PROMPT_REQUIRED = "User prompt is required";
 const ERR_BLOG_TITLE_REQUIRED = "Blog title is required";
 const ERR_BLOG_CONTENT_REQUIRED = "Blog content is required";
+const ERR_BLOG_PUBLISHED_REQUIRED = "Published flag is required";
+const ERR_BLOG_PUBLISHED_INVALID = "Published flag must be a boolean, 0, or 1";
 const ERR_BLOG_ID_REQUIRED = "Blog id is required";
 const ERR_BLOG_ID_INVALID = "Blog id must be a positive integer";
 const ERR_CATEGORY_NAME_REQUIRED = "Category name is required";
@@ -133,4 +135,27 @@ export function validateTagBody(body) {
   }
 
   return { value: { name }, err: null };
+}
+
+/**
+ * @param {unknown} body
+ * @returns {Result<{published: number}>}
+ */
+export function validatePublishBody(body) {
+  if (!body || typeof body !== "object") {
+    return { value: null, err: new Error(ERR_BODY_OBJECT) };
+  }
+
+  if (body.published === undefined || body.published === null) {
+    return { value: null, err: new Error(ERR_BLOG_PUBLISHED_REQUIRED) };
+  }
+
+  const raw = body.published;
+  const isBool = typeof raw === "boolean";
+  const isNum = raw === 0 || raw === 1;
+  if (!isBool && !isNum) {
+    return { value: null, err: new Error(ERR_BLOG_PUBLISHED_INVALID) };
+  }
+
+  return { value: { published: raw ? 1 : 0 }, err: null };
 }
