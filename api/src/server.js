@@ -1,7 +1,9 @@
 import { randomUUID } from "node:crypto";
 import "dotenv/config";
+import { existsSync } from "node:fs";
 import { Hono } from "hono";
 import { serve } from "@hono/node-server";
+import { serveStatic } from "@hono/node-server/serve-static";
 import { secureHeaders } from "hono/secure-headers";
 import jwt from "jsonwebtoken";
 import cron from "node-cron";
@@ -18,6 +20,7 @@ import {
 import {
   createBlogCategory,
   createBlogTag,
+  buildBlogRssFeedXml,
   buildSlackAnimeQuestionRssFeedXml,
   buildSlackAnimeRssFeedXml,
   createBlog,
@@ -65,6 +68,8 @@ const EVENT_RATE_LIMIT_EXCEEDED = "rate_limit_exceeded";
 const EVENT_SHUTDOWN_SIGNAL = "shutdown_signal";
 const EVENT_SHUTDOWN_COMPLETE = "shutdown_complete";
 const EVENT_SHUTDOWN_ERROR = "shutdown_error";
+const EVENT_WEB_STATIC_ENABLED = "web_static_enabled";
+const EVENT_WEB_STATIC_SKIPPED = "web_static_skipped";
 const LEVEL_INFO = "info";
 const LEVEL_ERROR = "error";
 const PATH_API_HEALTH = "/api/health";
@@ -73,6 +78,7 @@ const PATH_API_AI = "/api/ai";
 const PATH_API_MOTD = "/api/message-of-day";
 const PATH_API_HOME_CONTENT = "/api/home-content";
 const PATH_API_BLOGS = "/api/blogs";
+const PATH_API_BLOGS_FEED = "/api/blogs/feed.xml";
 const PATH_API_BLOGS_ID = "/api/blogs/:id";
 const PATH_API_BLOGS_PUBLISH = "/api/blogs/:id/publish";
 const PATH_API_BLOGS_PUBLIC_ID = "/api/blogs/public/:id";
@@ -97,6 +103,7 @@ const HEADER_SET_COOKIE = "Set-Cookie";
 const HEADER_RETRY_AFTER = "Retry-After";
 const HEADER_X_FORWARDED_FOR = "x-forwarded-for";
 const HEADER_X_REAL_IP = "x-real-ip";
+const HEADER_CONTENT_TYPE = "Content-Type";
 const CODE_NOT_FOUND = "NOT_FOUND";
 const CODE_RATE_LIMITED = "RATE_LIMITED";
 const CODE_SHUTTING_DOWN = "SHUTTING_DOWN";
@@ -116,22 +123,42 @@ const STATUS_TOO_MANY_REQUESTS = 429;
 const PROMPTS_CACHE_TTL_MS = 15000;
 const AI_CACHE_TTL_MS = 300000;
 const BLOG_CACHE_TTL_MS = 15000;
-const ANIME_SEARCH_CACHE_TTL_MS = 1_800_000;
-const ANIME_SEARCH_STALE_TTL_MS = 86_400_000;
-const MOTD_CACHE_HEADER = "public, max-age=3600, stale-while-revalidate=86400";
 const ENV_API_PORT = "API_PORT";
 const ENV_BLOG_ADMIN_PASSWORD = "BLOG_ADMIN_PASSWORD";
 const ENV_BLOG_ADMIN_USER = "BLOG_ADMIN_USER";
 const ENV_BLOG_ADMIN_JWT_SECRET = "BLOG_ADMIN_JWT_SECRET";
 const ENV_NODE_ENV = "NODE_ENV";
+const ENV_ANIME_SEARCH_CACHE_TTL_MS = "ANIME_SEARCH_CACHE_TTL_MS";
+const ENV_ANIME_SEARCH_STALE_TTL_MS = "ANIME_SEARCH_STALE_TTL_MS";
+const ENV_MOTD_CACHE_MAX_AGE_SEC = "MOTD_CACHE_MAX_AGE_SEC";
+const ENV_MOTD_CACHE_STALE_WHILE_REVALIDATE_SEC = "MOTD_CACHE_STALE_WHILE_REVALIDATE_SEC";
 const ENV_ANIME_RELEASE_CRON_ENABLED = "ANIME_RELEASE_CRON_ENABLED";
 const ENV_ANIME_RELEASE_CRON_SCHEDULE = "ANIME_RELEASE_CRON_SCHEDULE";
 const ENV_ANIME_RELEASE_CRON_TIMEZONE = "ANIME_RELEASE_CRON_TIMEZONE";
+const ENV_RATE_LIMIT_AI_WINDOW_MS = "RATE_LIMIT_AI_WINDOW_MS";
+const ENV_RATE_LIMIT_AI_MAX = "RATE_LIMIT_AI_MAX";
+const ENV_RATE_LIMIT_REFRESH_WINDOW_MS = "RATE_LIMIT_REFRESH_WINDOW_MS";
+const ENV_RATE_LIMIT_REFRESH_MAX = "RATE_LIMIT_REFRESH_MAX";
+const ENV_RATE_LIMIT_LOGIN_WINDOW_MS = "RATE_LIMIT_LOGIN_WINDOW_MS";
+const ENV_RATE_LIMIT_LOGIN_MAX = "RATE_LIMIT_LOGIN_MAX";
+const ENV_RATE_LIMIT_STORE_MAX = "RATE_LIMIT_STORE_MAX";
+const ENV_SHUTDOWN_FORCE_EXIT_MS = "SHUTDOWN_FORCE_EXIT_MS";
+const ENV_WEB_DIST_ROOT = "WEB_DIST_ROOT";
+const ENV_WEB_PUBLIC_ROOT = "WEB_PUBLIC_ROOT";
+const ENV_WEB_CACHE_IMMUTABLE_SEC = "WEB_CACHE_IMMUTABLE_SEC";
+const ENV_WEB_CACHE_MEDIA_SEC = "WEB_CACHE_MEDIA_SEC";
+const ENV_WEB_CACHE_SHORT_SEC = "WEB_CACHE_SHORT_SEC";
+const ENV_TRUST_PROXY_HEADERS = "TRUST_PROXY_HEADERS";
+const ENV_TRUSTED_PROXY_IPS = "TRUSTED_PROXY_IPS";
 const DEFAULT_API_PORT = 8787;
 const DEFAULT_ANIME_CRON_ENABLED = "true";
 const DEFAULT_ANIME_CRON_SCHEDULE = "*/15 * * * *";
 const DEFAULT_ANIME_CRON_TIMEZONE = "UTC";
 const DEFAULT_BLOG_ADMIN_USER = "admin";
+const DEFAULT_ANIME_SEARCH_CACHE_TTL_MS = 1_800_000;
+const DEFAULT_ANIME_SEARCH_STALE_TTL_MS = 86_400_000;
+const DEFAULT_MOTD_CACHE_MAX_AGE_SEC = 3600;
+const DEFAULT_MOTD_CACHE_STALE_WHILE_REVALIDATE_SEC = 86400;
 const HEADER_ADMIN_TOKEN = "x-admin-token";
 const HEADER_COOKIE = "cookie";
 const NODE_ENV_PRODUCTION = "production";
@@ -155,17 +182,63 @@ const RATE_LIMIT_SCOPE_AI = "ai";
 const RATE_LIMIT_SCOPE_REFRESH = "refresh";
 const RATE_LIMIT_SCOPE_LOGIN = "login";
 const RATE_LIMIT_KEY_UNKNOWN = "unknown";
-const RATE_LIMIT_WINDOW_AI_MS = 60_000;
-const RATE_LIMIT_WINDOW_REFRESH_MS = 60_000;
-const RATE_LIMIT_WINDOW_LOGIN_MS = 15 * 60_000;
-const RATE_LIMIT_MAX_AI = 15;
-const RATE_LIMIT_MAX_REFRESH = 12;
-const RATE_LIMIT_MAX_LOGIN = 10;
-const RATE_LIMIT_STORE_MAX = 5000;
-const SHUTDOWN_FORCE_EXIT_MS = 10_000;
+const DEFAULT_RATE_LIMIT_WINDOW_AI_MS = 60_000;
+const DEFAULT_RATE_LIMIT_WINDOW_REFRESH_MS = 60_000;
+const DEFAULT_RATE_LIMIT_WINDOW_LOGIN_MS = 15 * 60_000;
+const DEFAULT_RATE_LIMIT_MAX_AI = 15;
+const DEFAULT_RATE_LIMIT_MAX_REFRESH = 12;
+const DEFAULT_RATE_LIMIT_MAX_LOGIN = 10;
+const DEFAULT_RATE_LIMIT_STORE_MAX = 5000;
+const DEFAULT_SHUTDOWN_FORCE_EXIT_MS = 10_000;
 const SIGNAL_SIGINT = "SIGINT";
 const SIGNAL_SIGTERM = "SIGTERM";
 const TIMER_UNREF_FN = "unref";
+const DEFAULT_WEB_DIST_ROOT = "../web/dist";
+const DEFAULT_WEB_PUBLIC_ROOT = "../web/public";
+const WEB_DIST_INDEX_FILE = "index.html";
+const PATH_WEB_ASSETS = "/assets/*";
+const PATH_WEB_IMAGES = "/images/*";
+const PATH_WEB_UPLOADS = "/uploads/*";
+const PATH_WEB_FAVICON = "/favicon.svg";
+const PATH_WEB_ROBOTS = "/robots.txt";
+const PATH_WEB_SPA_CATCH_ALL = "*";
+const DEFAULT_WEB_CACHE_IMMUTABLE_SEC = 31536000;
+const DEFAULT_WEB_CACHE_MEDIA_SEC = 2592000;
+const DEFAULT_WEB_CACHE_SHORT_SEC = 3600;
+const DEFAULT_TRUST_PROXY_HEADERS = false;
+const DEFAULT_TRUSTED_PROXY_IPS = "127.0.0.1,::1";
+const CONTENT_TYPE_HTML = "text/html; charset=utf-8";
+const EXT_HTML = ".html";
+const EXT_JS = ".js";
+const EXT_CSS = ".css";
+const EXT_SVG = ".svg";
+const EXT_JSON = ".json";
+const EXT_MAP = ".map";
+const EXT_TXT = ".txt";
+const EXT_XML = ".xml";
+const ANIME_SEARCH_CACHE_TTL_MS = readEnvIntOrDefault(ENV_ANIME_SEARCH_CACHE_TTL_MS, DEFAULT_ANIME_SEARCH_CACHE_TTL_MS);
+const ANIME_SEARCH_STALE_TTL_MS = readEnvIntOrDefault(ENV_ANIME_SEARCH_STALE_TTL_MS, DEFAULT_ANIME_SEARCH_STALE_TTL_MS);
+const MOTD_CACHE_MAX_AGE_SEC = readEnvIntOrDefault(ENV_MOTD_CACHE_MAX_AGE_SEC, DEFAULT_MOTD_CACHE_MAX_AGE_SEC);
+const MOTD_CACHE_STALE_WHILE_REVALIDATE_SEC = readEnvIntOrDefault(ENV_MOTD_CACHE_STALE_WHILE_REVALIDATE_SEC, DEFAULT_MOTD_CACHE_STALE_WHILE_REVALIDATE_SEC);
+const MOTD_CACHE_HEADER = `public, max-age=${MOTD_CACHE_MAX_AGE_SEC}, stale-while-revalidate=${MOTD_CACHE_STALE_WHILE_REVALIDATE_SEC}`;
+const RATE_LIMIT_WINDOW_AI_MS = readEnvIntOrDefault(ENV_RATE_LIMIT_AI_WINDOW_MS, DEFAULT_RATE_LIMIT_WINDOW_AI_MS);
+const RATE_LIMIT_WINDOW_REFRESH_MS = readEnvIntOrDefault(ENV_RATE_LIMIT_REFRESH_WINDOW_MS, DEFAULT_RATE_LIMIT_WINDOW_REFRESH_MS);
+const RATE_LIMIT_WINDOW_LOGIN_MS = readEnvIntOrDefault(ENV_RATE_LIMIT_LOGIN_WINDOW_MS, DEFAULT_RATE_LIMIT_WINDOW_LOGIN_MS);
+const RATE_LIMIT_MAX_AI = readEnvIntOrDefault(ENV_RATE_LIMIT_AI_MAX, DEFAULT_RATE_LIMIT_MAX_AI);
+const RATE_LIMIT_MAX_REFRESH = readEnvIntOrDefault(ENV_RATE_LIMIT_REFRESH_MAX, DEFAULT_RATE_LIMIT_MAX_REFRESH);
+const RATE_LIMIT_MAX_LOGIN = readEnvIntOrDefault(ENV_RATE_LIMIT_LOGIN_MAX, DEFAULT_RATE_LIMIT_MAX_LOGIN);
+const RATE_LIMIT_STORE_MAX = readEnvIntOrDefault(ENV_RATE_LIMIT_STORE_MAX, DEFAULT_RATE_LIMIT_STORE_MAX);
+const SHUTDOWN_FORCE_EXIT_MS = readEnvIntOrDefault(ENV_SHUTDOWN_FORCE_EXIT_MS, DEFAULT_SHUTDOWN_FORCE_EXIT_MS);
+const WEB_DIST_ROOT = readEnvStringOrDefault(ENV_WEB_DIST_ROOT, DEFAULT_WEB_DIST_ROOT);
+const WEB_PUBLIC_ROOT = readEnvStringOrDefault(ENV_WEB_PUBLIC_ROOT, DEFAULT_WEB_PUBLIC_ROOT);
+const WEB_CACHE_IMMUTABLE_SEC = readEnvIntOrDefault(ENV_WEB_CACHE_IMMUTABLE_SEC, DEFAULT_WEB_CACHE_IMMUTABLE_SEC);
+const WEB_CACHE_MEDIA_SEC = readEnvIntOrDefault(ENV_WEB_CACHE_MEDIA_SEC, DEFAULT_WEB_CACHE_MEDIA_SEC);
+const WEB_CACHE_SHORT_SEC = readEnvIntOrDefault(ENV_WEB_CACHE_SHORT_SEC, DEFAULT_WEB_CACHE_SHORT_SEC);
+const CACHE_STATIC_IMMUTABLE = `public, max-age=${WEB_CACHE_IMMUTABLE_SEC}, immutable`;
+const CACHE_STATIC_MEDIA = `public, max-age=${WEB_CACHE_MEDIA_SEC}`;
+const CACHE_STATIC_SHORT = `public, max-age=${WEB_CACHE_SHORT_SEC}`;
+const TRUST_PROXY_HEADERS = parseEnvBoolOrDefault(process.env[ENV_TRUST_PROXY_HEADERS], DEFAULT_TRUST_PROXY_HEADERS);
+const TRUSTED_PROXY_IPS = parseTrustedProxyIps(process.env[ENV_TRUSTED_PROXY_IPS] || DEFAULT_TRUSTED_PROXY_IPS);
 
 const app = new Hono();
 let isAnimeCronRunning = false;
@@ -333,6 +406,18 @@ app.get(PATH_API_BLOGS, (c) => {
 
   c.header(CACHE_CONTROL, CACHE_PUBLIC_PROMPTS);
   return c.json({ rows: blogsRes.value });
+});
+
+app.get(PATH_API_BLOGS_FEED, (c) => {
+  const origin = new URL(c.req.url).origin;
+  const xmlRes = buildBlogRssFeedXml(origin);
+  if (xmlRes.err) {
+    const publicErrRes = toPublicError(xmlRes.err);
+    return c.json(publicErrRes.value, STATUS_SERVER_ERROR);
+  }
+  c.header(CACHE_CONTROL, CACHE_PUBLIC_PROMPTS);
+  c.header(HEADER_CONTENT_TYPE, CONTENT_TYPE_XML);
+  return c.body(xmlRes.value);
 });
 
 app.get(PATH_API_BLOG_CATEGORIES, (c) => {
@@ -1029,7 +1114,67 @@ function isProductionEnv() {
   return { value: (process.env[ENV_NODE_ENV] || "").trim().toLowerCase() === NODE_ENV_PRODUCTION, err: null };
 }
 
-const port = Number(process.env[ENV_API_PORT] || DEFAULT_API_PORT);
+/**
+ * @param {string} name
+ * @param {number} fallback
+ * @returns {number}
+ */
+function readEnvIntOrDefault(name, fallback) {
+  const raw = String(process.env[name] || "").trim();
+  if (!raw) {
+    return fallback;
+  }
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return fallback;
+  }
+  return Math.floor(parsed);
+}
+
+/**
+ * @param {string} name
+ * @param {string} fallback
+ * @returns {string}
+ */
+function readEnvStringOrDefault(name, fallback) {
+  const raw = String(process.env[name] || "").trim();
+  return raw || fallback;
+}
+
+/**
+ * @param {string | undefined} raw
+ * @param {boolean} fallback
+ * @returns {boolean}
+ */
+function parseEnvBoolOrDefault(raw, fallback) {
+  const normalized = String(raw || "").trim().toLowerCase();
+  if (!normalized) {
+    return fallback;
+  }
+  if (normalized === "1" || normalized === "true" || normalized === "yes" || normalized === "on") {
+    return true;
+  }
+  if (normalized === "0" || normalized === "false" || normalized === "no" || normalized === "off") {
+    return false;
+  }
+  return fallback;
+}
+
+/**
+ * @param {string} raw
+ * @returns {Set<string>}
+ */
+function parseTrustedProxyIps(raw) {
+  const values = String(raw || "").split(",").map((v) => v.trim()).filter(Boolean);
+  return new Set(values.length > 0 ? values : ["127.0.0.1", "::1"]);
+}
+
+const webStaticRoutesRes = registerWebStaticRoutes();
+if (webStaticRoutesRes.err) {
+  console.error(webStaticRoutesRes.err.message);
+}
+
+const port = readEnvIntOrDefault(ENV_API_PORT, DEFAULT_API_PORT);
 const serverHandle = serve({ fetch: app.fetch, port });
 const bootLogRes = logEvent(LEVEL_INFO, EVENT_API_BOOT, { port });
 if (bootLogRes.err) {
@@ -1133,16 +1278,67 @@ function enforceRateLimit(c, scope, maxRequests, windowMs) {
  * @returns {{ value: string | null, err: Error | null }}
  */
 function getClientIp(c) {
-  const forwarded = String(c.req.header(HEADER_X_FORWARDED_FOR) || "").trim();
-  if (forwarded) {
-    const first = forwarded.split(",")[0]?.trim();
-    return { value: first || RATE_LIMIT_KEY_UNKNOWN, err: null };
+  const socketIpRes = getRemoteSocketIp(c);
+  if (socketIpRes.err) {
+    return { value: null, err: socketIpRes.err };
   }
-  const realIp = String(c.req.header(HEADER_X_REAL_IP) || "").trim();
-  if (realIp) {
-    return { value: realIp, err: null };
+
+  const socketIp = socketIpRes.value || RATE_LIMIT_KEY_UNKNOWN;
+  const canTrustForwarded = TRUST_PROXY_HEADERS && isTrustedProxyIp(socketIp);
+  if (canTrustForwarded) {
+    const forwarded = String(c.req.header(HEADER_X_FORWARDED_FOR) || "").trim();
+    if (forwarded) {
+      const first = forwarded.split(",")[0]?.trim();
+      if (first) {
+        return { value: first, err: null };
+      }
+    }
+    const realIp = String(c.req.header(HEADER_X_REAL_IP) || "").trim();
+    if (realIp) {
+      return { value: realIp, err: null };
+    }
+  }
+  return { value: socketIp || RATE_LIMIT_KEY_UNKNOWN, err: null };
+}
+
+/**
+ * @param {import("hono").Context} c
+ * @returns {{ value: string | null, err: Error | null }}
+ */
+function getRemoteSocketIp(c) {
+  const raw = c?.req?.raw;
+  const socketAddress = raw?.socket?.remoteAddress ? String(raw.socket.remoteAddress).trim() : "";
+  if (socketAddress) {
+    return { value: normalizeIpAddress(socketAddress), err: null };
   }
   return { value: RATE_LIMIT_KEY_UNKNOWN, err: null };
+}
+
+/**
+ * @param {string} ip
+ * @returns {boolean}
+ */
+function isTrustedProxyIp(ip) {
+  const normalized = normalizeIpAddress(ip);
+  if (TRUSTED_PROXY_IPS.has(normalized)) {
+    return true;
+  }
+  return normalized.startsWith("127.") || normalized === "::1";
+}
+
+/**
+ * @param {string} ip
+ * @returns {string}
+ */
+function normalizeIpAddress(ip) {
+  const value = String(ip || "").trim();
+  if (!value) {
+    return RATE_LIMIT_KEY_UNKNOWN;
+  }
+  if (value.startsWith("::ffff:")) {
+    return value.slice(7);
+  }
+  return value;
 }
 
 /**
@@ -1315,4 +1511,132 @@ async function runAnimeReleaseCronTick() {
     console.error(doneLogRes.err.message);
   }
   return { value: true, err: null };
+}
+
+/**
+ * @returns {{ value: boolean | null, err: Error | null }}
+ */
+function registerWebStaticRoutes() {
+  const distRootExists = existsSync(WEB_DIST_ROOT);
+  const distIndexExists = existsSync(`${WEB_DIST_ROOT}/${WEB_DIST_INDEX_FILE}`);
+  if (!distRootExists || !distIndexExists) {
+    const skipLogRes = logEvent(LEVEL_INFO, EVENT_WEB_STATIC_SKIPPED, {
+      reason: "dist_missing",
+      distRoot: WEB_DIST_ROOT,
+      distIndex: `${WEB_DIST_ROOT}/${WEB_DIST_INDEX_FILE}`
+    });
+    if (skipLogRes.err) {
+      return { value: null, err: skipLogRes.err };
+    }
+    return { value: true, err: null };
+  }
+
+  app.use(PATH_WEB_ASSETS, serveStatic({
+    root: WEB_DIST_ROOT,
+    precompressed: true,
+    onFound: (path, c) => {
+      applyStaticCacheHeaders(c, path, true);
+    }
+  }));
+  app.use(PATH_WEB_IMAGES, serveStatic({
+    root: WEB_PUBLIC_ROOT,
+    precompressed: true,
+    onFound: (path, c) => {
+      applyStaticCacheHeaders(c, path, false);
+    }
+  }));
+  app.use(PATH_WEB_UPLOADS, serveStatic({
+    root: WEB_PUBLIC_ROOT,
+    precompressed: true,
+    onFound: (path, c) => {
+      applyStaticCacheHeaders(c, path, false);
+    }
+  }));
+  app.use(PATH_WEB_FAVICON, serveStatic({
+    root: WEB_PUBLIC_ROOT,
+    path: "favicon.svg",
+    precompressed: true,
+    onFound: (path, c) => {
+      applyStaticCacheHeaders(c, path, false);
+    }
+  }));
+  app.use(PATH_WEB_ROBOTS, serveStatic({
+    root: WEB_PUBLIC_ROOT,
+    path: "robots.txt",
+    precompressed: true,
+    onFound: (path, c) => {
+      applyStaticCacheHeaders(c, path, false);
+    }
+  }));
+
+  const spaIndexHandler = serveStatic({
+    root: WEB_DIST_ROOT,
+    path: WEB_DIST_INDEX_FILE,
+    precompressed: true,
+    onFound: (_path, c) => {
+      c.header(CACHE_CONTROL, CACHE_NO_STORE);
+      c.header(HEADER_CONTENT_TYPE, CONTENT_TYPE_HTML);
+    }
+  });
+
+  app.get(PATH_WEB_SPA_CATCH_ALL, async (c, next) => {
+    if (c.req.path.startsWith("/api/")) {
+      return next();
+    }
+    if (c.req.path.startsWith("/assets/") || c.req.path.startsWith("/images/") || c.req.path.startsWith("/uploads/")) {
+      return next();
+    }
+    if (looksLikeFileRequest(c.req.path)) {
+      return next();
+    }
+    return spaIndexHandler(c, next);
+  });
+
+  const enabledLogRes = logEvent(LEVEL_INFO, EVENT_WEB_STATIC_ENABLED, {
+    distRoot: WEB_DIST_ROOT,
+    publicRoot: WEB_PUBLIC_ROOT
+  });
+  if (enabledLogRes.err) {
+    return { value: null, err: enabledLogRes.err };
+  }
+  return { value: true, err: null };
+}
+
+/**
+ * @param {import("hono").Context} c
+ * @param {string} requestPath
+ * @param {boolean} isImmutableAsset
+ * @returns {{ value: boolean | null, err: Error | null }}
+ */
+function applyStaticCacheHeaders(c, requestPath, isImmutableAsset) {
+  const lowerPath = String(requestPath || "").toLowerCase();
+  if (isImmutableAsset) {
+    c.header(CACHE_CONTROL, CACHE_STATIC_IMMUTABLE);
+    return { value: true, err: null };
+  }
+  if (lowerPath.endsWith(EXT_HTML)) {
+    c.header(CACHE_CONTROL, CACHE_NO_STORE);
+    return { value: true, err: null };
+  }
+  if (lowerPath.endsWith(EXT_SVG) || lowerPath.endsWith(EXT_TXT) || lowerPath.endsWith(EXT_XML)) {
+    c.header(CACHE_CONTROL, CACHE_STATIC_SHORT);
+    return { value: true, err: null };
+  }
+  c.header(CACHE_CONTROL, CACHE_STATIC_MEDIA);
+  return { value: true, err: null };
+}
+
+/**
+ * @param {string} path
+ * @returns {boolean}
+ */
+function looksLikeFileRequest(path) {
+  const lowerPath = String(path || "").toLowerCase();
+  return lowerPath.endsWith(EXT_JS)
+    || lowerPath.endsWith(EXT_CSS)
+    || lowerPath.endsWith(EXT_SVG)
+    || lowerPath.endsWith(EXT_JSON)
+    || lowerPath.endsWith(EXT_MAP)
+    || lowerPath.endsWith(EXT_TXT)
+    || lowerPath.endsWith(EXT_XML);
 }

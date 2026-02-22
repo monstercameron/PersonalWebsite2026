@@ -126,6 +126,7 @@ const TEXT_VLOG_URL_PLACEHOLDER = "https://www.youtube.com/watch?v=...";
 const TEXT_VLOG_URL_HELP = "Paste a full YouTube URL for this vlog entry.";
 const TEXT_VLOG_URL_INVALID = "Enter a valid YouTube URL to preview the embed.";
 const TEXT_BUDGET_LOADING = "Loading budget tool...";
+const API_BLOG_RSS_FEED_PATH = "/api/blogs/feed.xml";
 const BudgetToolPageLazy = lazy(() => import("./budget/entry.jsx"));
 let highlightRuntime = null;
 let highlightRuntimePromise = null;
@@ -1157,6 +1158,7 @@ function BlogPage() {
           ) : null}
         </div>
         <div className="blog-header-actions">
+          <a className="tab-btn" href={API_BLOG_RSS_FEED_PATH} target="_blank" rel="noreferrer noopener"><IconRSS /> Blog RSS</a>
           <button className={`tab-btn ${view === "list" ? "is-active" : ""}`} type="button" onClick={() => goTo(PATH_BLOG)}><IconBlog /> Public Logs</button>
           {!isAdmin ? <button className={`tab-btn ${view === "login" ? "is-active" : ""}`} type="button" onClick={() => goTo(PATH_BLOG_DASHBOARD)}><IconSettings /> Authenticate</button> : null}
           {isAdmin ? <button className={`tab-btn ${view === "dashboard" ? "is-active" : ""}`} type="button" onClick={() => goTo(PATH_BLOG_DASHBOARD)}><IconSettings /> Dashboard</button> : null}

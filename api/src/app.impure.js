@@ -1,5 +1,6 @@
 ﻿import Database from "better-sqlite3";
 import OpenAI from "openai";
+import { randomUUID } from "node:crypto";
 import {
   appendFileSync,
   existsSync,
@@ -173,6 +174,9 @@ const RSS_FEED_TITLE_TRACKED = "Anime Release Radar - Tracked Releases";
 const RSS_FEED_DESC_TRACKED = "Tracked show release updates and status snapshots.";
 const RSS_FEED_TITLE_QUESTION = "Anime Release Radar - Daily Prompts";
 const RSS_FEED_DESC_QUESTION = "Daily anime discussion prompts for engagement.";
+const RSS_FEED_TITLE_BLOG = "Earl Cameron Blog Feed";
+const RSS_FEED_DESC_BLOG = "Published engineering logs, vlogs, and system notes.";
+const RSS_GUID_PREFIX_BLOG = "blog-post-";
 const RSS_GUID_PREFIX_TRACKED = "slackanime-tracked-";
 const RSS_GUID_PREFIX_QUESTION = "slackanime-question-";
 const RSS_GUID_PREFIX_DEBUG = "slackanime-debug-";
@@ -262,6 +266,7 @@ const HOME_CONTENT_WILDCARDS = [
 ];
 const ANIME_DAILY_QUESTION_PROMPT_PREFIX = "Generate one fun, concise anime community question for engagement.";
 const ANIME_DAILY_QUESTION_PROMPT_SUFFIX = "Return one line only, no numbering, no markdown, no emoji.";
+const BLOG_RSS_ITEM_LIMIT = 30;
 const SAMPLE_BLOG_POSTS = [
   {
     title: "Designing for Failure First",
@@ -1356,6 +1361,65 @@ export function buildSlackAnimeRssFeedXml(baseUrl, debugMessage = "") {
 
 /**
  * @param {string} baseUrl
+ * @returns {Result<string>}
+ */
+export function buildBlogRssFeedXml(baseUrl) {
+  const normalizedBase = String(baseUrl || "").trim().replace(/\/+$/, "");
+  if (!normalizedBase) {
+    return { value: null, err: new Error(ERR_SLACKANIME_FEED_BASE_URL_REQUIRED) };
+  }
+
+  const blogsRes = listBlogsCached();
+  if (blogsRes.err) {
+    return { value: null, err: blogsRes.err };
+  }
+  const publishedRows = (Array.isArray(blogsRes.value) ? blogsRes.value : [])
+    .filter((row) => Number(row?.published || 0) === 1)
+    .slice(0, BLOG_RSS_ITEM_LIMIT);
+
+  const itemsXml = publishedRows.map((row) => {
+    const id = Number(row?.id || 0);
+    const title = escapeXml(String(row?.title || "Untitled"));
+    const summary = escapeXml(String(row?.summary || "").trim() || "Published blog entry.");
+    const updatedAt = String(row?.updated_at || row?.created_at || "");
+    const pubDate = updatedAt ? new Date(updatedAt).toUTCString() : new Date().toUTCString();
+    const path = id > 0 ? `/blog/${id}` : "/blog";
+    const link = `${normalizedBase}${path}`;
+    const categoryText = row?.category?.name ? `<category>${escapeXml(String(row.category.name))}</category>` : "";
+    const variantText = row?.variant ? `<category>${escapeXml(String(row.variant).toLowerCase())}</category>` : "";
+    return [
+      "<item>",
+      `<title>${title}</title>`,
+      `<link>${escapeXml(link)}</link>`,
+      `<guid isPermaLink="false">${RSS_GUID_PREFIX_BLOG}${id || String(row?.slug || title)}</guid>`,
+      `<pubDate>${escapeXml(pubDate)}</pubDate>`,
+      `<description>${summary}</description>`,
+      categoryText,
+      variantText,
+      "</item>"
+    ].filter(Boolean).join("");
+  }).join("");
+
+  const lastBuildDate = new Date().toUTCString();
+  const channelLink = `${normalizedBase}/blog`;
+  const xml = [
+    "<?xml version=\"1.0\" encoding=\"UTF-8\"?>",
+    "<rss version=\"2.0\">",
+    "<channel>",
+    `<title>${escapeXml(RSS_FEED_TITLE_BLOG)}</title>`,
+    `<link>${escapeXml(channelLink)}</link>`,
+    `<description>${escapeXml(RSS_FEED_DESC_BLOG)}</description>`,
+    `<lastBuildDate>${escapeXml(lastBuildDate)}</lastBuildDate>`,
+    itemsXml,
+    "</channel>",
+    "</rss>"
+  ].join("");
+
+  return { value: xml, err: null };
+}
+
+/**
+ * @param {string} baseUrl
  * @returns {Promise<Result<string>>}
  */
 export async function buildSlackAnimeQuestionRssFeedXml(baseUrl, debugMessage = "") {
@@ -1873,7 +1937,7 @@ export function fromPromise(promise) {
  */
 export function saveUploadedImage(bytes, extension) {
   const safeExt = extension.startsWith(".") ? extension : `.${extension}`;
-  const fileName = `img-${Date.now()}-${Math.floor(Math.random() * 10000)}${safeExt}`;
+  const fileName = `img-${Date.now()}-${randomUUID()}${safeExt}`;
   const fullPath = join(uploadsDir, fileName);
   writeFileSync(fullPath, bytes);
   return { value: { url: `/uploads/${fileName}`, fileName }, err: null };
