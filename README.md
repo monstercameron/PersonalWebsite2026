@@ -1,30 +1,37 @@
-﻿# website_2025
+# Cameron's Engineering Portfolio & Sandbox
 
-## Conventions
+Hi, I'm Cameron. I'm a software engineer who builds practical, production-ready systems.
 
-- Return tuples from app functions: `[result, err]`.
-- Keep deterministic logic in `*.pure.js` only.
-- Keep side effects in `*.impure.js` only.
-- Do not use app-level `try/catch`; boundary wrappers in impure files normalize throws.
-- Add JSDoc to exported functions.
-- Add short comments only on critical paths.
+This repository is more than just a static portfolio—it's a live, deployed sandbox where I design, build, and maintain full-stack applications. It demonstrates my ability to take a project from concept to a reliable, self-hosted production environment, balancing performance, maintainability, and iteration speed.
 
-## Scripts
+## What I Build
 
-- `npm run install:all`: install workspace dependencies.
-- `npm run dev`: run web + api in foreground.
-- `npm run dev:bg:start`: run dev stack in background.
-- `npm run dev:bg:stop`: stop background dev stack.
-- `npm run dev:bg:logs`: view background logs.
+I focus on creating tools and platforms that solve real problems. This repository houses:
 
-## Ports
+- **Full-Stack Applications:** Including a custom blog/vlog platform with complete CRUD capabilities, tagging, RSS, and media handling.
+- **Utility Software:** Such as complex, local-first budgeting workflows and dynamic site features.
+- **Production Infrastructure:** A custom backend designed for performance, reliability, and self-hosted operation.
 
-- Web dev server: `http://localhost:4000` (strict port).
-- API server: `http://localhost:8787`.
+## My Technical Stack
 
-## Logs
+I choose tools that offer the best leverage for the problem at hand. My current stack includes:
 
-- Structured API logs are written to `/logs/api.log` as JSON lines.
-- Rolling files rotate automatically to `/logs/api.log.1` through `/logs/api.log.5`.
-- Background dev process logs are stored in `/logs/devserver.out.log` and `/logs/devserver.err.log`.
+- **Frontend:** React + Vite for fast, responsive user interfaces.
+- **Backend:** Node.js with Hono for lightweight, high-performance API services.
+- **Data:** SQLite for low-friction, local-first persistence.
+- **AI Integration:** OpenAI APIs applied where they provide tangible value.
+- **Infrastructure:** Ubuntu + Nginx on DigitalOcean, managed with PM2.
 
+## How I Approach Engineering
+
+I view software engineering as a systems design challenge, not just a feature checklist.
+
+- **Systems Thinking:** I prioritize clean interfaces, understanding constraints, and anticipating failure modes alongside the final user experience.
+- **End-to-End Ownership:** I push ideas through the entire lifecycle—from architecture and deployment to maintenance and upgrade paths.
+- **Pragmatic Trade-offs:** I navigate the balance between software architecture, tooling, infrastructure, and product requirements.
+- **Clear Communication:** I value direct communication, explicitly stating assumptions, and making decisions based on real-world constraints.
+- **Sustainable Velocity:** I iterate quickly while ensuring the underlying system remains understandable and maintainable.
+
+## Let's Connect
+
+I'm always interested in discussing new opportunities, complex systems, and practical engineering. If you're looking for an engineer who cares about the whole product lifecycle, let's talk.
