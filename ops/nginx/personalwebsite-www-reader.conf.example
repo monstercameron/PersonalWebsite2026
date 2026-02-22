@@ -1,0 +1,144 @@
+# Combined nginx configuration for PersonalWebsite2026
+# Hosts:
+# - www.earlcameron.com (main site + API, proxied to Node/Hono on 127.0.0.1:8080)
+# - reader.earlcameron.com (RSS reader app, proxied to 127.0.0.1:3001)
+#
+# Notes:
+# - This removes the legacy slackanime subdomain. Anime Tracker now lives inside the main site.
+# - Replace certificate paths if Certbot created per-domain cert directories.
+
+# ============================================
+# HTTP -> HTTPS redirects
+# ============================================
+server {
+    listen 80;
+    listen [::]:80;
+    server_name www.earlcameron.com;
+    return 301 https://$host$request_uri;
+}
+
+server {
+    listen 80;
+    listen [::]:80;
+    server_name reader.earlcameron.com;
+    return 301 https://$host$request_uri;
+}
+
+server {
+    listen 80;
+    listen [::]:80;
+    server_name earlcameron.com;
+    return 301 https://www.earlcameron.com$request_uri;
+}
+
+# ============================================
+# Apex redirect (HTTPS)
+# ============================================
+server {
+    listen 443 ssl http2;
+    listen [::]:443 ssl http2;
+    server_name earlcameron.com;
+
+    ssl_certificate /etc/letsencrypt/live/www.earlcameron.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/www.earlcameron.com/privkey.pem;
+    include /etc/letsencrypt/options-ssl-nginx.conf;
+    ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;
+
+    return 301 https://www.earlcameron.com$request_uri;
+}
+
+# ============================================
+# Main Website - www.earlcameron.com
+# Proxies to API server that serves both SPA + /api
+# ============================================
+server {
+    listen 443 ssl http2;
+    listen [::]:443 ssl http2;
+    server_name www.earlcameron.com;
+
+    ssl_certificate /etc/letsencrypt/live/www.earlcameron.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/www.earlcameron.com/privkey.pem;
+    include /etc/letsencrypt/options-ssl-nginx.conf;
+    ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;
+
+    add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header X-Frame-Options "SAMEORIGIN" always;
+    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+
+    # Compression
+    gzip on;
+    gzip_vary on;
+    gzip_min_length 1024;
+    gzip_proxied any;
+    gzip_comp_level 6;
+    gzip_types
+        text/plain
+        text/css
+        text/javascript
+        application/javascript
+        application/json
+        application/xml
+        application/rss+xml
+        image/svg+xml;
+    gzip_static on;
+
+    # If your nginx build has Brotli:
+    # brotli on;
+    # brotli_static on;
+    # brotli_comp_level 5;
+    # brotli_types text/plain text/css text/javascript application/javascript application/json application/xml application/rss+xml image/svg+xml;
+
+    location / {
+        proxy_pass http://127.0.0.1:8080;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $remote_addr;   # overwrite client-provided header
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $connection_upgrade;
+        proxy_read_timeout 60s;
+        proxy_send_timeout 60s;
+        proxy_connect_timeout 60s;
+    }
+}
+
+# ============================================
+# Reader - reader.earlcameron.com
+# Separate app on port 3001
+# ============================================
+server {
+    listen 443 ssl http2;
+    listen [::]:443 ssl http2;
+    server_name reader.earlcameron.com;
+
+    # Use the correct cert path for this host (or a SAN cert that includes reader)
+    ssl_certificate /etc/letsencrypt/live/www.earlcameron.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/www.earlcameron.com/privkey.pem;
+    include /etc/letsencrypt/options-ssl-nginx.conf;
+    ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;
+
+    add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header X-Frame-Options "SAMEORIGIN" always;
+    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+
+    location / {
+        proxy_pass http://127.0.0.1:3001/;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $remote_addr;   # overwrite client-provided header
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 60s;
+        proxy_send_timeout 60s;
+        proxy_connect_timeout 60s;
+    }
+}
+
+# Needed for websocket upgrade compatibility in proxy_set_header Connection
+map $http_upgrade $connection_upgrade {
+    default upgrade;
+    '' close;
+}
