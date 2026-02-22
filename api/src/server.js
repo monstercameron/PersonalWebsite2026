@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import "dotenv/config";
 import { Hono } from "hono";
 import { serve } from "@hono/node-server";
+import jwt from "jsonwebtoken";
 import {
   buildModelPrompt,
   toPublicError,
@@ -55,6 +56,7 @@ const PATH_API_BLOGS_DASHBOARD = "/api/blogs/dashboard";
 const PATH_API_BLOG_CATEGORIES = "/api/blogs/categories";
 const PATH_API_BLOG_TAGS = "/api/blogs/tags";
 const PATH_API_BLOGS_ADMIN_LOGIN = "/api/blogs/admin/login";
+const PATH_API_BLOGS_ADMIN_LOGOUT = "/api/blogs/admin/logout";
 const PATH_API_BLOGS_UPLOAD_IMAGE = "/api/blogs/upload-image";
 const STATUS_BAD_REQUEST = 400;
 const STATUS_UNAUTHORIZED = 401;
@@ -69,10 +71,16 @@ const MOTD_CACHE_HEADER = "public, max-age=3600, stale-while-revalidate=86400";
 const ENV_API_PORT = "API_PORT";
 const ENV_BLOG_ADMIN_PASSWORD = "BLOG_ADMIN_PASSWORD";
 const ENV_BLOG_ADMIN_USER = "BLOG_ADMIN_USER";
+const ENV_BLOG_ADMIN_JWT_SECRET = "BLOG_ADMIN_JWT_SECRET";
+const ENV_NODE_ENV = "NODE_ENV";
 const DEFAULT_API_PORT = 8787;
 const DEFAULT_BLOG_ADMIN_USER = "admin";
 const HEADER_ADMIN_TOKEN = "x-admin-token";
-const ADMIN_SESSION_TTL_MS = 86400000;
+const HEADER_COOKIE = "cookie";
+const NODE_ENV_PRODUCTION = "production";
+const COOKIE_ADMIN_TOKEN = "blog_admin_jwt";
+const ADMIN_SESSION_TTL_MS_DEFAULT = 900000;
+const ADMIN_SESSION_TTL_MS_DEV = 3600000;
 const LOG_BOOT_TEXT = "API server running on";
 const ERR_ADMIN_PASSWORD_REQUIRED = "Admin password is required";
 const ERR_ADMIN_PASSWORD_INVALID = "Invalid admin password";
@@ -81,9 +89,11 @@ const ERR_ADMIN_TOKEN_INVALID = "Admin session expired or invalid";
 const ERR_IMAGE_REQUIRED = "Image file is required";
 const ERR_IMAGE_TYPE_INVALID = "Only png, jpg, jpeg, webp are allowed";
 const ALLOWED_IMAGE_TYPES = new Set(["image/png", "image/jpeg", "image/jpg", "image/webp"]);
+const JWT_ALG = "HS256";
+const JWT_SECRET_FALLBACK = "local-blog-admin-jwt-secret-change-me";
+const ERR_ADMIN_JWT_SECRET_REQUIRED = "BLOG_ADMIN_JWT_SECRET is required in production";
 
 const app = new Hono();
-const adminSessions = new Map();
 
 app.use("*", async (c, next) => {
   const requestId = c.req.header(HEADER_REQUEST_ID) || randomUUID();
@@ -235,11 +245,22 @@ app.post(PATH_API_BLOGS_ADMIN_LOGIN, async (c) => {
     return c.json({ message: ERR_ADMIN_PASSWORD_INVALID, code: "UNAUTHORIZED" }, STATUS_UNAUTHORIZED);
   }
 
-  const token = randomUUID();
-  const expiresAt = Date.now() + ADMIN_SESSION_TTL_MS;
-  adminSessions.set(token, expiresAt);
+  const ttlMs = getAdminSessionTtlMs();
+  const tokenRes = createAdminJwt(process.env[ENV_BLOG_ADMIN_USER] || DEFAULT_BLOG_ADMIN_USER, ttlMs);
+  if (tokenRes.err) {
+    const publicErrRes = toPublicError(tokenRes.err);
+    return c.json(publicErrRes.value, STATUS_SERVER_ERROR);
+  }
+  const expiresAt = Date.now() + ttlMs;
+  c.header("Set-Cookie", buildAdminCookie(tokenRes.value, ttlMs));
   c.header(CACHE_CONTROL, CACHE_NO_STORE);
-  return c.json({ token, expiresAt, user: process.env[ENV_BLOG_ADMIN_USER] || DEFAULT_BLOG_ADMIN_USER });
+  return c.json({ expiresAt, user: process.env[ENV_BLOG_ADMIN_USER] || DEFAULT_BLOG_ADMIN_USER });
+});
+
+app.post(PATH_API_BLOGS_ADMIN_LOGOUT, (c) => {
+  c.header("Set-Cookie", buildClearAdminCookie());
+  c.header(CACHE_CONTROL, CACHE_NO_STORE);
+  return c.json({ ok: true });
 });
 
 app.post(PATH_API_BLOG_CATEGORIES, async (c) => {
@@ -388,7 +409,9 @@ app.get(PATH_API_BLOGS_PUBLIC_ID, (c) => {
     const publicErrRes = toPublicError(blogRes.err);
     return c.json(publicErrRes.value, STATUS_SERVER_ERROR);
   }
-  if (!blogRes.value || !blogRes.value.published) {
+
+  const isAdmin = !requireAdminSession(c).err;
+  if (!blogRes.value || (!blogRes.value.published && !isAdmin)) {
     return c.json({ message: "Blog not found", code: "NOT_FOUND" }, STATUS_NOT_FOUND);
   }
 
@@ -454,6 +477,10 @@ app.put(PATH_API_BLOGS_ID, async (c) => {
     return c.json(publicErrRes.value, STATUS_SERVER_ERROR);
   }
 
+  if (!updateRes.value) {
+    return c.json({ message: "Blog not found", code: "NOT_FOUND" }, STATUS_NOT_FOUND);
+  }
+
   c.header(CACHE_CONTROL, CACHE_NO_STORE);
   return c.json({ updated: updateRes.value, id: idRes.value });
 });
@@ -488,6 +515,10 @@ app.patch(PATH_API_BLOGS_PUBLISH, async (c) => {
     return c.json(publicErrRes.value, STATUS_SERVER_ERROR);
   }
 
+  if (!updateRes.value) {
+    return c.json({ message: "Blog not found", code: "NOT_FOUND" }, STATUS_NOT_FOUND);
+  }
+
   c.header(CACHE_CONTROL, CACHE_NO_STORE);
   return c.json({ updated: updateRes.value, id: idRes.value, published: payloadRes.value.published });
 });
@@ -510,6 +541,10 @@ app.delete(PATH_API_BLOGS_ID, (c) => {
     return c.json(publicErrRes.value, STATUS_SERVER_ERROR);
   }
 
+  if (!deleteRes.value) {
+    return c.json({ message: "Blog not found", code: "NOT_FOUND" }, STATUS_NOT_FOUND);
+  }
+
   c.header(CACHE_CONTROL, CACHE_NO_STORE);
   return c.json({ deleted: deleteRes.value, id: idRes.value });
 });
@@ -519,18 +554,139 @@ app.delete(PATH_API_BLOGS_ID, (c) => {
  * @returns {{ value: boolean | null, err: Error | null }}
  */
 function requireAdminSession(c) {
-  const token = c.req.header(HEADER_ADMIN_TOKEN) || "";
+  const token = getAdminTokenFromRequest(c);
   if (!token) {
     return { value: null, err: new Error(ERR_ADMIN_TOKEN_REQUIRED) };
   }
 
-  const expiresAt = adminSessions.get(token);
-  if (!expiresAt || expiresAt <= Date.now()) {
-    adminSessions.delete(token);
+  const verifyRes = verifyAdminJwt(token);
+  if (verifyRes.err) {
     return { value: null, err: new Error(ERR_ADMIN_TOKEN_INVALID) };
   }
 
   return { value: true, err: null };
+}
+
+/**
+ * @param {import("hono").Context} c
+ * @returns {string}
+ */
+function getAdminTokenFromRequest(c) {
+  const cookieHeader = c.req.header(HEADER_COOKIE) || "";
+  const cookieToken = getCookieValue(cookieHeader, COOKIE_ADMIN_TOKEN);
+  if (cookieToken) {
+    return cookieToken;
+  }
+  const headerToken = c.req.header(HEADER_ADMIN_TOKEN) || "";
+  if (headerToken) {
+    return headerToken;
+  }
+  const authHeader = c.req.header("authorization") || "";
+  if (authHeader.toLowerCase().startsWith("bearer ")) {
+    return authHeader.slice(7).trim();
+  }
+  return "";
+}
+
+/**
+ * @param {string} cookieHeader
+ * @param {string} key
+ * @returns {string}
+ */
+function getCookieValue(cookieHeader, key) {
+  const pairs = cookieHeader.split(";").map((part) => part.trim());
+  for (const pair of pairs) {
+    if (!pair.startsWith(`${key}=`)) {
+      continue;
+    }
+    return decodeURIComponent(pair.slice(key.length + 1));
+  }
+  return "";
+}
+
+/**
+ * @returns {number}
+ */
+function getAdminSessionTtlMs() {
+  return isProductionEnv() ? ADMIN_SESSION_TTL_MS_DEFAULT : ADMIN_SESSION_TTL_MS_DEV;
+}
+
+/**
+ * @param {string} user
+ * @param {number} ttlMs
+ * @returns {{value: string | null, err: Error | null}}
+ */
+function createAdminJwt(user, ttlMs) {
+  const secretRes = getJwtSecret();
+  if (secretRes.err) {
+    return { value: null, err: secretRes.err };
+  }
+  try {
+    const token = jwt.sign(
+      { sub: user, role: "admin" },
+      secretRes.value,
+      { algorithm: JWT_ALG, expiresIn: Math.max(1, Math.floor(ttlMs / 1000)) }
+    );
+    return { value: token, err: null };
+  } catch (err) {
+    return { value: null, err: err instanceof Error ? err : new Error(ERR_ADMIN_TOKEN_INVALID) };
+  }
+}
+
+/**
+ * @param {string} token
+ * @returns {{value: boolean | null, err: Error | null}}
+ */
+function verifyAdminJwt(token) {
+  const secretRes = getJwtSecret();
+  if (secretRes.err) {
+    return { value: null, err: secretRes.err };
+  }
+  try {
+    jwt.verify(token, secretRes.value, { algorithms: [JWT_ALG] });
+    return { value: true, err: null };
+  } catch (err) {
+    return { value: null, err: err instanceof Error ? err : new Error(ERR_ADMIN_TOKEN_INVALID) };
+  }
+}
+
+/**
+ * @returns {{value: string | null, err: Error | null}}
+ */
+function getJwtSecret() {
+  const envSecret = process.env[ENV_BLOG_ADMIN_JWT_SECRET];
+  if (envSecret && envSecret.trim()) {
+    return { value: envSecret, err: null };
+  }
+  if (isProductionEnv()) {
+    return { value: null, err: new Error(ERR_ADMIN_JWT_SECRET_REQUIRED) };
+  }
+  return { value: JWT_SECRET_FALLBACK, err: null };
+}
+
+/**
+ * @param {string} token
+ * @param {number} ttlMs
+ * @returns {string}
+ */
+function buildAdminCookie(token, ttlMs) {
+  const maxAge = Math.max(1, Math.floor(ttlMs / 1000));
+  const secure = isProductionEnv() ? "; Secure" : "";
+  return `${COOKIE_ADMIN_TOKEN}=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${maxAge}${secure}`;
+}
+
+/**
+ * @returns {string}
+ */
+function buildClearAdminCookie() {
+  return `${COOKIE_ADMIN_TOKEN}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`;
+}
+
+/**
+ * @returns {boolean}
+ */
+function isProductionEnv() {
+  return (process.env[ENV_NODE_ENV] || "").trim().toLowerCase() === NODE_ENV_PRODUCTION;
 }
 
 const port = Number(process.env[ENV_API_PORT] || DEFAULT_API_PORT);

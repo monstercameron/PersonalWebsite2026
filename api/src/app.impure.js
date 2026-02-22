@@ -32,6 +32,7 @@ const CACHE_KEY_BLOGS_LIST = "blogs:list:latest";
 const CACHE_KEY_BLOGS_DASHBOARD = "blogs:dashboard:latest";
 const SAMPLE_POST_PUBLISHED = 1;
 const SAMPLE_POST_SUFFIX = "-sample";
+const BLOG_VARIANT_DEFAULT = "blog";
 const SQLITE_SCHEMA = `
   CREATE TABLE IF NOT EXISTS prompts (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -47,6 +48,7 @@ const SQLITE_BLOG_SCHEMA = `
     slug TEXT NOT NULL UNIQUE,
     summary TEXT NOT NULL DEFAULT '',
     content TEXT NOT NULL,
+    variant TEXT NOT NULL DEFAULT 'blog',
     published INTEGER NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
@@ -82,10 +84,10 @@ const SQLITE_BLOG_TAG_MAP_SCHEMA = `
 `;
 const SQL_INSERT_PROMPT = "INSERT INTO prompts (prompt, reply, created_at) VALUES (?, ?, ?)";
 const SQL_SELECT_PROMPTS = "SELECT id, prompt, reply, created_at FROM prompts ORDER BY id DESC LIMIT 20";
-const SQL_LIST_BLOGS = "SELECT id, title, slug, summary, content, published, created_at, updated_at FROM blogs ORDER BY updated_at DESC LIMIT 100";
-const SQL_GET_BLOG = "SELECT id, title, slug, summary, content, published, created_at, updated_at FROM blogs WHERE id = ?";
-const SQL_INSERT_BLOG = "INSERT INTO blogs (title, slug, summary, content, published, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)";
-const SQL_UPDATE_BLOG = "UPDATE blogs SET title = ?, slug = ?, summary = ?, content = ?, published = ?, updated_at = ? WHERE id = ?";
+const SQL_LIST_BLOGS = "SELECT id, title, slug, summary, content, variant, published, created_at, updated_at FROM blogs ORDER BY updated_at DESC LIMIT 100";
+const SQL_GET_BLOG = "SELECT id, title, slug, summary, content, variant, published, created_at, updated_at FROM blogs WHERE id = ?";
+const SQL_INSERT_BLOG = "INSERT INTO blogs (title, slug, summary, content, variant, published, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
+const SQL_UPDATE_BLOG = "UPDATE blogs SET title = ?, slug = ?, summary = ?, content = ?, variant = ?, published = ?, updated_at = ? WHERE id = ?";
 const SQL_UPDATE_BLOG_PUBLISHED = "UPDATE blogs SET published = ?, updated_at = ? WHERE id = ?";
 const SQL_DELETE_BLOG = "DELETE FROM blogs WHERE id = ?";
 const SQL_COUNT_BLOGS = "SELECT COUNT(1) AS total FROM blogs";
@@ -211,6 +213,7 @@ db.exec(SQLITE_BLOG_CATEGORIES_SCHEMA);
 db.exec(SQLITE_BLOG_TAGS_SCHEMA);
 db.exec(SQLITE_BLOG_CATEGORY_MAP_SCHEMA);
 db.exec(SQLITE_BLOG_TAG_MAP_SCHEMA);
+ensureBlogVariantColumn();
 
 const openai = new OpenAI({ apiKey: process.env[OPENAI_KEY_ENV] });
 const memoryCache = new Map();
@@ -360,12 +363,19 @@ export function listPrompts() {
 }
 
 /**
- * @returns {Result<Array<{id: number, title: string, slug: string, summary: string, content: string, published: number, created_at: string, updated_at: string}>>}
+ * @returns {Result<Array<{id: number, title: string, slug: string, summary: string, content: string, variant: string, published: number, created_at: string, updated_at: string}>>}
  */
 export function listBlogs() {
   const rows = db.prepare(SQL_LIST_BLOGS).all();
-  const categoryRows = db.prepare(SQL_BLOG_CATEGORY_ROWS).all();
-  const tagRows = db.prepare(SQL_BLOG_TAG_ROWS).all();
+  if (rows.length === 0) {
+    return { value: [], err: null };
+  }
+
+  const blogIds = rows.map((r) => r.id);
+  const placeholders = blogIds.map(() => "?").join(",");
+
+  const categoryRows = db.prepare(`${SQL_BLOG_CATEGORY_ROWS} WHERE bcm.blog_id IN (${placeholders})`).all(...blogIds);
+  const tagRows = db.prepare(`${SQL_BLOG_TAG_ROWS} WHERE btm.blog_id IN (${placeholders})`).all(...blogIds);
   const categoryMap = new Map();
   const tagMap = new Map();
 
@@ -389,7 +399,7 @@ export function listBlogs() {
 
 /**
  * @param {number} [ttlMs]
- * @returns {Result<Array<{id: number, title: string, slug: string, summary: string, content: string, published: number, created_at: string, updated_at: string}>>}
+ * @returns {Result<Array<{id: number, title: string, slug: string, summary: string, content: string, variant: string, published: number, created_at: string, updated_at: string}>>}
  */
 export function listBlogsCached(ttlMs = defaultPromptsCacheTtlMs) {
   const cacheRes = readCache(CACHE_KEY_BLOGS_LIST);
@@ -416,7 +426,7 @@ export function listBlogsCached(ttlMs = defaultPromptsCacheTtlMs) {
 
 /**
  * @param {number} id
- * @returns {Result<{id: number, title: string, slug: string, summary: string, content: string, published: number, created_at: string, updated_at: string} | null>}
+ * @returns {Result<{id: number, title: string, slug: string, summary: string, content: string, variant: string, published: number, created_at: string, updated_at: string} | null>}
  */
 export function getBlogById(id) {
   const row = db.prepare(SQL_GET_BLOG).get(id) || null;
@@ -438,7 +448,7 @@ export function getBlogById(id) {
 /**
  * @param {number} id
  * @param {number} [ttlMs]
- * @returns {Result<{id: number, title: string, slug: string, summary: string, content: string, published: number, created_at: string, updated_at: string} | null>}
+ * @returns {Result<{id: number, title: string, slug: string, summary: string, content: string, variant: string, published: number, created_at: string, updated_at: string} | null>}
  */
 export function getBlogByIdCached(id, ttlMs = defaultPromptsCacheTtlMs) {
   const cacheKey = `${CACHE_PREFIX_BLOGS}id:${id}`;
@@ -474,14 +484,14 @@ function toSlug(title) {
 }
 
 /**
- * @param {{title: string, summary: string, content: string, published: number}} payload
+ * @param {{title: string, summary: string, content: string, variant: string, published: number}} payload
  * @returns {Result<{id: number}>}
  */
 export function createBlog(payload) {
   const now = new Date().toISOString();
   const slug = `${toSlug(payload.title)}-${Date.now()}`;
   const stmt = db.prepare(SQL_INSERT_BLOG);
-  const info = stmt.run(payload.title, slug, payload.summary, payload.content, payload.published, now, now);
+  const info = stmt.run(payload.title, slug, payload.summary, payload.content, payload.variant || BLOG_VARIANT_DEFAULT, payload.published, now, now);
   const blogId = Number(info.lastInsertRowid);
   const mapRes = upsertBlogRelations(blogId, payload.categoryId, payload.tags);
   if (mapRes.err) {
@@ -496,14 +506,17 @@ export function createBlog(payload) {
 
 /**
  * @param {number} id
- * @param {{title: string, summary: string, content: string, published: number}} payload
+ * @param {{title: string, summary: string, content: string, variant: string, published: number}} payload
  * @returns {Result<boolean>}
  */
 export function updateBlog(id, payload) {
   const now = new Date().toISOString();
   const slug = `${toSlug(payload.title)}-${id}`;
   const stmt = db.prepare(SQL_UPDATE_BLOG);
-  stmt.run(payload.title, slug, payload.summary, payload.content, payload.published, now, id);
+  const info = stmt.run(payload.title, slug, payload.summary, payload.content, payload.variant || BLOG_VARIANT_DEFAULT, payload.published, now, id);
+  if (info.changes === 0) {
+    return { value: false, err: null };
+  }
   const mapRes = upsertBlogRelations(id, payload.categoryId, payload.tags);
   if (mapRes.err) {
     return { value: null, err: mapRes.err };
@@ -522,7 +535,10 @@ export function updateBlog(id, payload) {
  */
 export function setBlogPublished(id, published) {
   const stmt = db.prepare(SQL_UPDATE_BLOG_PUBLISHED);
-  stmt.run(published ? 1 : 0, new Date().toISOString(), id);
+  const info = stmt.run(published ? 1 : 0, new Date().toISOString(), id);
+  if (info.changes === 0) {
+    return { value: false, err: null };
+  }
   const invalidateRes = invalidateCacheByPrefix(CACHE_PREFIX_BLOGS);
   if (invalidateRes.err) {
     return { value: null, err: invalidateRes.err };
@@ -535,10 +551,12 @@ export function setBlogPublished(id, published) {
  * @returns {Result<boolean>}
  */
 export function deleteBlog(id) {
+  const info = db.prepare(SQL_DELETE_BLOG).run(id);
+  if (info.changes === 0) {
+    return { value: false, err: null };
+  }
   db.prepare(SQL_DELETE_BLOG_TAG_MAP).run(id);
   db.prepare(SQL_DELETE_BLOG_CATEGORY_MAP).run(id);
-  const stmt = db.prepare(SQL_DELETE_BLOG);
-  stmt.run(id);
   const invalidateRes = invalidateCacheByPrefix(CACHE_PREFIX_BLOGS);
   if (invalidateRes.err) {
     return { value: null, err: invalidateRes.err };
@@ -668,7 +686,7 @@ function ensureSampleBlogs() {
       continue;
     }
     const slug = `${toSlug(sample.title)}${SAMPLE_POST_SUFFIX}`;
-    const info = db.prepare(SQL_INSERT_BLOG).run(sample.title, slug, sample.summary, sample.content, SAMPLE_POST_PUBLISHED, now, now);
+    const info = db.prepare(SQL_INSERT_BLOG).run(sample.title, slug, sample.summary, sample.content, BLOG_VARIANT_DEFAULT, SAMPLE_POST_PUBLISHED, now, now);
     const blogId = Number(info.lastInsertRowid);
     const relationRes = upsertBlogRelations(blogId, ensureCategoryId(sample.category), sample.tags);
     if (relationRes.err) {
@@ -694,6 +712,20 @@ function ensureCategoryId(name) {
   }
   const created = db.prepare(SQL_INSERT_CATEGORY).run(normalized, new Date().toISOString());
   return Number(created.lastInsertRowid);
+}
+
+/**
+ * Adds `variant` for older DBs that predate vlog support.
+ * @returns {Result<boolean>}
+ */
+function ensureBlogVariantColumn() {
+  const columns = db.prepare("PRAGMA table_info(blogs)").all();
+  const hasVariant = columns.some((column) => column && column.name === "variant");
+  if (hasVariant) {
+    return { value: true, err: null };
+  }
+  db.exec(`ALTER TABLE blogs ADD COLUMN variant TEXT NOT NULL DEFAULT '${BLOG_VARIANT_DEFAULT}'`);
+  return { value: true, err: null };
 }
 
 /**

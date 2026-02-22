@@ -3,6 +3,7 @@ import { getYearLabel, buildNavItems } from "./core.pure.js";
 import { createBlog, createBlogCategory, deleteBlog, downloadResumePdf, fetchMessageOfDay, getBlog, getBlogAdminToken, getBlogsDashboard, getCurrentYear, getPublicBlog, listBlogCategories, listBlogs, listBlogTags, loginBlogAdmin, logoutBlogAdmin, setBlogPublished, updateBlog, uploadBlogImage } from "./core.impure.js";
 import hljs from "highlight.js/lib/common";
 import "highlight.js/styles/github-dark.css";
+import "./ui.css";
 import javascriptLang from "highlight.js/lib/languages/javascript";
 import typescriptLang from "highlight.js/lib/languages/typescript";
 import goLang from "highlight.js/lib/languages/go";
@@ -51,9 +52,16 @@ const RESUME_PDF_FILENAME = "EarlCameron-Resume.pdf";
 const RESUME_PDF_EXPORT_CLASS = "pdf-export";
 const BLOG_PAGE_SIZE = 10;
 const BLOG_ACTION_ANIMATION_MS = 100;
+const BLOG_VARIANT_ALL = "all";
+const BLOG_VARIANT_BLOG = "blog";
+const BLOG_VARIANT_VLOG = "vlog";
 const TEXT_CODE_COPY = "Copy";
 const TEXT_CODE_COPIED = "Copied";
 const TEXT_CODE_FALLBACK_LANG = "code";
+const TEXT_VLOG_URL_LABEL = "YouTube Link";
+const TEXT_VLOG_URL_PLACEHOLDER = "https://www.youtube.com/watch?v=...";
+const TEXT_VLOG_URL_HELP = "Paste a full YouTube URL for this vlog entry.";
+const TEXT_VLOG_URL_INVALID = "Enter a valid YouTube URL to preview the embed.";
 
 /**
  * @param {string} text
@@ -80,7 +88,7 @@ export function App() {
   const yearLabelRes = yearRes.err ? { value: null, err: yearRes.err } : getYearLabel(yearRes.value);
 
   if (navRes.err || yearLabelRes.err) {
-    return <main style={{ padding: 24 }}>{TEXT_INIT_ERROR}</main>;
+    return <main className="app-init-error">{TEXT_INIT_ERROR}</main>;
   }
 
   const pathname = window.location.pathname;
@@ -126,7 +134,6 @@ export function App() {
 
   return (
     <div className="site-shell">
-      <style>{GLOBAL_CSS}</style>
 
       <header className="topbar">
         <div className="container topbar-inner">
@@ -164,10 +171,10 @@ export function App() {
           <div>
             <div className="footer-title">{TEXT_NAME}</div>
             <div className="footer-sub">{TEXT_TAGLINE}</div>
-            <div style={{ display: "flex", gap: "16px", marginTop: "16px" }}>
-              <a href="https://github.com/monstercameron" target="_blank" rel="noreferrer noopener" style={{ color: "var(--muted)", textDecoration: "none", fontSize: "0.9rem" }}>GitHub</a>
-              <a href="https://www.linkedin.com/in/earl-cameron/" target="_blank" rel="noreferrer noopener" style={{ color: "var(--muted)", textDecoration: "none", fontSize: "0.9rem" }}>LinkedIn</a>
-              <a href="https://www.youtube.com/@EarlCameron007" target="_blank" rel="noreferrer noopener" style={{ color: "var(--muted)", textDecoration: "none", fontSize: "0.9rem" }}>YouTube</a>
+            <div className="footer-links">
+              <a className="footer-link" href="https://github.com/monstercameron" target="_blank" rel="noreferrer noopener">GitHub</a>
+              <a className="footer-link" href="https://www.linkedin.com/in/earl-cameron/" target="_blank" rel="noreferrer noopener">LinkedIn</a>
+              <a className="footer-link" href="https://www.youtube.com/@EarlCameron007" target="_blank" rel="noreferrer noopener">YouTube</a>
             </div>
           </div>
           <div className="footer-year">{yearLabelRes.value}</div>
@@ -400,77 +407,77 @@ function ProjectsPage() {
     <section className="panel">
       <p className="eyebrow">PROJECTS & EXPERIMENTS</p>
       <h2>Systems, Tools, and Hardware</h2>
-      <p style={{ marginBottom: "32px", maxWidth: "70ch" }}>
+      <p className="projects-intro">
         A collection of tools built to solve specific problems, explore new architectures, or push hardware constraints. I focus on observability, performance, and practical utility over glossy features.
       </p>
       <div className="cards">
         <article className="card">
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "12px" }}>
+          <div className="project-card-head">
             <h3><a href="https://github.com/monstercameron/Zerver" target="_blank" rel="noreferrer noopener">Zerver</a></h3>
-            <span className="chip" style={{ margin: 0 }}>Zig</span>
+            <span className="chip chip-zero">Zig</span>
           </div>
           <p><strong>The Build:</strong> A backend framework built around pure-step request pipelines, explicit side effects, and built-in tracing.</p>
           <p><strong>The Why:</strong> I wanted to make API behavior observable by default, so bottlenecks and failures are easier to diagnose and fix in production without relying on heavy external APM tools.</p>
         </article>
 
         <article className="card">
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "12px" }}>
+          <div className="project-card-head">
             <h3><a href="https://github.com/monstercameron/SchemaFlow" target="_blank" rel="noreferrer noopener">SchemaFlow</a></h3>
-            <span className="chip" style={{ margin: 0 }}>Go</span>
+            <span className="chip chip-zero">Go</span>
           </div>
           <p><strong>The Build:</strong> A library for type-safe LLM extraction and structured output validation.</p>
           <p><strong>The Why:</strong> Parsing JSON from LLMs is notoriously fragile. I built this to replace runtime guessing with compile-time safety, making LLM pipelines actually production-friendly.</p>
         </article>
 
         <article className="card">
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "12px" }}>
+          <div className="project-card-head">
             <h3><a href="https://github.com/monstercameron/pi-camera-gui" target="_blank" rel="noreferrer noopener">Pi Camera Rig</a></h3>
-            <span className="chip" style={{ margin: 0 }}>Python / Hardware</span>
+            <span className="chip chip-zero">Python / Hardware</span>
           </div>
           <p><strong>The Build:</strong> A Pygame-based GUI that turns a bare Raspberry Pi HQ camera setup into a menu-driven, standalone camera experience.</p>
           <p><strong>The Why:</strong> Command-line camera control isn't practical in the field. I needed a reliable interface with deep settings, metadata support, and a desktop mock mode for rapid iteration.</p>
         </article>
 
         <article className="card">
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "12px" }}>
+          <div className="project-card-head">
             <h3><a href="https://github.com/monstercameron/LatentSpaceBrowser" target="_blank" rel="noreferrer noopener">Latent Space Browser</a></h3>
-            <span className="chip" style={{ margin: 0 }}>React / LLMs</span>
+            <span className="chip chip-zero">React / LLMs</span>
           </div>
           <p><strong>The Build:</strong> A generative encyclopedia UI where every linked term recursively generates new, context-aware AI content.</p>
           <p><strong>The Why:</strong> Exploring a new interaction model for LLMs that moves beyond the standard chat interface, focusing on low-latency exploration and transparent token/cost metrics.</p>
         </article>
 
         <article className="card">
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "12px" }}>
+          <div className="project-card-head">
             <h3><a href="https://github.com/monstercameron/GoScript" target="_blank" rel="noreferrer noopener">GoScript</a></h3>
-            <span className="chip" style={{ margin: 0 }}>Go / WebAssembly</span>
+            <span className="chip chip-zero">Go / WebAssembly</span>
           </div>
           <p><strong>The Build:</strong> A browser-based Go environment running the real Go compiler entirely client-side via WebAssembly.</p>
           <p><strong>The Why:</strong> To make Go runnable in documentation, tutorials, and playgrounds instantly, without requiring users to install a local toolchain or rely on a backend execution server.</p>
         </article>
 
         <article className="card">
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "12px" }}>
+          <div className="project-card-head">
             <h3><a href="https://github.com/monstercameron/MetaHumanServer" target="_blank" rel="noreferrer noopener">MetaHuman Server</a></h3>
-            <span className="chip" style={{ margin: 0 }}>Python / Audio</span>
+            <span className="chip chip-zero">Python / Audio</span>
           </div>
           <p><strong>The Build:</strong> A voice-interactive chatbot server that combines NLP and real-time audio processing pipelines.</p>
           <p><strong>The Why:</strong> Text chat is slow. I wanted to build a more human-like, low-latency voice interaction layer that could be integrated into games or online services.</p>
         </article>
 
         <article className="card">
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "12px" }}>
+          <div className="project-card-head">
             <h3><a href="https://github.com/monstercameron/mdchem" target="_blank" rel="noreferrer noopener">MDChem Backend</a></h3>
-            <span className="chip" style={{ margin: 0 }}>Node.js / REST</span>
+            <span className="chip chip-zero">Node.js / REST</span>
           </div>
           <p><strong>The Build:</strong> Backend services for an educational chemistry game, handling data capture, reporting workflows, and educator access.</p>
           <p><strong>The Why:</strong> Gameplay is only half the product. I built the infrastructure to store telemetry, generate useful trends, and manage controlled access for teachers.</p>
         </article>
 
         <article className="card">
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "12px" }}>
+          <div className="project-card-head">
             <h3><a href="https://github.com/monstercameron/Budgetting_tool_vibecoded" target="_blank" rel="noreferrer noopener">Personal Finance Dashboard</a></h3>
-            <span className="chip" style={{ margin: 0 }}>React / Vite</span>
+            <span className="chip chip-zero">React / Vite</span>
           </div>
           <p><strong>The Build:</strong> A fast, client-side budgeting app for tracking income, expenses, debt, and goal progress.</p>
           <p><strong>The Why:</strong> Off-the-shelf tools were too slow or lacked specific workflows. I built this to centralize my personal finance tracking with instant feedback and high-visibility metrics.</p>
@@ -512,6 +519,8 @@ function BlogPage() {
   const searchParams = new URLSearchParams(search);
   const activeCategory = String(searchParams.get("category") || "").trim().toLowerCase();
   const activeTag = String(searchParams.get("tag") || "").trim().toLowerCase();
+  const activeVariantRaw = String(searchParams.get("variant") || BLOG_VARIANT_ALL).trim().toLowerCase();
+  const activeVariant = activeVariantRaw === BLOG_VARIANT_BLOG || activeVariantRaw === BLOG_VARIANT_VLOG ? activeVariantRaw : BLOG_VARIANT_ALL;
   const segments = pathname.split("/").filter(Boolean);
   const routeSecond = segments[1] || "";
   const routeThird = segments[2] || "";
@@ -536,7 +545,7 @@ function BlogPage() {
   const [password, setPassword] = useState("");
   const [newCategoryName, setNewCategoryName] = useState("");
   const [imageScalePct, setImageScalePct] = useState(60);
-  const [form, setForm] = useState({ id: null, title: "", summary: "", content: "", published: 0, categoryId: "", tagsText: "" });
+  const [form, setForm] = useState({ id: null, title: "", summary: "", content: "", variant: "blog", published: 0, categoryId: "", tagsText: "" });
   const imageInputRef = useRef(null);
   const goTo = (path) => window.location.assign(path);
   const goToAnimated = async (path, event) => {
@@ -557,10 +566,28 @@ function BlogPage() {
     }
     window.location.assign(fallbackPath);
   };
-  const listRows = rows.filter((row) => (isAdmin || row.published) && matchesBlogFilters(row, activeCategory, activeTag));
-  const dashboardRows = rows.filter((row) => matchesBlogFilters(row, activeCategory, activeTag));
+  const setVariantFilter = (variant) => {
+    const nextVariant = variant === BLOG_VARIANT_BLOG || variant === BLOG_VARIANT_VLOG ? variant : BLOG_VARIANT_ALL;
+    const nextSearch = new URLSearchParams(window.location.search);
+    if (nextVariant === BLOG_VARIANT_ALL) {
+      nextSearch.delete("variant");
+    } else {
+      nextSearch.set("variant", nextVariant);
+    }
+    const basePath = isDashboardRoute ? PATH_BLOG_DASHBOARD : PATH_BLOG;
+    const query = nextSearch.toString();
+    goTo(query ? `${basePath}?${query}` : basePath);
+  };
+  const listRows = rows.filter((row) => row.published && matchesBlogFilters(row, activeCategory, activeTag, activeVariant));
+  const dashboardRows = rows.filter((row) => matchesBlogFilters(row, activeCategory, activeTag, activeVariant));
   const listPageData = paginateItems(listRows, listPage, BLOG_PAGE_SIZE);
   const dashboardPageData = paginateItems(dashboardRows, dashboardPage, BLOG_PAGE_SIZE);
+  const derivedDashboard = {
+    total: rows.length,
+    published: rows.filter((row) => Boolean(row.published)).length,
+    drafts: rows.filter((row) => !row.published).length
+  };
+  const dashboardMetrics = dashboard.total > 0 || dashboard.published > 0 || dashboard.drafts > 0 ? dashboard : derivedDashboard;
 
   const load = async () => {
     if (isDetailView) {
@@ -611,6 +638,7 @@ function BlogPage() {
             title: target.title || "",
             summary: target.summary || "",
             content: target.content || "",
+            variant: target.variant || "blog",
             published: target.published ? 1 : 0,
             categoryId: target.category?.id ? String(target.category.id) : "",
             tagsText: Array.isArray(target.tags) ? target.tags.map((tag) => tag.name).join(", ") : ""
@@ -618,7 +646,7 @@ function BlogPage() {
         }
         setView("editor");
       } else if (isNewRoute) {
-        setForm({ id: null, title: "", summary: "", content: "", published: 0, categoryId: "", tagsText: "" });
+        setForm({ id: null, title: "", summary: "", content: "", variant: "blog", published: 0, categoryId: "", tagsText: "" });
         setView("editor");
       } else {
         setView("list");
@@ -643,7 +671,7 @@ function BlogPage() {
   }, [dashboardPage, dashboardPageData.page]);
 
   const onField = (key, value) => setForm((prev) => ({ ...prev, [key]: value }));
-  const payload = () => ({ title: form.title, summary: form.summary, content: form.content, published: form.published, categoryId: form.categoryId ? Number(form.categoryId) : null, tags: form.tagsText.split(",").map((tag) => tag.trim()).filter(Boolean) });
+  const payload = () => ({ title: form.title, summary: form.summary, content: form.content, variant: form.variant || "blog", published: form.published, categoryId: form.categoryId ? Number(form.categoryId) : null, tags: form.tagsText.split(",").map((tag) => tag.trim()).filter(Boolean) });
 
   const onLogin = async (event) => {
     event.preventDefault();
@@ -665,7 +693,7 @@ function BlogPage() {
       return;
     }
     setStatus({ text: form.id ? "Blog updated." : "Blog created.", error: false });
-    setForm({ id: null, title: "", summary: "", content: "", published: 0, categoryId: "", tagsText: "" });
+    setForm({ id: null, title: "", summary: "", content: "", variant: "blog", published: 0, categoryId: "", tagsText: "" });
     goTo(PATH_BLOG_DASHBOARD);
     await load();
   };
@@ -740,7 +768,7 @@ function BlogPage() {
   };
 
   if (isDetailView && detailRow) {
-    return <BlogDetailView detailRow={detailRow} detailNav={detailNav} goToAnimated={goToAnimated} />;
+    return <BlogDetailView detailRow={detailRow} detailNav={detailNav} goToAnimated={goToAnimated} activeVariant={activeVariant} />;
   }
 
   return (
@@ -750,12 +778,18 @@ function BlogPage() {
           <p className="eyebrow">SYSTEM LOGS</p>
           <h2>{isAdmin ? "Command Console" : "Build Logs & Notes"}</h2>
           <p className="blog-subhead">Engineering notes, architectural decisions, and operational experiments.</p>
+          <div className="blog-variant-filter-row">
+            <span className="blog-filter-label">Type:</span>
+            <button className={`tab-btn blog-variant-btn ${activeVariant === BLOG_VARIANT_ALL ? "is-active" : ""}`} type="button" onClick={() => setVariantFilter(BLOG_VARIANT_ALL)}>All</button>
+            <button className={`tab-btn blog-variant-btn ${activeVariant === BLOG_VARIANT_BLOG ? "is-active" : ""}`} type="button" onClick={() => setVariantFilter(BLOG_VARIANT_BLOG)}>Blogs</button>
+            <button className={`tab-btn blog-variant-btn ${activeVariant === BLOG_VARIANT_VLOG ? "is-active" : ""}`} type="button" onClick={() => setVariantFilter(BLOG_VARIANT_VLOG)}>Vlogs</button>
+          </div>
           {(activeCategory || activeTag) ? (
-            <p className="blog-subhead" style={{ marginTop: "8px", display: "flex", gap: "8px", alignItems: "center" }}>
-              <span style={{ color: "var(--muted)" }}>Active Filter:</span>
-              {activeCategory ? <span className="meta-pill" style={{ borderColor: "var(--accent)", color: "var(--accent-soft)" }}>{activeCategory}</span> : null}
-              {activeTag ? <span className="meta-pill" style={{ borderColor: "var(--accent)", color: "var(--accent-soft)" }}>{activeTag}</span> : null}
-              <a href={PATH_BLOG} style={{ fontSize: "0.85rem", color: "var(--muted)", textDecoration: "underline" }}>Clear</a>
+            <p className="blog-subhead blog-filter-row">
+              <span className="blog-filter-label">Active Filter:</span>
+              {activeCategory ? <span className="meta-pill blog-filter-pill">{activeCategory}</span> : null}
+              {activeTag ? <span className="meta-pill blog-filter-pill">{activeTag}</span> : null}
+              <a className="blog-filter-clear" href={PATH_BLOG}>Clear</a>
             </p>
           ) : null}
         </div>
@@ -764,36 +798,57 @@ function BlogPage() {
           {!isAdmin ? <button className={`tab-btn ${view === "login" ? "is-active" : ""}`} type="button" onClick={() => goTo(PATH_BLOG_DASHBOARD)}>Authenticate</button> : null}
           {isAdmin ? <button className={`tab-btn ${view === "dashboard" ? "is-active" : ""}`} type="button" onClick={() => goTo(PATH_BLOG_DASHBOARD)}>Dashboard</button> : null}
           {isAdmin ? <button className={`tab-btn ${view === "editor" ? "is-active" : ""}`} type="button" onClick={() => { setPreviousView(view); goTo("/blog/0/new"); }}>New Entry</button> : null}
-          {isAdmin ? <button className="tab-btn danger" type="button" onClick={() => { logoutBlogAdmin(); setIsAdmin(false); goTo(PATH_BLOG); }}>Disconnect</button> : null}
+          {isAdmin ? <button className="tab-btn danger" type="button" onClick={async () => { await logoutBlogAdmin(); setIsAdmin(false); goTo(PATH_BLOG); }}>Disconnect</button> : null}
         </div>
       </header>
 
       {status.text ? <p className={status.error ? "blog-error" : "blog-success"}>{status.text}</p> : null}
 
       {view === "login" && !isAdmin ? <BlogLoginView password={password} setPassword={setPassword} onLogin={onLogin} /> : null}
-      {view === "dashboard" && isAdmin ? <BlogDashboardView dashboard={dashboard} dashboardPageData={dashboardPageData} dashboardPage={dashboardPage} setDashboardPage={setDashboardPage} onDelete={onDelete} onTogglePublish={onTogglePublish} onNavigate={goToAnimated} /> : null}
-      {view === "list" ? <BlogListView listPageData={listPageData} listPage={listPage} setListPage={setListPage} isAdmin={isAdmin} onDelete={onDelete} onNavigate={goToAnimated} /> : null}
+      {view === "dashboard" && isAdmin ? <BlogDashboardView dashboard={dashboardMetrics} dashboardPageData={dashboardPageData} dashboardPage={dashboardPage} setDashboardPage={setDashboardPage} onDelete={onDelete} onTogglePublish={onTogglePublish} onNavigate={goToAnimated} activeVariant={activeVariant} /> : null}
+      {view === "list" ? <BlogListView listPageData={listPageData} listPage={listPage} setListPage={setListPage} isAdmin={isAdmin} onDelete={onDelete} onNavigate={goToAnimated} activeVariant={activeVariant} /> : null}
       {view === "editor" && isAdmin ? <BlogEditorView form={form} onField={onField} onSave={onSave} goBack={goBack} previousView={previousView} applyEditorWrap={applyEditorWrap} imageInputRef={imageInputRef} imageScalePct={imageScalePct} setImageScalePct={setImageScalePct} onImagePick={onImagePick} categories={categories} newCategoryName={newCategoryName} setNewCategoryName={setNewCategoryName} createCategory={createCategory} tags={tags} /> : null}
     </section>
   );
 }
 
-function BlogDetailView({ detailRow, detailNav, goToAnimated }) {
+function BlogDetailView({ detailRow, detailNav, goToAnimated, activeVariant = BLOG_VARIANT_ALL }) {
+  const vlogId = detailRow.variant === "vlog" ? parseYouTubeVideoId(detailRow.content) : "";
+  const vlogEmbedUrl = vlogId ? buildYouTubeEmbedUrl(vlogId) : "";
   return (
     <article className="blog-post-detail">
       <div className="blog-post-topbar">
         <button className="cta-link cta-button" type="button" onClick={(event) => goToAnimated(PATH_BLOG, event)}>← Back to System Logs</button>
       </div>
-      <div style={{ maxWidth: "75ch", margin: "0 auto", width: "100%" }}>
+      <div className="blog-detail-inner">
         <div className="blog-detail-stage">
         <p className="eyebrow">SYSTEM LOG</p>
         <h2>{detailRow.title}</h2>
         {detailRow.summary ? <p className="blog-post-summary">{detailRow.summary}</p> : null}
         <div className="blog-post-meta">
-          {detailRow.category ? <a className="meta-pill meta-link" href={buildBlogFilterHref({ category: detailRow.category.name })}>{detailRow.category.name}</a> : null}
-          {Array.isArray(detailRow.tags) ? detailRow.tags.map((tag) => <a className="meta-pill meta-link" key={tag.id} href={buildBlogFilterHref({ tag: tag.name })}>{tag.name}</a>) : null}
+          <span className="meta-pill">{detailRow.variant === "vlog" ? "VLOG" : "BLOG"}</span>
+          {detailRow.category ? <a className="meta-pill meta-link" href={buildBlogFilterHref({ category: detailRow.category.name, variant: activeVariant })}>{detailRow.category.name}</a> : null}
+          {Array.isArray(detailRow.tags) ? detailRow.tags.map((tag) => <a className="meta-pill meta-link" key={tag.id} href={buildBlogFilterHref({ tag: tag.name, variant: activeVariant })}>{tag.name}</a>) : null}
         </div>
-        <div className="blog-content blog-detail-content">{renderRichContent(detailRow.content)}</div>
+        {detailRow.variant === "vlog" ? (
+          <div className="blog-content blog-detail-content">
+            {vlogEmbedUrl ? (
+              <div className="video-wrap">
+                <iframe
+                  className="video-frame"
+                  src={vlogEmbedUrl}
+                  title={detailRow.title || "YouTube vlog"}
+                  loading="lazy"
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                  allowFullScreen
+                />
+              </div>
+            ) : null}
+            <p><a href={detailRow.content} target="_blank" rel="noreferrer noopener">Watch on YouTube</a></p>
+          </div>
+        ) : (
+          <div className="blog-content blog-detail-content">{renderRichContent(detailRow.content)}</div>
+        )}
         </div>
         <div className="blog-row-actions blog-detail-nav">
           {detailNav.prevId ? <a className="cta-link" href={`/blog/${detailNav.prevId}`} onClick={(event) => goToAnimated(`/blog/${detailNav.prevId}`, event)}>← Previous Log</a> : <span />}
@@ -807,78 +862,103 @@ function BlogDetailView({ detailRow, detailNav, goToAnimated }) {
 function BlogLoginView({ password, setPassword, onLogin }) {
   return (
     <form className="blog-login-card" onSubmit={onLogin}>
-      <div style={{ marginBottom: "24px", textAlign: "center" }}>
-        <h3 style={{ margin: "0 0 8px 0" }}>System Authentication</h3>
-        <p style={{ color: "var(--muted)", margin: 0, fontSize: "0.9rem" }}>Enter credentials to access the command console.</p>
+      <div className="login-head">
+        <h3 className="login-title">System Authentication</h3>
+        <p className="login-subtitle">Enter credentials to access the command console.</p>
       </div>
       <label>
-        <span style={{ color: "var(--muted)", fontSize: "0.85rem", textTransform: "uppercase", letterSpacing: "0.05em" }}>Access Key</span>
-        <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" style={{ marginTop: "8px" }} />
+        <span className="field-label">Access Key</span>
+        <input className="login-input" type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="????????" />
       </label>
-      <button className="cta-link cta-button" type="submit" style={{ width: "100%", justifyContent: "center", marginTop: "16px" }}>Authenticate</button>
+      <button className="cta-link cta-button login-submit" type="submit">Authenticate</button>
     </form>
   );
 }
 
-function BlogDashboardView({ dashboard, dashboardPageData, dashboardPage, setDashboardPage, onDelete, onTogglePublish, onNavigate }) {
+function BlogDashboardView({ dashboard, dashboardPageData, dashboardPage, setDashboardPage, onDelete, onTogglePublish, onNavigate, activeVariant }) {
   return (
     <section className="blog-dash">
       <div className="dash-stats">
         <article className="dash-card">
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-            <p style={{ color: "var(--muted)", fontSize: "0.85rem", textTransform: "uppercase", letterSpacing: "0.05em", margin: 0 }}>Total Logs</p>
-            <span style={{ color: "var(--muted)", fontSize: "1.2rem", lineHeight: 1 }}>∑</span>
+          <div className="dash-stat-head">
+            <p className="dash-stat-label">Total Logs</p>
+            <span className="dash-stat-icon">∑</span>
           </div>
-          <h3 style={{ fontSize: "2rem", margin: "16px 0 0 0" }}>{dashboard.total}</h3>
+          <h3 className="dash-stat-value">{dashboard.total}</h3>
         </article>
         <article className="dash-card">
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-            <p style={{ color: "var(--muted)", fontSize: "0.85rem", textTransform: "uppercase", letterSpacing: "0.05em", margin: 0 }}>Published</p>
-            <span style={{ color: "var(--accent)", fontSize: "1.2rem", lineHeight: 1 }}>●</span>
+          <div className="dash-stat-head">
+            <p className="dash-stat-label">Published</p>
+            <span className="dash-stat-icon dash-stat-icon-accent">●</span>
           </div>
-          <h3 style={{ fontSize: "2rem", margin: "16px 0 0 0" }}>{dashboard.published}</h3>
+          <h3 className="dash-stat-value">{dashboard.published}</h3>
         </article>
         <article className="dash-card">
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-            <p style={{ color: "var(--muted)", fontSize: "0.85rem", textTransform: "uppercase", letterSpacing: "0.05em", margin: 0 }}>Drafts</p>
-            <span style={{ color: "var(--muted)", fontSize: "1.2rem", lineHeight: 1 }}>○</span>
+          <div className="dash-stat-head">
+            <p className="dash-stat-label">Drafts</p>
+            <span className="dash-stat-icon">○</span>
           </div>
-          <h3 style={{ fontSize: "2rem", margin: "16px 0 0 0" }}>{dashboard.drafts}</h3>
+          <h3 className="dash-stat-value">{dashboard.drafts}</h3>
         </article>
       </div>
       <div className="dash-list">
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "24px", borderBottom: "1px solid var(--line)", paddingBottom: "16px" }}>
-          <h3 style={{ margin: 0, border: "none", padding: 0, fontSize: "1.1rem" }}>System Entries</h3>
-          <span className="meta-pill" style={{ margin: 0 }}>Page {dashboardPageData.page}</span>
+        <div className="dash-list-head">
+          <h3 className="dash-list-title">System Entries</h3>
+          <span className="meta-pill dash-page-pill">Page {dashboardPageData.page}</span>
         </div>
         <div className="dash-rows">
           {dashboardPageData.items.length === 0 ? (
-            <p style={{ color: "var(--muted)", fontStyle: "italic", padding: "20px 0", textAlign: "center" }}>No entries found in the system.</p>
+            <p className="dash-empty">No entries found in the system.</p>
           ) : null}
-          {dashboardPageData.items.map((row) => (
-            <div className="dash-row" key={row.id}>
-              <div className="dash-row-main">
-                <a href={`/blog/${row.id}`} onClick={(event) => onNavigate(`/blog/${row.id}`, event)} style={{ fontWeight: 500, fontSize: "1.05rem" }}>{row.title || "Untitled Entry"}</a>
-                <div className="dash-row-meta" style={{ marginTop: "8px" }}>
-                  <span className="meta-pill" style={{ borderColor: row.published ? "var(--accent)" : "var(--line)", color: row.published ? "var(--accent-soft)" : "var(--muted)" }}>
-                    {row.published ? "Published" : "Draft"}
-                  </span>
-                  {row.category ? <a className="meta-pill meta-link" href={buildBlogFilterHref({ category: row.category.name })}>{row.category.name}</a> : <span className="meta-pill">Uncategorized</span>}
-                  {Array.isArray(row.tags) && row.tags.length > 0
-                    ? row.tags.map((tag) => <a className="meta-pill meta-link" key={`${row.id}-${tag.id}`} href={buildBlogFilterHref({ tag: tag.name })}>{tag.name}</a>)
-                    : null}
+          {dashboardPageData.items.map((row) => {
+            const isVlog = row.variant === "vlog";
+            const vlogId = isVlog ? parseYouTubeVideoId(row.content) : "";
+            const vlogEmbedUrl = vlogId ? buildYouTubeEmbedUrl(vlogId) : "";
+            return (
+              <div className={`dash-row ${isVlog ? "dash-row-vlog" : ""}`} key={row.id}>
+                <div className="dash-row-main">
+                  <a className="dash-entry-link" href={`/blog/${row.id}`} onClick={(event) => onNavigate(`/blog/${row.id}`, event)}>{row.title || "Untitled Entry"}</a>
+                  <div className="dash-row-meta dash-row-meta-tight">
+                    <span className="meta-pill">{isVlog ? "VLOG" : "BLOG"}</span>
+                    <span className={`meta-pill status-pill ${row.published ? "is-published" : "is-draft"}`}>
+                      {row.published ? "Published" : "Draft"}
+                    </span>
+                    {row.category ? <a className="meta-pill meta-link" href={buildBlogFilterHref({ category: row.category.name, variant: activeVariant })}>{row.category.name}</a> : <span className="meta-pill">Uncategorized</span>}
+                    {Array.isArray(row.tags) && row.tags.length > 0
+                      ? row.tags.map((tag) => <a className="meta-pill meta-link" key={`${row.id}-${tag.id}`} href={buildBlogFilterHref({ tag: tag.name, variant: activeVariant })}>{tag.name}</a>)
+                      : null}
+                  </div>
+                  {row.summary ? <p className="dash-row-summary">{row.summary}</p> : null}
+                </div>
+                {isVlog ? (
+                  <div className="dash-vlog-preview">
+                    {vlogEmbedUrl ? (
+                      <div className="video-wrap dash-vlog-video">
+                        <iframe
+                          className="video-frame"
+                          src={vlogEmbedUrl}
+                          title={row.title || "Vlog preview"}
+                          loading="lazy"
+                          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                          allowFullScreen
+                        />
+                      </div>
+                    ) : (
+                      <p className="dash-vlog-missing">Add a valid YouTube URL in edit mode to preview this vlog.</p>
+                    )}
+                  </div>
+                ) : null}
+                <div className="dash-actions">
+                  <a className="cta-link" href={`/blog/${row.id}/edit`} onClick={(event) => onNavigate(`/blog/${row.id}/edit`, event)}>Edit</a>
+                  <button className="cta-link cta-button" type="button" onClick={() => onTogglePublish(row)}>{row.published ? "Unpublish" : "Publish"}</button>
+                  <button className="cta-link cta-button cta-danger" type="button" onClick={(event) => onDelete(row.id, event)}>Delete</button>
                 </div>
               </div>
-              <div className="dash-actions">
-                <a className="cta-link" href={`/blog/${row.id}/edit`} onClick={(event) => onNavigate(`/blog/${row.id}/edit`, event)}>Edit</a>
-                <button className="cta-link cta-button" type="button" onClick={() => onTogglePublish(row)}>{row.published ? "Unpublish" : "Publish"}</button>
-                <button className="cta-link cta-button cta-danger" type="button" onClick={(event) => onDelete(row.id, event)}>Delete</button>
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
         {dashboardPageData.totalPages > 1 ? (
-          <div style={{ marginTop: "24px", paddingTop: "24px", borderTop: "1px solid var(--line)" }}>
+          <div className="dash-pagination-wrap">
             <PaginationControls
               page={dashboardPageData.page}
               totalPages={dashboardPageData.totalPages}
@@ -892,27 +972,48 @@ function BlogDashboardView({ dashboard, dashboardPageData, dashboardPage, setDas
   );
 }
 
-function BlogListView({ listPageData, listPage, setListPage, isAdmin, onDelete, onNavigate }) {
+function BlogListView({ listPageData, listPage, setListPage, isAdmin, onDelete, onNavigate, activeVariant }) {
   return (
     <section className="blog-grid">
       {listPageData.items.length === 0 ? (
-        <div style={{ gridColumn: "1 / -1", padding: "40px", textAlign: "center", border: "1px dashed var(--line)", borderRadius: "12px" }}>
-          <p style={{ color: "var(--muted)", fontSize: "1.1rem" }}>No entries found matching the current filters.</p>
+        <div className="blog-empty-wrap">
+          <p className="blog-empty-text">No entries found matching the current filters.</p>
         </div>
       ) : null}
       {listPageData.items.map((row) => (
-        <article className="blog-card blog-card-spawn" key={row.id}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "12px" }}>
-            <h3 style={{ margin: 0 }}><a href={`/blog/${row.id}`} onClick={(event) => onNavigate(`/blog/${row.id}`, event)}>{row.title}</a></h3>
-            {!row.published && isAdmin ? <span className="meta-pill" style={{ borderColor: "var(--muted)", color: "var(--muted)", margin: 0 }}>Draft</span> : null}
+        <article className={`blog-card blog-card-spawn ${row.variant === "vlog" ? "blog-card-vlog" : ""}`} key={row.id}>
+          <div className="blog-card-head">
+            <h3 className="blog-card-title"><a href={`/blog/${row.id}`} onClick={(event) => onNavigate(`/blog/${row.id}`, event)}>{row.title}</a></h3>
+            {!row.published && isAdmin ? <span className="meta-pill draft-pill">Draft</span> : null}
           </div>
-          <p className="blog-card-summary">{row.summary || "No summary provided for this entry."}</p>
-          <div className="blog-card-meta">
-            {row.category ? <a className="meta-pill meta-link" href={buildBlogFilterHref({ category: row.category.name })}>{row.category.name}</a> : null}
-            {Array.isArray(row.tags) ? row.tags.slice(0, 3).map((tag) => <a className="meta-pill meta-link" key={tag.id} href={buildBlogFilterHref({ tag: tag.name })}>{tag.name}</a>) : null}
-          </div>
+          {row.variant === "vlog" ? (
+            <div className="blog-card-vlog-preview">
+              {parseYouTubeVideoId(row.content) ? (
+                <div className="video-wrap blog-card-vlog-video">
+                  <iframe
+                    className="video-frame"
+                    src={buildYouTubeEmbedUrl(parseYouTubeVideoId(row.content))}
+                    title={row.title || "Vlog preview"}
+                    loading="lazy"
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                    allowFullScreen
+                  />
+                </div>
+              ) : (
+                <p className="blog-card-vlog-missing">Invalid YouTube URL in this vlog entry.</p>
+              )}
+            </div>
+          ) : null}
+          {row.variant !== "vlog" ? <p className="blog-card-summary">{row.summary || "No summary provided for this entry."}</p> : null}
+          {row.variant !== "vlog" || row.category || (Array.isArray(row.tags) && row.tags.length > 0) ? (
+            <div className={`blog-card-meta ${row.variant === "vlog" ? "blog-card-meta-vlog" : ""}`}>
+              {row.variant !== "vlog" ? <span className="meta-pill">BLOG</span> : null}
+              {row.category ? <a className="meta-pill meta-link" href={buildBlogFilterHref({ category: row.category.name, variant: activeVariant })}>{row.category.name}</a> : null}
+              {Array.isArray(row.tags) ? row.tags.slice(0, 3).map((tag) => <a className="meta-pill meta-link" key={tag.id} href={buildBlogFilterHref({ tag: tag.name, variant: activeVariant })}>{tag.name}</a>) : null}
+            </div>
+          ) : null}
           {isAdmin ? (
-            <div className="blog-row-actions" style={{ marginTop: "16px", paddingTop: "16px", borderTop: "1px solid rgba(255,255,255,0.05)" }}>
+            <div className="blog-row-actions admin-card-actions">
               <a className="cta-link" href={`/blog/${row.id}/edit`} onClick={(event) => onNavigate(`/blog/${row.id}/edit`, event)}>Edit</a>
               <button className="cta-link cta-button cta-danger" type="button" onClick={(event) => onDelete(row.id, event)}>Delete</button>
             </div>
@@ -934,66 +1035,102 @@ function BlogListView({ listPageData, listPage, setListPage, isAdmin, onDelete, 
 }
 
 function BlogEditorView({ form, onField, onSave, goBack, previousView, applyEditorWrap, imageInputRef, imageScalePct, setImageScalePct, onImagePick, categories, newCategoryName, setNewCategoryName, createCategory, tags }) {
+  const isVlog = form.variant === "vlog";
+  const vlogId = isVlog ? parseYouTubeVideoId(form.content) : "";
+  const vlogEmbedUrl = vlogId ? buildYouTubeEmbedUrl(vlogId) : "";
   return (
     <section className="editor-shell">
       <form className="blog-form editor-main" onSubmit={onSave}>
-        <div className="blog-row-actions" style={{ marginBottom: "24px" }}>
+        <div className="blog-row-actions editor-back-row">
           <button className="cta-link cta-button" type="button" onClick={() => goBack(previousView === "dashboard" ? PATH_BLOG_DASHBOARD : PATH_BLOG)}>← Back to Console</button>
         </div>
         <label>
-          <span style={{ color: "var(--muted)", fontSize: "0.85rem", textTransform: "uppercase", letterSpacing: "0.05em" }}>Entry Title</span>
+          <span className="field-label">Entry Title</span>
           <input value={form.title} onChange={(e) => onField("title", e.target.value)} placeholder="e.g., Migrating to a new infrastructure..." />
         </label>
         <label>
-          <span style={{ color: "var(--muted)", fontSize: "0.85rem", textTransform: "uppercase", letterSpacing: "0.05em" }}>Summary</span>
+          <span className="field-label">Summary</span>
           <input value={form.summary} onChange={(e) => onField("summary", e.target.value)} placeholder="Brief overview of this log entry..." />
         </label>
         <label>
-          <span style={{ color: "var(--muted)", fontSize: "0.85rem", textTransform: "uppercase", letterSpacing: "0.05em" }}>Log Content</span>
-          <div className="blog-editor-toolbar">
-            <button className="cta-link cta-button" type="button" onClick={() => applyEditorWrap("**")}>Bold</button>
-            <button className="cta-link cta-button" type="button" onClick={() => applyEditorWrap("__")}>Underline</button>
-            <button className="cta-link cta-button" type="button" onClick={() => applyEditorWrap("[tc]", "[/tc]")}>TC</button>
-            <button className="cta-link cta-button" type="button" onClick={() => applyEditorWrap("```\n", "\n```")}>Code</button>
-            <button className="cta-link cta-button" type="button" onClick={() => imageInputRef.current && imageInputRef.current.click()}>Image</button>
-            <label style={{ display: "flex", alignItems: "center", gap: "8px", margin: 0 }}>
-              <span style={{ fontSize: "0.85rem", color: "var(--muted)" }}>Scale %</span>
-              <input type="number" min="10" max="100" value={imageScalePct} onChange={(e) => setImageScalePct(Number(e.target.value || 60))} style={{ width: "60px", padding: "4px 8px" }} />
-            </label>
-            <input ref={imageInputRef} type="file" accept="image/*" onChange={onImagePick} style={{ display: "none" }} />
-          </div>
-          <textarea id="blog-content-editor" rows={14} value={form.content} onChange={(e) => onField("content", e.target.value)} placeholder="Write your log entry here. Markdown is supported." />
-          <div className="editor-preview">
-            <p className="editor-help" style={{ borderBottom: "1px solid var(--line)", paddingBottom: "8px", marginBottom: "16px" }}>Live Preview</p>
-            <div className="blog-content">{renderRichContent(form.content)}</div>
-          </div>
+          <span className="field-label">Variant</span>
+          <select value={form.variant || "blog"} onChange={(e) => onField("variant", e.target.value)}>
+            <option value="blog">Blog</option>
+            <option value="vlog">Vlog</option>
+          </select>
         </label>
-        <label className="blog-check" style={{ marginTop: "24px", padding: "16px", border: "1px solid var(--line)", borderRadius: "8px", background: "rgba(255,255,255,0.02)" }}>
+        <label>
+          <span className="field-label">{isVlog ? TEXT_VLOG_URL_LABEL : "Log Content"}</span>
+          {isVlog ? (
+            <>
+              <input id="blog-content-editor" type="url" value={form.content} onChange={(e) => onField("content", e.target.value)} placeholder={TEXT_VLOG_URL_PLACEHOLDER} />
+              <p className="editor-help editor-help-sm">{TEXT_VLOG_URL_HELP}</p>
+              <div className="editor-preview">
+                <p className="editor-help editor-preview-title">Video Preview</p>
+                {vlogEmbedUrl ? (
+                  <div className="video-wrap">
+                    <iframe
+                      className="video-frame"
+                      src={vlogEmbedUrl}
+                      title="Vlog preview"
+                      loading="lazy"
+                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                      allowFullScreen
+                    />
+                  </div>
+                ) : (
+                  <p className="editor-help editor-help-sm">{TEXT_VLOG_URL_INVALID}</p>
+                )}
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="blog-editor-toolbar">
+                <button className="cta-link cta-button" type="button" onClick={() => applyEditorWrap("**")}>Bold</button>
+                <button className="cta-link cta-button" type="button" onClick={() => applyEditorWrap("__")}>Underline</button>
+                <button className="cta-link cta-button" type="button" onClick={() => applyEditorWrap("[tc]", "[/tc]")}>TC</button>
+                <button className="cta-link cta-button" type="button" onClick={() => applyEditorWrap("```\n", "\n```")}>Code</button>
+                <button className="cta-link cta-button" type="button" onClick={() => imageInputRef.current && imageInputRef.current.click()}>Image</button>
+                <label className="scale-label">
+                  <span className="scale-label-text">Scale %</span>
+                  <input className="scale-input" type="number" min="10" max="100" value={imageScalePct} onChange={(e) => setImageScalePct(Number(e.target.value || 60))} />
+                </label>
+                <input ref={imageInputRef} type="file" accept="image/*" onChange={onImagePick} className="input-hidden" />
+              </div>
+              <textarea id="blog-content-editor" rows={14} value={form.content} onChange={(e) => onField("content", e.target.value)} placeholder="Write your log entry here. Markdown is supported." />
+              <div className="editor-preview">
+                <p className="editor-help editor-preview-title">Live Preview</p>
+                <div className="blog-content">{renderRichContent(form.content)}</div>
+              </div>
+            </>
+          )}
+        </label>
+        <label className="blog-check publish-check">
           <input type="checkbox" checked={Boolean(form.published)} onChange={(e) => onField("published", e.target.checked ? 1 : 0)} />
-          <span style={{ fontWeight: 500 }}>Publish this entry immediately</span>
+          <span className="publish-check-text">Publish this entry immediately</span>
         </label>
-        <button className="cta-link cta-button" type="submit" style={{ marginTop: "24px", width: "100%", justifyContent: "center", padding: "12px" }}>
+        <button className="cta-link cta-button editor-submit" type="submit">
           {form.id ? "Commit Changes" : "Create Log Entry"}
         </button>
       </form>
 
       <aside className="editor-side">
         <div className="editor-side-card">
-          <h3 style={{ fontSize: "1rem", marginBottom: "16px" }}>Classification</h3>
-          <select value={form.categoryId} onChange={(e) => onField("categoryId", e.target.value)} style={{ width: "100%", marginBottom: "16px" }}>
+          <h3 className="editor-side-title">Classification</h3>
+          <select className="editor-select" value={form.categoryId} onChange={(e) => onField("categoryId", e.target.value)}>
             <option value="">Uncategorized</option>
             {categories.map((cat) => <option key={cat.id} value={String(cat.id)}>{cat.name}</option>)}
           </select>
-          <div className="blog-inline-form" style={{ display: "flex", gap: "8px" }}>
-            <input value={newCategoryName} onChange={(e) => setNewCategoryName(e.target.value)} placeholder="New category..." style={{ flex: 1 }} />
+          <div className="blog-inline-form editor-inline-form">
+            <input className="editor-inline-input" value={newCategoryName} onChange={(e) => setNewCategoryName(e.target.value)} placeholder="New category..." />
             <button className="cta-link cta-button" type="button" onClick={createCategory}>Add</button>
           </div>
         </div>
         <div className="editor-side-card">
-          <h3 style={{ fontSize: "1rem", marginBottom: "16px" }}>Metadata Tags</h3>
-          <input value={form.tagsText} onChange={(e) => onField("tagsText", e.target.value)} list="blog-tags-list" placeholder="infra, ai, systems" style={{ width: "100%", marginBottom: "8px" }} />
+          <h3 className="editor-side-title">Metadata Tags</h3>
+          <input className="editor-tags-input" value={form.tagsText} onChange={(e) => onField("tagsText", e.target.value)} list="blog-tags-list" placeholder="infra, ai, systems" />
           <datalist id="blog-tags-list">{tags.map((tag) => <option key={tag.id} value={tag.name} />)}</datalist>
-          <p className="editor-help" style={{ fontSize: "0.8rem" }}>Comma-separated tags for indexing.</p>
+          <p className="editor-help editor-help-sm">Comma-separated tags for indexing.</p>
         </div>
       </aside>
     </section>
@@ -1006,9 +1143,9 @@ function BlogEditorView({ form, onField, onSave, goBack, previousView, applyEdit
  */
 function PaginationControls(props) {
   return (
-    <div className="pagination-row" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%" }}>
+    <div className="pagination-row">
       <button className="tab-btn pagination-btn" type="button" onClick={props.onPrevious} disabled={props.page <= 1}>← Previous</button>
-      <span className="pagination-meta" style={{ color: "var(--muted)", fontSize: "0.9rem", letterSpacing: "0.05em", textTransform: "uppercase" }}>Page {props.page} of {props.totalPages}</span>
+      <span className="pagination-meta">Page {props.page} of {props.totalPages}</span>
       <button className="tab-btn pagination-btn" type="button" onClick={props.onNext} disabled={props.page >= props.totalPages}>Next →</button>
     </div>
   );
@@ -1065,6 +1202,9 @@ function buildBlogFilterHref(params) {
   if (params.tag) {
     search.set("tag", String(params.tag).trim().toLowerCase());
   }
+  if (params.variant && params.variant !== BLOG_VARIANT_ALL) {
+    search.set("variant", String(params.variant).trim().toLowerCase());
+  }
   return `${PATH_BLOG}?${search.toString()}`;
 }
 
@@ -1072,14 +1212,49 @@ function buildBlogFilterHref(params) {
  * @param {{category?: {name?: string} | null, tags?: Array<{name?: string}>}} row
  * @param {string} activeCategory
  * @param {string} activeTag
+ * @param {string} activeVariant
  * @returns {boolean}
  */
-function matchesBlogFilters(row, activeCategory, activeTag) {
+function matchesBlogFilters(row, activeCategory, activeTag, activeVariant) {
   const categoryName = String(row?.category?.name || "").toLowerCase();
   const tagNames = Array.isArray(row?.tags) ? row.tags.map((tag) => String(tag?.name || "").toLowerCase()) : [];
+  const rowVariant = String(row?.variant || BLOG_VARIANT_BLOG).toLowerCase();
   const categoryMatch = !activeCategory || categoryName === activeCategory;
   const tagMatch = !activeTag || tagNames.includes(activeTag);
-  return categoryMatch && tagMatch;
+  const variantMatch = !activeVariant || activeVariant === BLOG_VARIANT_ALL || rowVariant === activeVariant;
+  return categoryMatch && tagMatch && variantMatch;
+}
+
+/**
+ * @param {string} url
+ * @returns {string}
+ */
+function parseYouTubeVideoId(url) {
+  const raw = String(url || "").trim();
+  if (!raw) {
+    return "";
+  }
+  const watchMatch = raw.match(/[?&]v=([a-zA-Z0-9_-]{6,})/);
+  if (watchMatch && watchMatch[1]) {
+    return watchMatch[1];
+  }
+  const shortMatch = raw.match(/youtu\.be\/([a-zA-Z0-9_-]{6,})/);
+  if (shortMatch && shortMatch[1]) {
+    return shortMatch[1];
+  }
+  const embedMatch = raw.match(/youtube\.com\/embed\/([a-zA-Z0-9_-]{6,})/);
+  if (embedMatch && embedMatch[1]) {
+    return embedMatch[1];
+  }
+  return "";
+}
+
+/**
+ * @param {string} id
+ * @returns {string}
+ */
+function buildYouTubeEmbedUrl(id) {
+  return `https://www.youtube.com/embed/${encodeURIComponent(id)}`;
 }
 
 /**
@@ -1104,10 +1279,10 @@ function renderRichContent(content) {
           const imageMatch = part.match(/^!\[img\]\(([^|)]+)\|?(\d{1,3})?\)$/);
           if (imageMatch) {
             const widthPct = Number(imageMatch[2] || 60);
-            return <img key={`img-${partIndex}`} src={imageMatch[1]} style={{ width: `${Math.max(10, Math.min(100, widthPct))}%`, height: "auto", borderRadius: "8px", border: "1px solid var(--line)", marginTop: "16px", marginBottom: "16px" }} alt="System Log Artifact" />;
+            return <img key={`img-${partIndex}`} src={imageMatch[1]} className="rich-image" style={{ width: `${Math.max(10, Math.min(100, widthPct))}%` }} alt="System Log Artifact" />;
           }
           const tokens = part.split(/(\*\*[^*]+\*\*|__[^_]+__|\[tc\][\s\S]*?\[\/tc\])/g).filter(Boolean);
-          return <p key={`line-${partIndex}`} style={{ lineHeight: 1.7, marginBottom: "16px" }}>{tokens.map((token, tokenIndex) => token.startsWith("**") && token.endsWith("**") ? <strong key={tokenIndex} style={{ color: "var(--fg)" }}>{token.slice(2, -2)}</strong> : token.startsWith("__") && token.endsWith("__") ? <u key={tokenIndex} style={{ textDecorationColor: "var(--accent)" }}>{token.slice(2, -2)}</u> : token.startsWith("[tc]") && token.endsWith("[/tc]") ? <span key={tokenIndex} className="text-center-block" style={{ display: "block", textAlign: "center", fontStyle: "italic", color: "var(--muted)", margin: "24px 0" }}>{token.slice(4, -5)}</span> : <span key={tokenIndex}>{token}</span>)}</p>;
+          return <p key={`line-${partIndex}`} className="rich-p">{tokens.map((token, tokenIndex) => token.startsWith("**") && token.endsWith("**") ? <strong key={tokenIndex} className="rich-strong">{token.slice(2, -2)}</strong> : token.startsWith("__") && token.endsWith("__") ? <u key={tokenIndex} className="rich-u">{token.slice(2, -2)}</u> : token.startsWith("[tc]") && token.endsWith("[/tc]") ? <span key={tokenIndex} className="text-center-block rich-tc">{token.slice(4, -5)}</span> : <span key={tokenIndex}>{token}</span>)}</p>;
         })}
       </div>
     );
@@ -1135,19 +1310,19 @@ function CodeBlock(props) {
   };
 
   return (
-    <div className="code-shell" style={{ margin: "24px 0", borderRadius: "8px", overflow: "hidden", border: "1px solid var(--line)", background: "#000" }}>
-      <div className="code-head" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 16px", background: "rgba(255,255,255,0.03)", borderBottom: "1px solid var(--line)" }}>
-        <span className="code-lang" style={{ color: "var(--muted)", fontSize: "0.8rem", textTransform: "uppercase", letterSpacing: "0.05em" }}>{lang || TEXT_CODE_FALLBACK_LANG}</span>
-        <button className="code-copy-btn" type="button" onClick={onCopy} style={{ background: "transparent", border: "none", color: copied ? "var(--accent)" : "var(--muted)", cursor: "pointer", fontSize: "0.85rem", transition: "color 0.2s" }}>{copied ? TEXT_CODE_COPIED : TEXT_CODE_COPY}</button>
+    <div className="code-shell">
+      <div className="code-head">
+        <span className="code-lang">{lang || TEXT_CODE_FALLBACK_LANG}</span>
+        <button className={`code-copy-btn ${copied ? "is-copied" : ""}`} type="button" onClick={onCopy}>{copied ? TEXT_CODE_COPIED : TEXT_CODE_COPY}</button>
       </div>
-      <div className="code-body" style={{ padding: "16px 0", overflowX: "auto" }}>
+      <div className="code-body">
         {lines.map((line, index) => {
           const rawLine = line || " ";
           const highlighted = lang ? hljs.highlight(rawLine, { language: lang }).value : hljs.highlightAuto(rawLine).value;
           return (
-            <div className="code-line" key={`line-${index}`} style={{ display: "flex", padding: "0 16px", lineHeight: 1.5, fontFamily: "var(--font-mono)", fontSize: "0.9rem" }}>
-              <span className="line-no" style={{ color: "var(--muted)", opacity: 0.5, width: "32px", flexShrink: 0, userSelect: "none", textAlign: "right", marginRight: "16px" }}>{index + 1}</span>
-              <code className="hljs" dangerouslySetInnerHTML={{ __html: highlighted }} style={{ background: "transparent", padding: 0 }} />
+            <div className="code-line" key={`line-${index}`}>
+              <span className="line-no">{index + 1}</span>
+              <code className="hljs" dangerouslySetInnerHTML={{ __html: highlighted }} />
             </div>
           );
         })}
@@ -1155,274 +1330,3 @@ function CodeBlock(props) {
     </div>
   );
 }
-
-const GLOBAL_CSS = `
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
-
-:root {
-  --bg: #050505;
-  --bg-soft: #0a0a0a;
-  --panel: rgba(20, 20, 20, 0.6);
-  --ink: #ededed;
-  --muted: #a1a1aa;
-  --line: rgba(255, 255, 255, 0.08);
-  --accent: #eab308;
-  --accent-soft: #fef08a;
-  --glow: rgba(234, 179, 8, 0.15);
-}
-* { box-sizing: border-box; }
-body { 
-  margin: 0; 
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-  background: radial-gradient(circle at 50% 0%, #1f1f1f 0%, var(--bg) 60%), var(--bg); 
-  color: var(--ink); 
-  line-height: 1.6;
-  -webkit-font-smoothing: antialiased;
-}
-.site-shell { min-height: 100vh; display: flex; flex-direction: column; }
-.container { width: min(1080px, 90vw); margin: 0 auto; }
-
-/* Topbar */
-.topbar { border-bottom: 1px solid var(--line); background: rgba(5, 5, 5, 0.6); backdrop-filter: blur(12px); position: sticky; top: 0; z-index: 100; }
-.topbar-inner { display: flex; align-items: center; gap: 16px; padding: 16px 0; }
-.brand-mark { width: 40px; height: 40px; border: 1px solid var(--line); background: linear-gradient(135deg, rgba(255,255,255,0.1), transparent); border-radius: 10px; color: var(--ink); display: grid; place-items: center; font-weight: 600; letter-spacing: 0.05em; font-size: 0.9rem; box-shadow: 0 4px 12px rgba(0,0,0,0.2); }
-.brand-name { margin: 0; font-size: 1.1rem; font-weight: 600; letter-spacing: -0.01em; }
-.brand-role { margin: 2px 0 0; color: var(--muted); font-size: 0.85rem; }
-
-/* Nav */
-.nav-wrap { border-bottom: 1px solid var(--line); background: rgba(5, 5, 5, 0.4); backdrop-filter: blur(12px); }
-.nav-shell { padding: 12px 0; }
-.nav-row { display: flex; flex-wrap: wrap; gap: 6px; }
-.nav-link { color: var(--muted); text-decoration: none; padding: 6px 12px; font-size: 0.85rem; font-weight: 500; border-radius: 8px; transition: all 100ms ease; }
-.nav-link:hover { color: var(--ink); background: rgba(255,255,255,0.05); }
-.nav-link.is-active { color: var(--ink); background: rgba(255,255,255,0.1); }
-.nav-ext { margin-left: 4px; font-size: 0.75rem; opacity: 0.7; }
-
-/* Main */
-.main-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 24px; padding: 40px 0 60px; flex: 1; align-content: start; }
-
-/* Panels */
-.panel { background: var(--panel); backdrop-filter: blur(16px); border: 1px solid var(--line); padding: 32px; border-radius: 16px; box-shadow: 0 8px 32px -12px rgba(0,0,0,0.5); transition: transform 100ms ease, border-color 100ms ease; }
-.motd-panel { border-color: rgba(234, 179, 8, 0.3); background: linear-gradient(180deg, rgba(234, 179, 8, 0.05), transparent); }
-.motd-quote { margin: 12px 0 0; color: var(--ink); font-size: clamp(1.1rem, 1.5vw, 1.25rem); line-height: 1.6; font-weight: 500; font-style: italic; }
-.motd-status { margin-top: 12px; font-size: 0.8rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; font-weight: 600; }
-
-/* Typography */
-h1, h2, h3, h4 { margin-top: 0; color: var(--ink); font-weight: 600; letter-spacing: -0.02em; }
-.hero h2, .panel h2 { margin-bottom: 16px; font-size: clamp(1.75rem, 3vw, 2.5rem); }
-.eyebrow { color: var(--accent); letter-spacing: 0.15em; font-size: 0.75rem; font-weight: 700; margin: 0 0 12px 0; text-transform: uppercase; }
-.panel p { color: var(--muted); line-height: 1.7; margin-top: 0; }
-.panel a { color: var(--ink); text-decoration: none; border-bottom: 1px solid var(--line); transition: border-color 100ms ease; }
-.panel a:hover { border-bottom-color: var(--accent); }
-
-/* Hero */
-.hero-intro { background: transparent; border: none; box-shadow: none; padding: 20px 0 40px; }
-.hero-intro-grid { display: grid; grid-template-columns: 1.2fr 340px; gap: 40px; align-items: center; }
-.hero-copy { max-width: 64ch; }
-.hero-copy h2 { background: linear-gradient(to right, #fff, #a1a1aa); -webkit-background-clip: text; -webkit-text-fill-color: transparent; line-height: 1.15; }
-.hero-copy p { font-size: 1.1rem; }
-.hero-mini-metrics { margin-top: 24px; display: flex; flex-wrap: wrap; gap: 10px; }
-.metric-pill { font-size: 0.75rem; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; border: 1px solid var(--line); padding: 6px 12px; border-radius: 20px; color: var(--muted); background: rgba(255,255,255,0.02); }
-.hero-anchor-wrap { width: 100%; display: flex; flex-direction: column; gap: 12px; align-items: center; }
-.home-anchor-image { width: 100%; aspect-ratio: 4 / 5; object-fit: cover; border: 1px solid var(--line); border-radius: 20px; box-shadow: 0 20px 40px -10px rgba(0,0,0,0.6); }
-.hero-caption { margin: 0; font-size: 0.85rem; color: var(--muted); text-align: center; }
-
-/* Grids */
-.home-grid { display: grid; gap: 24px; grid-template-columns: 1fr 1fr; align-items: start; }
-.home-grid .panel:first-child { grid-column: span 2; }
-.kv-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; margin-top: 20px; }
-.key { margin: 0; color: var(--ink); font-weight: 600; font-size: 0.95rem; }
-.val { margin: 6px 0 0; font-size: 0.95rem; }
-
-/* Cards */
-.cards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
-.card { border: 1px solid var(--line); padding: 24px; background: rgba(255,255,255,0.02); border-radius: 12px; transition: all 100ms ease; }
-.card:hover { transform: translateY(-2px); border-color: rgba(255,255,255,0.15); background: rgba(255,255,255,0.04); box-shadow: 0 8px 24px -8px rgba(0,0,0,0.3); }
-.card h3 { margin: 0 0 12px; font-size: 1.1rem; }
-.card p { font-size: 0.95rem; margin-bottom: 8px; }
-.card p:last-child { margin-bottom: 0; }
-
-/* Video */
-.video-wrap { width: 100%; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; background: #000; margin-bottom: 16px; box-shadow: 0 8px 24px -8px rgba(0,0,0,0.5); }
-.video-frame { width: 100%; aspect-ratio: 16 / 9; border: 0; display: block; }
-
-/* Resume */
-.list { margin: 12px 0 0; padding-left: 20px; color: var(--muted); display: grid; gap: 10px; line-height: 1.6; font-size: 0.95rem; }
-.resume-title { margin: 0 0 4px; font-size: 2rem; }
-.resume-subtitle { margin: 0 0 16px; color: var(--muted); font-size: 1.1rem; font-weight: 500; }
-.resume-contact { margin: 0 0 16px; font-size: 0.95rem; display: flex; align-items: center; flex-wrap: wrap; }
-.resume-contact a { color: var(--ink); text-decoration: none; border-bottom: 1px solid var(--line); }
-.resume-contact a:hover { border-bottom-color: var(--accent); }
-.dot-sep { margin: 0 12px; color: var(--line); }
-.resume-summary { max-width: 80ch; font-size: 1.05rem; }
-.resume-hero { display: flex; justify-content: space-between; align-items: flex-start; gap: 24px; margin-bottom: 24px; }
-.resume-hero-cta { min-width: 240px; display: flex; flex-direction: column; align-items: flex-end; gap: 12px; }
-.resume-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; margin-top: 24px; }
-.resume-block { border: 1px solid var(--line); background: rgba(255,255,255,0.02); padding: 24px; border-radius: 12px; }
-.skills-block { grid-column: span 2; }
-.experience-block { grid-column: span 2; }
-.resume-block h3 { margin: 0 0 16px; font-size: 1.1rem; border-bottom: 1px solid var(--line); padding-bottom: 12px; }
-.chip-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
-.chip { border: 1px solid var(--line); padding: 4px 10px; font-size: 0.8rem; color: var(--muted); background: rgba(255,255,255,0.03); border-radius: 6px; }
-.chip-label { border: none; background: transparent; color: var(--ink); font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; padding-left: 0; margin-right: 4px; margin-left: 8px; }
-.chip-label:first-child { margin-left: 0; }
-.xp-item + .xp-item { margin-top: 20px; padding-top: 20px; border-top: 1px solid var(--line); }
-.xp-head { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; flex-wrap: wrap; margin-bottom: 8px; }
-.xp-role { margin: 0; color: var(--ink); font-weight: 600; font-size: 1.05rem; }
-.xp-time { margin: 0; color: var(--muted); font-size: 0.9rem; font-variant-numeric: tabular-nums; }
-
-/* Buttons */
-.cta-link { display: inline-block; border: 1px solid var(--line); background: rgba(255,255,255,0.03); color: var(--ink); text-decoration: none; padding: 8px 16px; font-weight: 500; border-radius: 8px; transition: all 100ms ease; font-size: 0.9rem; }
-.panel a.cta-link { border-bottom: 1px solid var(--line); }
-.cta-link:hover { background: rgba(255,255,255,0.08); border-color: rgba(255,255,255,0.2); }
-.cta-button { cursor: pointer; font: inherit; }
-.cta-danger { border-color: rgba(239, 68, 68, 0.3); color: #fca5a5; }
-.cta-danger:hover { background: rgba(239, 68, 68, 0.1); border-color: rgba(239, 68, 68, 0.5); }
-
-/* Blog */
-.blog-toolbar { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
-.blog-shell { width: 100%; max-width: 1080px; margin: 0 auto; }
-.blog-header { display: flex; justify-content: space-between; gap: 24px; align-items: flex-start; margin-bottom: 32px; border-bottom: 1px solid var(--line); padding-bottom: 32px; }
-.blog-subhead { margin: 12px 0 0; color: var(--muted) !important; font-size: 1.1rem; max-width: 60ch; line-height: 1.6; }
-.blog-header-actions { display: flex; flex-wrap: wrap; gap: 12px; justify-content: flex-end; }
-.tab-btn { border: 1px solid var(--line); background: rgba(255,255,255,0.02); color: var(--muted); padding: 10px 20px; cursor: pointer; font: inherit; border-radius: 10px; font-size: 0.95rem; font-weight: 500; transition: none; box-shadow: 0 2px 8px rgba(0,0,0,0.2); }
-.tab-btn:hover { background: rgba(255,255,255,0.06); color: var(--ink); border-color: rgba(255,255,255,0.15); }
-.tab-btn.is-active { border-color: var(--accent); color: var(--accent-soft); background: var(--glow); box-shadow: 0 4px 12px rgba(234, 179, 8, 0.1); }
-.tab-btn.danger { border-color: rgba(239, 68, 68, 0.3); color: #fca5a5; }
-.blog-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 24px; }
-.blog-card { border: 1px solid var(--line); background: rgba(255,255,255,0.02); padding: 32px; display: flex; flex-direction: column; gap: 16px; border-radius: 16px; transition: all 100ms ease; position: relative; overflow: hidden; }
-.blog-card-spawn { animation: blogCardSpawn 200ms ease-out both; }
-.blog-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 1px; background: linear-gradient(90deg, transparent, rgba(255,255,255,0.1), transparent); opacity: 0; transition: opacity 100ms ease; }
-.blog-card:hover { border-color: rgba(255,255,255,0.15); background: rgba(255,255,255,0.04); transform: translateY(-4px); box-shadow: 0 12px 32px -12px rgba(0,0,0,0.5); }
-.blog-card:hover::before { opacity: 1; }
-.blog-card h3 { margin: 0; font-size: 1.35rem; line-height: 1.3; letter-spacing: -0.01em; }
-.blog-card h3 a { border: none; color: var(--ink); text-decoration: none; }
-.blog-card-summary { margin: 0; color: var(--muted) !important; font-size: 1rem; line-height: 1.6; flex-grow: 1; }
-.blog-card-meta { display: flex; gap: 8px; flex-wrap: wrap; margin-top: auto; padding-top: 16px; border-top: 1px solid rgba(255,255,255,0.05); position: relative; z-index: 2; }
-.meta-pill { border: 1px solid var(--line); padding: 6px 12px; font-size: 0.75rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; font-weight: 600; border-radius: 20px; background: rgba(255,255,255,0.02); backdrop-filter: blur(4px); }
-.meta-link { text-decoration: none; cursor: pointer; transition: all 100ms ease; }
-.meta-link:hover { border-color: var(--accent); color: var(--accent-soft); background: var(--glow); }
-
-/* Dashboard */
-.blog-dash { display: grid; gap: 24px; }
-.dash-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; }
-.dash-card { border: 1px solid var(--line); background: rgba(255,255,255,0.02); padding: 24px; border-radius: 16px; position: relative; overflow: hidden; }
-.dash-card::after { content: ''; position: absolute; top: 0; right: 0; width: 100px; height: 100px; background: radial-gradient(circle at top right, rgba(255,255,255,0.05), transparent 70%); }
-.dash-card p { margin: 0; font-size: 0.85rem; color: var(--muted) !important; text-transform: uppercase; letter-spacing: 0.1em; font-weight: 600; }
-.dash-card h3 { margin: 16px 0 0; font-size: 2.5rem; color: var(--ink); font-weight: 500; letter-spacing: -0.02em; }
-.dash-list { border: 1px solid var(--line); background: rgba(255,255,255,0.02); padding: 32px; border-radius: 16px; }
-.dash-list h3 { margin: 0 0 24px; border-bottom: 1px solid var(--line); padding-bottom: 16px; font-size: 1.2rem; }
-.dash-rows { display: grid; gap: 0; }
-.dash-row { display: flex; justify-content: space-between; gap: 24px; padding: 20px 0; border-bottom: 1px solid var(--line); align-items: center; transition: background-color 100ms ease; }
-.dash-row:hover { background: rgba(255,255,255,0.01); margin: 0 -16px; padding: 20px 16px; border-radius: 8px; border-bottom-color: transparent; }
-.dash-row:last-child { border-bottom: 0; }
-.dash-row-main { min-width: 0; display: grid; gap: 10px; }
-.dash-row-main a { font-weight: 500; font-size: 1.1rem; border: none; color: var(--ink); text-decoration: none; }
-.dash-row-main a:hover { color: var(--accent-soft); }
-.dash-row-meta { display: flex; gap: 8px; flex-wrap: wrap; }
-.dash-actions { display: flex; gap: 12px; flex-wrap: wrap; justify-content: flex-end; opacity: 0.7; transition: opacity 100ms ease; }
-.dash-row:hover .dash-actions { opacity: 1; }
-
-/* Pagination */
-.pagination-row { margin-top: 32px; display: flex; align-items: center; justify-content: space-between; gap: 16px; border-top: 1px solid var(--line); padding-top: 24px; }
-.pagination-btn { min-width: 100px; }
-.pagination-btn[disabled] { opacity: 0.3; cursor: not-allowed; transform: none !important; box-shadow: none !important; }
-.pagination-meta { color: var(--muted); font-size: 0.9rem; letter-spacing: 0.08em; text-transform: uppercase; font-weight: 600; background: rgba(255,255,255,0.03); padding: 6px 16px; border-radius: 20px; border: 1px solid var(--line); }
-.blog-pagination-wrap { grid-column: 1 / -1; }
-
-/* Editor */
-.editor-shell { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 32px; align-items: start; }
-.editor-main { border: 1px solid var(--line); background: rgba(255,255,255,0.02); padding: 32px; display: grid; gap: 24px; border-radius: 16px; box-shadow: 0 8px 32px rgba(0,0,0,0.2); }
-.editor-side { display: grid; gap: 24px; position: sticky; top: 100px; }
-.editor-side-card { border: 1px solid var(--line); background: rgba(255,255,255,0.02); padding: 24px; display: grid; gap: 16px; border-radius: 16px; }
-.editor-side-card h3 { margin: 0; font-size: 1.1rem; border-bottom: 1px solid var(--line); padding-bottom: 12px; }
-.editor-help { margin: 0; color: var(--muted) !important; font-size: 0.85rem; line-height: 1.5; }
-.editor-preview { border: 1px solid var(--line); background: rgba(0,0,0,0.3); padding: 24px; margin-top: 12px; border-radius: 12px; max-height: 600px; overflow-y: auto; }
-.blog-login-card { width: min(440px, 100%); border: 1px solid var(--line); background: rgba(255,255,255,0.02); padding: 32px; display: grid; gap: 24px; border-radius: 16px; margin: 60px auto; box-shadow: 0 12px 40px rgba(0,0,0,0.4); position: relative; overflow: hidden; }
-.blog-login-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px; background: linear-gradient(90deg, transparent, var(--accent), transparent); }
-.blog-form { display: grid; gap: 20px; }
-.blog-form label { display: grid; gap: 10px; color: var(--ink); font-weight: 600; font-size: 0.95rem; letter-spacing: 0.02em; }
-.blog-form input, .blog-form textarea, .blog-form select { background: rgba(0,0,0,0.3); border: 1px solid var(--line); color: var(--ink); padding: 12px 16px; font: inherit; border-radius: 10px; transition: all 100ms ease; box-shadow: inset 0 2px 4px rgba(0,0,0,0.2); }
-.blog-form input:focus, .blog-form textarea:focus, .blog-form select:focus { outline: none; border-color: var(--accent); background: rgba(0,0,0,0.5); box-shadow: inset 0 2px 4px rgba(0,0,0,0.2), 0 0 0 2px var(--glow); }
-.blog-check { display: flex !important; align-items: center; gap: 12px; flex-direction: row !important; cursor: pointer; padding: 12px; border: 1px solid var(--line); border-radius: 10px; background: rgba(255,255,255,0.02); transition: all 100ms ease; }
-.blog-check:hover { background: rgba(255,255,255,0.05); border-color: rgba(255,255,255,0.15); }
-.blog-check input[type="checkbox"] { width: 18px; height: 18px; accent-color: var(--accent); cursor: pointer; }
-.blog-row-actions { display: flex; gap: 12px; position: relative; z-index: 3; }
-.blog-editor-toolbar { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; background: rgba(255,255,255,0.03); padding: 12px; border-radius: 10px; border: 1px solid var(--line); }
-
-/* Blog Detail */
-.blog-post-detail { width: 100%; max-width: 1200px; margin: 0 auto; padding: 0; background: transparent; display: flex; flex-direction: column; min-height: 70vh; position: relative; }
-.blog-post-topbar { display: flex; justify-content: space-between; margin-bottom: 48px; padding: 24px 0; border-bottom: 1px solid var(--line); }
-.blog-post-detail h2 { font-size: clamp(3rem, 8vw, 5rem); line-height: 1.05; margin: 16px 0 32px; color: var(--ink); letter-spacing: -0.04em; font-weight: 800; max-width: 20ch; }
-.blog-post-summary { font-size: 1.5rem; line-height: 1.6; margin: 0 0 48px; color: var(--muted) !important; max-width: 50ch; font-weight: 400; border-left: 4px solid var(--accent); padding-left: 32px; }
-.blog-post-meta { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 64px; padding-bottom: 48px; border-bottom: 1px solid var(--line); }
-.blog-detail-content { font-size: 1.2rem; line-height: 1.85; color: #e4e4e7; max-width: 75ch; width: 100%; }
-.blog-detail-stage { animation: blogDetailLoad 200ms ease-out both; }
-.blog-detail-content p { margin: 0 0 32px; }
-.blog-detail-content h3 { font-size: 2rem; margin: 64px 0 24px; color: var(--ink); letter-spacing: -0.02em; font-weight: 700; }
-.blog-detail-content h4 { font-size: 1.5rem; margin: 40px 0 16px; color: var(--ink); font-weight: 600; }
-.blog-detail-content ul, .blog-detail-content ol { margin: 0 0 32px; padding-left: 32px; }
-.blog-detail-content li { margin-bottom: 12px; }
-.blog-detail-nav { display: flex; justify-content: space-between; margin-top: 80px; padding-top: 48px; border-top: 1px solid var(--line); }
-@keyframes blogDetailLoad {
-  from { opacity: 0; transform: translateY(-10px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-@keyframes blogCardSpawn {
-  from { opacity: 0; transform: translateY(10px) scale(0.99); }
-  to { opacity: 1; transform: translateY(0) scale(1); }
-}
-
-/* Code Blocks */
-.code-shell { margin: 24px 0; border: 1px solid var(--line); background: #0a0a0a; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.4); }
-.code-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px 16px; border-bottom: 1px solid var(--line); background: rgba(255,255,255,0.03); }
-.code-lang { color: var(--muted); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.08em; font-weight: 600; }
-.code-copy-btn { border: 1px solid var(--line); background: rgba(255,255,255,0.05); color: var(--ink); font: inherit; font-size: 0.75rem; font-weight: 500; padding: 4px 12px; border-radius: 6px; cursor: pointer; transition: all 100ms ease; }
-.is-action-pulse { transform: scale(0.98); opacity: 0.82; }
-.code-copy-btn:hover { background: rgba(255,255,255,0.1); }
-.code-body { overflow-x: auto; padding: 12px 0; }
-.code-line { display: grid; grid-template-columns: 48px 1fr; gap: 16px; align-items: baseline; padding: 0 16px; min-height: 1.5rem; }
-.line-no { color: #52525b; text-align: right; user-select: none; font: 400 0.8rem/1.6 ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; }
-.code-line code { display: block; white-space: pre; color: #e4e4e7; font: 400 0.9rem/1.6 ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; }
-
-/* Misc */
-.blog-content img { display: block; margin: 24px 0; border: 1px solid var(--line); border-radius: 12px; }
-.text-center-block { display: block; text-align: center; }
-.blog-inline-form { display: flex; gap: 8px; }
-.blog-inline-form input { flex: 1; }
-.blog-error { color: #fca5a5 !important; background: rgba(239, 68, 68, 0.1); padding: 12px 16px; border-radius: 8px; border: 1px solid rgba(239, 68, 68, 0.2); }
-.blog-success { color: #86efac !important; background: rgba(34, 197, 94, 0.1); padding: 12px 16px; border-radius: 8px; border: 1px solid rgba(34, 197, 94, 0.2); }
-
-/* PDF Export */
-.pdf-export, .pdf-export * { color: #000 !important; }
-.pdf-export { background: #fff !important; border-color: #e5e7eb !important; }
-.pdf-export .resume-block { background: #fff !important; border-color: #e5e7eb !important; box-shadow: none !important; }
-.pdf-export .chip { background: #f3f4f6 !important; border-color: #e5e7eb !important; color: #000 !important; }
-.pdf-export .chip-label { border-color: #000 !important; }
-.pdf-export .cta-link { border-color: #000 !important; color: #000 !important; background: #fff !important; }
-
-/* Footer */
-.footer { border-top: 1px solid var(--line); background: rgba(5, 5, 5, 0.8); margin-top: auto; }
-.footer-inner { padding: 32px 0; display: flex; justify-content: space-between; gap: 24px; align-items: end; }
-.footer-title { font-weight: 600; letter-spacing: 0.02em; font-size: 1.05rem; }
-.footer-sub { color: var(--muted); margin-top: 8px; max-width: 500px; font-size: 0.9rem; line-height: 1.6; }
-.footer-year { color: var(--muted); font-size: 0.85rem; font-weight: 500; }
-
-/* Responsive */
-@media (max-width: 768px) {
-  .kv-grid, .cards { grid-template-columns: 1fr; }
-  .blog-grid, .dash-stats, .editor-shell { grid-template-columns: 1fr; }
-  .blog-header { flex-direction: column; gap: 16px; }
-  .blog-header-actions { justify-content: flex-start; width: 100%; }
-  .blog-post-detail { padding: 0 24px; }
-  .blog-post-summary { padding-left: 16px; font-size: 1.15rem; }
-  .hero-intro-grid, .home-grid { grid-template-columns: 1fr; gap: 32px; }
-  .home-grid .panel:first-child { grid-column: span 1; }
-  .home-anchor-image { width: min(280px, 100%); }
-  .resume-grid { grid-template-columns: 1fr; }
-  .resume-hero { flex-direction: column; gap: 16px; }
-  .resume-hero-cta { min-width: 0; align-items: flex-start; }
-  .footer-inner { flex-direction: column; align-items: flex-start; gap: 16px; }
-  .panel { padding: 24px; }
-}
-`;

@@ -19,6 +19,7 @@ const API_BLOGS_PUBLISH_SUFFIX = "/publish";
 const API_BLOGS_PUBLIC_PATH = "/api/blogs/public";
 const API_BLOGS_DASHBOARD_PATH = "/api/blogs/dashboard";
 const API_BLOGS_ADMIN_LOGIN_PATH = "/api/blogs/admin/login";
+const API_BLOGS_ADMIN_LOGOUT_PATH = "/api/blogs/admin/logout";
 const API_BLOG_CATEGORIES_PATH = "/api/blogs/categories";
 const API_BLOG_TAGS_PATH = "/api/blogs/tags";
 const API_BLOG_UPLOAD_IMAGE_PATH = "/api/blogs/upload-image";
@@ -29,7 +30,6 @@ const METHOD_PUT = "PUT";
 const METHOD_PATCH = "PATCH";
 const METHOD_DELETE = "DELETE";
 const HEADER_CONTENT_TYPE = "Content-Type";
-const HEADER_ADMIN_TOKEN = "x-admin-token";
 const CONTENT_TYPE_JSON = "application/json";
 const STORAGE_BLOG_ADMIN_TOKEN = "blog_admin_token";
 
@@ -47,7 +47,8 @@ export function getCurrentYear() {
  * @returns {Promise<Result<T>>}
  */
 export async function apiRequest(url, options) {
-  const responseRes = await fromPromise(fetch(url, options));
+  const requestOptions = { credentials: "include", ...(options || {}) };
+  const responseRes = await fromPromise(fetch(url, requestOptions));
   if (responseRes.err) {
     return { value: null, err: responseRes.err };
   }
@@ -103,7 +104,7 @@ export async function fetchMessageOfDay() {
 }
 
 /**
- * @returns {Promise<Result<Array<{id: number, title: string, slug: string, summary: string, content: string, published: number, created_at: string, updated_at: string}>>>}
+ * @returns {Promise<Result<Array<{id: number, title: string, slug: string, summary: string, content: string, variant: string, published: number, created_at: string, updated_at: string}>>>}
  */
 export async function listBlogs() {
   const res = await apiRequestCached(API_BLOGS_PATH, undefined, BLOG_CACHE_TTL_MS);
@@ -115,7 +116,7 @@ export async function listBlogs() {
 
 /**
  * @param {number} id
- * @returns {Promise<Result<{id: number, title: string, slug: string, summary: string, content: string, published: number, created_at: string, updated_at: string}>>}
+ * @returns {Promise<Result<{id: number, title: string, slug: string, summary: string, content: string, variant: string, published: number, created_at: string, updated_at: string}>>}
  */
 export async function getBlog(id) {
   const authRes = getBlogAdminToken();
@@ -125,9 +126,7 @@ export async function getBlog(id) {
   if (!authRes.value) {
     return { value: null, err: new Error("Admin login required") };
   }
-  const res = await apiRequestCached(`${API_BLOGS_PATH}/${id}`, {
-    headers: { [HEADER_ADMIN_TOKEN]: authRes.value }
-  }, BLOG_CACHE_TTL_MS);
+  const res = await apiRequestCached(`${API_BLOGS_PATH}/${id}`, undefined, BLOG_CACHE_TTL_MS);
   if (res.err) {
     return { value: null, err: res.err };
   }
@@ -136,7 +135,7 @@ export async function getBlog(id) {
 
 /**
  * @param {number} id
- * @returns {Promise<Result<{id: number, title: string, slug: string, summary: string, content: string, published: number, created_at: string, updated_at: string, category?: {id: number, name: string} | null, tags?: Array<{id: number, name: string}>}>>}
+ * @returns {Promise<Result<{id: number, title: string, slug: string, summary: string, content: string, variant: string, published: number, created_at: string, updated_at: string, category?: {id: number, name: string} | null, tags?: Array<{id: number, name: string}>}>>}
  */
 export async function getPublicBlog(id) {
   const res = await apiRequestCached(`${API_BLOGS_PUBLIC_PATH}/${id}`, undefined, BLOG_CACHE_TTL_MS);
@@ -147,7 +146,7 @@ export async function getPublicBlog(id) {
 }
 
 /**
- * @param {{title: string, summary: string, content: string, published: number}} payload
+ * @param {{title: string, summary: string, content: string, variant: string, published: number}} payload
  * @returns {Promise<Result<{created: boolean, id: number}>>}
  */
 export async function createBlog(payload) {
@@ -161,7 +160,7 @@ export async function createBlog(payload) {
 
   const res = await apiRequest(API_BLOGS_PATH, {
     method: METHOD_POST,
-    headers: { [HEADER_CONTENT_TYPE]: CONTENT_TYPE_JSON, [HEADER_ADMIN_TOKEN]: authRes.value },
+    headers: { [HEADER_CONTENT_TYPE]: CONTENT_TYPE_JSON },
     body: JSON.stringify(payload)
   });
   if (res.err) {
@@ -173,7 +172,7 @@ export async function createBlog(payload) {
 
 /**
  * @param {number} id
- * @param {{title: string, summary: string, content: string, published: number}} payload
+ * @param {{title: string, summary: string, content: string, variant: string, published: number}} payload
  * @returns {Promise<Result<{updated: boolean, id: number}>>}
  */
 export async function updateBlog(id, payload) {
@@ -187,7 +186,7 @@ export async function updateBlog(id, payload) {
 
   const res = await apiRequest(`${API_BLOGS_PATH}/${id}`, {
     method: METHOD_PUT,
-    headers: { [HEADER_CONTENT_TYPE]: CONTENT_TYPE_JSON, [HEADER_ADMIN_TOKEN]: authRes.value },
+    headers: { [HEADER_CONTENT_TYPE]: CONTENT_TYPE_JSON },
     body: JSON.stringify(payload)
   });
   if (res.err) {
@@ -213,7 +212,7 @@ export async function setBlogPublished(id, published) {
 
   const res = await apiRequest(`${API_BLOGS_PATH}/${id}${API_BLOGS_PUBLISH_SUFFIX}`, {
     method: METHOD_PATCH,
-    headers: { [HEADER_CONTENT_TYPE]: CONTENT_TYPE_JSON, [HEADER_ADMIN_TOKEN]: authRes.value },
+    headers: { [HEADER_CONTENT_TYPE]: CONTENT_TYPE_JSON },
     body: JSON.stringify({ published: published ? 1 : 0 })
   });
   if (res.err) {
@@ -237,8 +236,7 @@ export async function deleteBlog(id) {
   }
 
   const res = await apiRequest(`${API_BLOGS_PATH}/${id}`, {
-    method: METHOD_DELETE,
-    headers: { [HEADER_ADMIN_TOKEN]: authRes.value }
+    method: METHOD_DELETE
   });
   if (res.err) {
     return { value: null, err: res.err };
@@ -259,9 +257,7 @@ export async function getBlogsDashboard() {
     return { value: null, err: new Error("Admin login required") };
   }
 
-  const res = await apiRequestCached(API_BLOGS_DASHBOARD_PATH, {
-    headers: { [HEADER_ADMIN_TOKEN]: authRes.value }
-  }, BLOG_CACHE_TTL_MS);
+  const res = await apiRequestCached(API_BLOGS_DASHBOARD_PATH, undefined, BLOG_CACHE_TTL_MS);
   if (res.err) {
     return { value: null, err: res.err };
   }
@@ -304,7 +300,7 @@ export async function createBlogCategory(name) {
   }
   const res = await apiRequest(API_BLOG_CATEGORIES_PATH, {
     method: METHOD_POST,
-    headers: { [HEADER_CONTENT_TYPE]: CONTENT_TYPE_JSON, [HEADER_ADMIN_TOKEN]: authRes.value },
+    headers: { [HEADER_CONTENT_TYPE]: CONTENT_TYPE_JSON },
     body: JSON.stringify({ name })
   });
   if (res.err) {
@@ -328,7 +324,7 @@ export async function createBlogTag(name) {
   }
   const res = await apiRequest(API_BLOG_TAGS_PATH, {
     method: METHOD_POST,
-    headers: { [HEADER_CONTENT_TYPE]: CONTENT_TYPE_JSON, [HEADER_ADMIN_TOKEN]: authRes.value },
+    headers: { [HEADER_CONTENT_TYPE]: CONTENT_TYPE_JSON },
     body: JSON.stringify({ name })
   });
   if (res.err) {
@@ -340,7 +336,7 @@ export async function createBlogTag(name) {
 
 /**
  * @param {string} password
- * @returns {Promise<Result<{token: string, expiresAt: number, user: string}>>}
+ * @returns {Promise<Result<{expiresAt: number, user: string}>>}
  */
 export async function loginBlogAdmin(password) {
   const res = await apiRequest(API_BLOGS_ADMIN_LOGIN_PATH, {
@@ -352,20 +348,19 @@ export async function loginBlogAdmin(password) {
     return { value: null, err: res.err };
   }
 
-  const token = typeof res.value?.token === "string" ? res.value.token : "";
-  if (!token) {
-    return { value: null, err: new Error("Login response missing token") };
-  }
-
-  localStorage.setItem(STORAGE_BLOG_ADMIN_TOKEN, token);
+  localStorage.setItem(STORAGE_BLOG_ADMIN_TOKEN, "1");
   invalidateApiCache("/api/blogs");
   return { value: res.value, err: null };
 }
 
 /**
- * @returns {Result<boolean>}
+ * @returns {Promise<Result<boolean>>}
  */
-export function logoutBlogAdmin() {
+export async function logoutBlogAdmin() {
+  const res = await apiRequest(API_BLOGS_ADMIN_LOGOUT_PATH, { method: METHOD_POST });
+  if (res.err) {
+    return { value: null, err: res.err };
+  }
   localStorage.removeItem(STORAGE_BLOG_ADMIN_TOKEN);
   invalidateApiCache("/api/blogs");
   return { value: true, err: null };
@@ -439,7 +434,6 @@ export async function uploadBlogImage(file) {
   formData.append("image", resizedRes.value);
   const res = await apiRequest(API_BLOG_UPLOAD_IMAGE_PATH, {
     method: METHOD_POST,
-    headers: { [HEADER_ADMIN_TOKEN]: authRes.value },
     body: formData
   });
   if (res.err) {

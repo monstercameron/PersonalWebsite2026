@@ -8,6 +8,7 @@ const ERR_PROMPT_REQUIRED = "Prompt is required";
 const ERR_USER_PROMPT_REQUIRED = "User prompt is required";
 const ERR_BLOG_TITLE_REQUIRED = "Blog title is required";
 const ERR_BLOG_CONTENT_REQUIRED = "Blog content is required";
+const ERR_BLOG_VARIANT_INVALID = "Blog variant must be 'blog' or 'vlog'";
 const ERR_BLOG_PUBLISHED_REQUIRED = "Published flag is required";
 const ERR_BLOG_PUBLISHED_INVALID = "Published flag must be a boolean, 0, or 1";
 const ERR_BLOG_ID_REQUIRED = "Blog id is required";
@@ -75,7 +76,7 @@ export function validateBlogId(rawId) {
 
 /**
  * @param {unknown} body
- * @returns {Result<{title: string, summary: string, content: string, published: number}>}
+ * @returns {Result<{title: string, summary: string, content: string, published: number, variant: string}>}
  */
 export function validateBlogBody(body) {
   if (!body || typeof body !== "object") {
@@ -86,6 +87,7 @@ export function validateBlogBody(body) {
   const summary = typeof body.summary === "string" ? body.summary.trim() : "";
   const content = typeof body.content === "string" ? body.content.trim() : "";
   const published = body.published ? 1 : 0;
+  const variantRaw = typeof body.variant === "string" ? body.variant.trim().toLowerCase() : "blog";
   const categoryId = body.categoryId === null || body.categoryId === undefined || body.categoryId === "" ? null : Number(body.categoryId);
   const tags = Array.isArray(body.tags) ? body.tags.filter((tag) => typeof tag === "string").map((tag) => tag.trim()).filter(Boolean) : [];
 
@@ -96,9 +98,12 @@ export function validateBlogBody(body) {
   if (!content) {
     return { value: null, err: new Error(ERR_BLOG_CONTENT_REQUIRED) };
   }
+  if (variantRaw !== "blog" && variantRaw !== "vlog") {
+    return { value: null, err: new Error(ERR_BLOG_VARIANT_INVALID) };
+  }
 
   return {
-    value: { title, summary, content, published, categoryId: Number.isInteger(categoryId) && categoryId > 0 ? categoryId : null, tags },
+    value: { title, summary, content, published, variant: variantRaw, categoryId: Number.isInteger(categoryId) && categoryId > 0 ? categoryId : null, tags },
     err: null
   };
 }
