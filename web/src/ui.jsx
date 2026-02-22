@@ -134,6 +134,9 @@ export function App() {
       window.alert("Could not generate PDF. Please try again.");
     }
   };
+  const handleScrollToTop = () => {
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
 
   return (
     <div className="site-shell">
@@ -178,6 +181,7 @@ export function App() {
               <a className="footer-link" href="https://github.com/monstercameron" target="_blank" rel="noreferrer noopener">GitHub</a>
               <a className="footer-link" href="https://www.linkedin.com/in/earl-cameron/" target="_blank" rel="noreferrer noopener">LinkedIn</a>
               <a className="footer-link" href="https://www.youtube.com/@EarlCameron007" target="_blank" rel="noreferrer noopener">YouTube</a>
+              <button className="footer-top-btn" onClick={handleScrollToTop} type="button">Top</button>
             </div>
           </div>
           <div className="footer-year">{yearLabelRes.value}</div>
@@ -390,7 +394,7 @@ function ResumePage({ onResumeDownload }) {
           </article>
         </section>
 
-        <section className="resume-block">
+        <section className="resume-block resume-projects-block">
           <h3>Notable Projects</h3>
           <ul className="list">
             <li><a href="https://github.com/monstercameron/GoWebComponents" target="_blank" rel="noreferrer noopener">GoWebComponents</a>: Go-powered component architecture focused on reusable frontend primitives.</li>
@@ -401,7 +405,7 @@ function ResumePage({ onResumeDownload }) {
           </ul>
         </section>
 
-        <section className="resume-block">
+        <section className="resume-block resume-interests-block">
           <h3>Community & Interests</h3>
           <ul className="list">
             <li>Building practical software tools with strong UX and measurable utility.</li>
