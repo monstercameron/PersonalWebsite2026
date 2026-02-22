@@ -7,4 +7,6 @@ api/data/*.db
 *.log
 .devserver.pid
 logs/
+/.tmp_*/
+/data/
 

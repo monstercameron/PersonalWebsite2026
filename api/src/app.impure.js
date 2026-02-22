@@ -4,6 +4,7 @@ import {
   appendFileSync,
   existsSync,
   mkdirSync,
+  readFileSync,
   renameSync,
   statSync,
   writeFileSync
@@ -27,6 +28,7 @@ const CACHE_KEY_PROMPTS_LATEST = "prompts:list:latest";
 const CACHE_PREFIX_PROMPTS = "prompts:";
 const CACHE_PREFIX_AI_REPLY = "ai:reply:";
 const CACHE_PREFIX_MOTD = "motd:";
+const CACHE_PREFIX_HOME_CONTENT = "home:content:";
 const CACHE_PREFIX_BLOGS = "blogs:";
 const CACHE_PREFIX_ANIME_SEARCH = "anime:search:";
 const CACHE_PREFIX_ANIME_DAILY_QUESTION = "anime:question:day:";
@@ -219,6 +221,36 @@ const defaultPromptsCacheTtlMs = 15000;
 const defaultAiReplyCacheTtlMs = 300000;
 const motdCacheTtlMs = 86_400_000;
 const MOTD_PROMPT_PREFIX = "Generate one short inspiring quote for software engineers. Keep it under 22 words. No markdown. No attribution line. Date key:";
+const HOME_CONTENT_CONTEXT_PATH = "../content/context.md";
+const HOME_CONTENT_CACHE_TTL_MS = 86_400_000;
+const HOME_CONTENT_CACHE_HEADER_SEED = "home-content";
+const HOME_CONTENT_PROMPT_PREFIX = "Using the provided technical profile context, generate polished homepage copy for a systems-minded senior software engineer. Keep it concise, concrete, and high-signal. Return JSON only.";
+const HOME_CONTENT_WILDCARDS = [
+  "systems-level clarity",
+  "execution under constraints",
+  "design-to-build realism",
+  "cross-domain architecture",
+  "pragmatic tradeoff discipline",
+  "observability-first operations",
+  "modular upgrade paths",
+  "manufacturable outcomes",
+  "latency-aware runtime design",
+  "throughput-minded engineering",
+  "reproducible delivery workflows",
+  "interface-first planning",
+  "failure-mode visibility",
+  "tooling leverage",
+  "constraint-first discovery",
+  "operator-friendly systems",
+  "clean deployment boundaries",
+  "real-world maintainability",
+  "iterative proof loops",
+  "hardware/software integration",
+  "cost-aware decision making",
+  "clear ownership seams",
+  "decision-ready communication",
+  "team-scale execution"
+];
 const ANIME_DAILY_QUESTION_PROMPT_PREFIX = "Generate one fun, concise anime community question for engagement.";
 const ANIME_DAILY_QUESTION_PROMPT_SUFFIX = "Return one line only, no numbering, no markdown, no emoji.";
 const SAMPLE_BLOG_POSTS = [
@@ -319,6 +351,8 @@ const openai = new OpenAI({ apiKey: process.env[OPENAI_KEY_ENV] });
 const memoryCache = new Map();
 const animeSearchStaleCache = new Map();
 const animeSearchInflight = new Map();
+const homeContentContextRes = loadHomeContentContext();
+const homeContentContext = homeContentContextRes.err ? "" : homeContentContextRes.value;
 const sampleSeedRes = ensureSampleBlogs();
 if (sampleSeedRes.err) {
   console.error("[seed_samples_failed]", sampleSeedRes.err.message);
@@ -461,6 +495,64 @@ export async function getMessageOfDay(forceRefresh = false) {
 }
 
 /**
+ * @param {boolean} [forceRefresh]
+ * @returns {Promise<Result<{
+ * heroTitle: string,
+ * heroBody: string,
+ * todayLens: string,
+ * heroCaption: string,
+ * metrics: string[],
+ * operatingHeading: string,
+ * operatingItems: Array<{key: string, val: string}>,
+ * beyondHeading: string,
+ * beyondItems: Array<{key: string, val: string}>,
+ * youtubeLead: string,
+ * source: string
+ * }>>}
+ */
+export async function getHomePageContent(forceRefresh = false) {
+  const dayKey = new Date().toISOString().slice(0, 10);
+  const cacheKey = `${CACHE_PREFIX_HOME_CONTENT}${dayKey}`;
+  if (!forceRefresh) {
+    const cacheRes = readCache(cacheKey);
+    if (cacheRes.err) {
+      return { value: null, err: cacheRes.err };
+    }
+    if (cacheRes.value) {
+      const logRes = logEvent(LOG_LEVEL_INFO, LOG_EVENT_CACHE_HIT, { cacheKey });
+      if (logRes.err) {
+        return { value: null, err: logRes.err };
+      }
+      return { value: cacheRes.value, err: null };
+    }
+  }
+
+  const wildcardsRes = pickHomeWildcardsForDay(dayKey, 4);
+  if (wildcardsRes.err) {
+    return { value: null, err: wildcardsRes.err };
+  }
+  const prompt = buildHomeContentPrompt(dayKey, wildcardsRes.value);
+  const replyRes = await generateReply(prompt);
+  const parsedRes = replyRes.err
+    ? { value: null, err: replyRes.err }
+    : await parseHomeContentPayload(replyRes.value);
+
+  const fallbackRes = buildFallbackHomeContent(dayKey, wildcardsRes.value);
+  if (fallbackRes.err) {
+    return { value: null, err: fallbackRes.err };
+  }
+  const payload = parsedRes.err || !parsedRes.value
+    ? fallbackRes.value
+    : { ...parsedRes.value, source: "ai" };
+
+  const writeRes = writeCache(cacheKey, payload, HOME_CONTENT_CACHE_TTL_MS);
+  if (writeRes.err) {
+    return { value: null, err: writeRes.err };
+  }
+  return { value: payload, err: null };
+}
+
+/**
  * @returns {Result<Array<{id: number, prompt: string, reply: string, created_at: string}>>}
  */
 export function listPrompts() {
@@ -582,11 +674,11 @@ export function getBlogByIdCached(id, ttlMs = defaultPromptsCacheTtlMs) {
 
 /**
  * @param {string} title
- * @returns {string}
+ * @returns {Result<string>}
  */
 function toSlug(title) {
   const core = String(title).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
-  return core || `post-${Date.now()}`;
+  return { value: core || `post-${Date.now()}`, err: null };
 }
 
 /**
@@ -595,7 +687,11 @@ function toSlug(title) {
  */
 export function createBlog(payload) {
   const now = new Date().toISOString();
-  const slug = `${toSlug(payload.title)}-${Date.now()}`;
+  const slugRes = toSlug(payload.title);
+  if (slugRes.err) {
+    return { value: null, err: slugRes.err };
+  }
+  const slug = `${slugRes.value}-${Date.now()}`;
   const stmt = db.prepare(SQL_INSERT_BLOG);
   const info = stmt.run(payload.title, slug, payload.summary, payload.content, payload.variant || BLOG_VARIANT_DEFAULT, payload.published, now, now);
   const blogId = Number(info.lastInsertRowid);
@@ -617,7 +713,11 @@ export function createBlog(payload) {
  */
 export function updateBlog(id, payload) {
   const now = new Date().toISOString();
-  const slug = `${toSlug(payload.title)}-${id}`;
+  const slugRes = toSlug(payload.title);
+  if (slugRes.err) {
+    return { value: null, err: slugRes.err };
+  }
+  const slug = `${slugRes.value}-${id}`;
   const stmt = db.prepare(SQL_UPDATE_BLOG);
   const info = stmt.run(payload.title, slug, payload.summary, payload.content, payload.variant || BLOG_VARIANT_DEFAULT, payload.published, now, id);
   if (info.changes === 0) {
@@ -1233,6 +1333,228 @@ function normalizeAnimeQuestionText(value) {
 }
 
 /**
+ * @returns {string}
+ */
+function loadHomeContentContext() {
+  const firstPath = resolve(process.cwd(), HOME_CONTENT_CONTEXT_PATH);
+  const secondPath = resolve(process.cwd(), "context.md");
+  if (existsSync(firstPath)) {
+    return { value: String(readFileSync(firstPath, "utf8") || ""), err: null };
+  }
+  if (existsSync(secondPath)) {
+    return { value: String(readFileSync(secondPath, "utf8") || ""), err: null };
+  }
+  return { value: "", err: null };
+}
+
+/**
+ * @param {string} dayKey
+ * @param {number} count
+ * @returns {Result<string[]>}
+ */
+function pickHomeWildcardsForDay(dayKey, count) {
+  const picked = [];
+  const used = new Set();
+  let cursor = 0;
+  while (picked.length < count && cursor < HOME_CONTENT_WILDCARDS.length * 3) {
+    const hashRes = hashText(`${HOME_CONTENT_CACHE_HEADER_SEED}:${dayKey}:${cursor}`);
+    if (hashRes.err) {
+      return { value: null, err: hashRes.err };
+    }
+    const index = Math.abs(hashRes.value) % HOME_CONTENT_WILDCARDS.length;
+    const item = HOME_CONTENT_WILDCARDS[index];
+    if (!used.has(item)) {
+      used.add(item);
+      picked.push(item);
+    }
+    cursor += 1;
+  }
+  return { value: picked, err: null };
+}
+
+/**
+ * @param {string} dayKey
+ * @param {string[]} wildcards
+ * @returns {string}
+ */
+function buildHomeContentPrompt(dayKey, wildcards) {
+  const wildcardText = wildcards.join(", ");
+  const contextText = homeContentContext || "No additional profile context available.";
+  return `${HOME_CONTENT_PROMPT_PREFIX}
+Date: ${dayKey}
+Wildcard phrases to weave naturally: ${wildcardText}
+Context:
+${contextText}
+
+Return strict JSON with this exact schema:
+{
+  "heroTitle": "string <= 96 chars",
+  "heroBody": "string <= 220 chars",
+  "todayLens": "string <= 120 chars",
+  "heroCaption": "string <= 96 chars",
+  "metrics": ["string", "string", "string", "string"],
+  "operatingHeading": "string <= 90 chars",
+  "operatingItems": [{"key":"string <= 40 chars","val":"string <= 160 chars"},{"key":"string <= 40 chars","val":"string <= 160 chars"},{"key":"string <= 40 chars","val":"string <= 160 chars"},{"key":"string <= 40 chars","val":"string <= 160 chars"}],
+  "beyondHeading": "string <= 90 chars",
+  "beyondItems": [{"key":"string <= 40 chars","val":"string <= 160 chars"},{"key":"string <= 40 chars","val":"string <= 160 chars"},{"key":"string <= 40 chars","val":"string <= 160 chars"},{"key":"string <= 40 chars","val":"string <= 160 chars"}],
+  "youtubeLead": "string <= 120 chars"
+}
+No markdown, no code fences, JSON only.`;
+}
+
+/**
+ * @param {string} text
+ * @returns {Promise<Result<{
+ * heroTitle: string,
+ * heroBody: string,
+ * todayLens: string,
+ * heroCaption: string,
+ * metrics: string[],
+ * operatingHeading: string,
+ * operatingItems: Array<{key: string, val: string}>,
+ * beyondHeading: string,
+ * beyondItems: Array<{key: string, val: string}>,
+ * youtubeLead: string
+ * }>>}
+ */
+async function parseHomeContentPayload(text) {
+  const normalized = String(text || "").trim();
+  if (!normalized) {
+    return { value: null, err: new Error(ERR_EMPTY_OUTPUT) };
+  }
+  const stripped = stripJsonFence(normalized);
+  if (stripped.err) {
+    return { value: null, err: stripped.err };
+  }
+  const firstBrace = stripped.value.indexOf("{");
+  const lastBrace = stripped.value.lastIndexOf("}");
+  if (firstBrace < 0 || lastBrace <= firstBrace) {
+    return { value: null, err: new Error(ERR_EMPTY_OUTPUT) };
+  }
+  const jsonText = stripped.value.slice(firstBrace, lastBrace + 1);
+  const parsedRes = await fromPromise(Promise.resolve().then(() => JSON.parse(jsonText)));
+  if (parsedRes.err) {
+    return { value: null, err: parsedRes.err };
+  }
+  const data = parsedRes.value || {};
+  const metrics = Array.isArray(data.metrics) ? data.metrics.slice(0, 4).map((x) => sanitizeHomeText(x, 48).value || "") : [];
+  const operatingItems = Array.isArray(data.operatingItems)
+    ? data.operatingItems.slice(0, 4).map((item) => ({ key: sanitizeHomeText(item?.key, 40).value || "", val: sanitizeHomeText(item?.val, 160).value || "" }))
+    : [];
+  const beyondItems = Array.isArray(data.beyondItems)
+    ? data.beyondItems.slice(0, 4).map((item) => ({ key: sanitizeHomeText(item?.key, 40).value || "", val: sanitizeHomeText(item?.val, 160).value || "" }))
+    : [];
+  if (metrics.length < 4 || operatingItems.length < 4 || beyondItems.length < 4) {
+    return { value: null, err: new Error(ERR_EMPTY_OUTPUT) };
+  }
+  return {
+    value: {
+      heroTitle: sanitizeHomeText(data.heroTitle, 96).value || "",
+      heroBody: sanitizeHomeText(data.heroBody, 220).value || "",
+      todayLens: sanitizeHomeText(data.todayLens, 120).value || "",
+      heroCaption: sanitizeHomeText(data.heroCaption, 96).value || "",
+      metrics,
+      operatingHeading: sanitizeHomeText(data.operatingHeading, 90).value || "",
+      operatingItems,
+      beyondHeading: sanitizeHomeText(data.beyondHeading, 90).value || "",
+      beyondItems,
+      youtubeLead: sanitizeHomeText(data.youtubeLead, 120).value || ""
+    },
+    err: null
+  };
+}
+
+/**
+ * @param {string} text
+ * @returns {string}
+ */
+function stripJsonFence(text) {
+  const value = text
+    .replace(/^```json\s*/i, "")
+    .replace(/^```\s*/i, "")
+    .replace(/\s*```$/i, "")
+    .trim();
+  return { value, err: null };
+}
+
+/**
+ * @param {unknown} value
+ * @param {number} maxLength
+ * @returns {string}
+ */
+function sanitizeHomeText(value, maxLength) {
+  const normalized = String(value || "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, Math.max(1, maxLength));
+  const lastSpace = normalized.lastIndexOf(" ");
+  if (normalized.length >= maxLength && lastSpace > 20) {
+    return { value: normalized.slice(0, lastSpace).trim(), err: null };
+  }
+  return { value: normalized, err: null };
+}
+
+/**
+ * @param {string} dayKey
+ * @param {string[]} wildcards
+ * @returns {{
+ * heroTitle: string,
+ * heroBody: string,
+ * todayLens: string,
+ * heroCaption: string,
+ * metrics: string[],
+ * operatingHeading: string,
+ * operatingItems: Array<{key: string, val: string}>,
+ * beyondHeading: string,
+ * beyondItems: Array<{key: string, val: string}>,
+ * youtubeLead: string,
+ * source: string
+ * }}
+ */
+function buildFallbackHomeContent(dayKey, wildcards) {
+  const w1 = wildcards[0] || "systems-level clarity";
+  const w2 = wildcards[1] || "execution under constraints";
+  const w3 = wildcards[2] || "cross-domain architecture";
+  const w4 = wildcards[3] || "pragmatic tradeoff discipline";
+  return { value: {
+    heroTitle: `Systems thinker. Builder. ${w2}.`,
+    heroBody: `I drive from abstract ideas to real outcomes through ${w1}, ${w3}, and practical operating constraints.`,
+    todayLens: `Today's lens (${dayKey}): ${w4}.`,
+    heroCaption: `Daily focus: ${w1}.`,
+    metrics: ["Cross-Domain Architecture", "AI + Runtime Pragmatism", "Hardware/Software Integration", "Production Reliability"],
+    operatingHeading: `Operating Principles (${w2})`,
+    operatingItems: [
+      { key: "Design-to-Build", val: `Push from concept to artifact with ${w1} and clear maintenance boundaries.` },
+      { key: "Tradeoff-Driven", val: `Prioritize value using ${w4} across performance, cost, and delivery.` },
+      { key: "Constraint-First", val: "Start from hard limits, then choose architecture that can actually ship." },
+      { key: "Team Signal", val: "Use direct communication, explicit assumptions, and decision-ready outputs." }
+    ],
+    beyondHeading: `Engineering & Exploration (${w3})`,
+    beyondItems: [
+      { key: "Maker Systems", val: "Mechanical packaging, electrification thinking, and real assembly constraints." },
+      { key: "Compute + AI", val: "Model/runtime practicality, local inference feasibility, and cost-aware deployment." },
+      { key: "Operations", val: "Instrumentation, reproducibility, and stable fallback behavior under pressure." },
+      { key: "Interests", val: "Tennis, logistics-heavy travel planning, and dashboards for real-world systems." }
+    ],
+    youtubeLead: `Current clip: practical execution patterns with ${w2}.`,
+    source: "fallback"
+  }, err: null };
+}
+
+/**
+ * @param {string} text
+ * @returns {number}
+ */
+function hashText(text) {
+  let hash = 2166136261;
+  for (let index = 0; index < text.length; index += 1) {
+    hash ^= text.charCodeAt(index);
+    hash += (hash << 1) + (hash << 4) + (hash << 7) + (hash << 8) + (hash << 24);
+  }
+  return { value: hash >>> 0, err: null };
+}
+
+/**
  * Adds missing sample posts once by title match so repeated restarts do not duplicate data.
  * @returns {Result<boolean>}
  */
@@ -1244,10 +1566,18 @@ function ensureSampleBlogs() {
     if (existingTitles.has(sample.title)) {
       continue;
     }
-    const slug = `${toSlug(sample.title)}${SAMPLE_POST_SUFFIX}`;
+    const slugRes = toSlug(sample.title);
+    if (slugRes.err) {
+      return { value: null, err: slugRes.err };
+    }
+    const slug = `${slugRes.value}${SAMPLE_POST_SUFFIX}`;
     const info = db.prepare(SQL_INSERT_BLOG).run(sample.title, slug, sample.summary, sample.content, BLOG_VARIANT_DEFAULT, SAMPLE_POST_PUBLISHED, now, now);
     const blogId = Number(info.lastInsertRowid);
-    const relationRes = upsertBlogRelations(blogId, ensureCategoryId(sample.category), sample.tags);
+    const categoryIdRes = ensureCategoryId(sample.category);
+    if (categoryIdRes.err) {
+      return { value: null, err: categoryIdRes.err };
+    }
+    const relationRes = upsertBlogRelations(blogId, categoryIdRes.value, sample.tags);
     if (relationRes.err) {
       return { value: null, err: relationRes.err };
     }
@@ -1276,14 +1606,14 @@ function escapeXml(value) {
 function ensureCategoryId(name) {
   const normalized = String(name || "").trim().toLowerCase();
   if (!normalized) {
-    return 0;
+    return { value: 0, err: null };
   }
   const row = db.prepare("SELECT id FROM blog_categories WHERE name = ?").get(normalized);
   if (row && row.id) {
-    return Number(row.id);
+    return { value: Number(row.id), err: null };
   }
   const created = db.prepare(SQL_INSERT_CATEGORY).run(normalized, new Date().toISOString());
-  return Number(created.lastInsertRowid);
+  return { value: Number(created.lastInsertRowid), err: null };
 }
 
 /**

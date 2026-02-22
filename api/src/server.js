@@ -25,6 +25,7 @@ import {
   fromPromise,
   getBlogByIdCached,
   getBlogDashboardCached,
+  getHomePageContent,
   getMessageOfDay,
   generateReplyCached,
   listBlogsCached,
@@ -65,6 +66,7 @@ const PATH_API_HEALTH = "/api/health";
 const PATH_API_PROMPTS = "/api/prompts";
 const PATH_API_AI = "/api/ai";
 const PATH_API_MOTD = "/api/message-of-day";
+const PATH_API_HOME_CONTENT = "/api/home-content";
 const PATH_API_BLOGS = "/api/blogs";
 const PATH_API_BLOGS_ID = "/api/blogs/:id";
 const PATH_API_BLOGS_PUBLISH = "/api/blogs/:id/publish";
@@ -244,6 +246,18 @@ app.get(PATH_API_MOTD, async (c) => {
   return c.json({ quote: motdRes.value });
 });
 
+app.get(PATH_API_HOME_CONTENT, async (c) => {
+  const refreshRaw = String(c.req.query(QUERY_REFRESH) || "").trim().toLowerCase();
+  const forceRefresh = refreshRaw === "1" || refreshRaw === "true" || refreshRaw === "yes";
+  const contentRes = await getHomePageContent(forceRefresh);
+  if (contentRes.err) {
+    const publicErrRes = toPublicError(contentRes.err);
+    return c.json(publicErrRes.value, STATUS_SERVICE_UNAVAILABLE);
+  }
+  c.header(CACHE_CONTROL, forceRefresh ? CACHE_NO_STORE : MOTD_CACHE_HEADER);
+  return c.json({ content: contentRes.value });
+});
+
 app.get(PATH_API_BLOGS, (c) => {
   const blogsRes = listBlogsCached(BLOG_CACHE_TTL_MS);
   if (blogsRes.err) {
@@ -292,20 +306,35 @@ app.post(PATH_API_BLOGS_ADMIN_LOGIN, async (c) => {
     return c.json({ message: ERR_ADMIN_PASSWORD_INVALID, code: "UNAUTHORIZED" }, STATUS_UNAUTHORIZED);
   }
 
-  const ttlMs = getAdminSessionTtlMs();
+  const ttlRes = getAdminSessionTtlMs();
+  if (ttlRes.err) {
+    const publicErrRes = toPublicError(ttlRes.err);
+    return c.json(publicErrRes.value, STATUS_SERVER_ERROR);
+  }
+  const ttlMs = ttlRes.value;
   const tokenRes = createAdminJwt(process.env[ENV_BLOG_ADMIN_USER] || DEFAULT_BLOG_ADMIN_USER, ttlMs);
   if (tokenRes.err) {
     const publicErrRes = toPublicError(tokenRes.err);
     return c.json(publicErrRes.value, STATUS_SERVER_ERROR);
   }
   const expiresAt = Date.now() + ttlMs;
-  c.header(HEADER_SET_COOKIE, buildAdminCookie(tokenRes.value, ttlMs));
+  const cookieRes = buildAdminCookie(tokenRes.value, ttlMs);
+  if (cookieRes.err) {
+    const publicErrRes = toPublicError(cookieRes.err);
+    return c.json(publicErrRes.value, STATUS_SERVER_ERROR);
+  }
+  c.header(HEADER_SET_COOKIE, cookieRes.value);
   c.header(CACHE_CONTROL, CACHE_NO_STORE);
   return c.json({ expiresAt, user: process.env[ENV_BLOG_ADMIN_USER] || DEFAULT_BLOG_ADMIN_USER });
 });
 
 app.post(PATH_API_BLOGS_ADMIN_LOGOUT, (c) => {
-  c.header(HEADER_SET_COOKIE, buildClearAdminCookie());
+  const clearCookieRes = buildClearAdminCookie();
+  if (clearCookieRes.err) {
+    const publicErrRes = toPublicError(clearCookieRes.err);
+    return c.json(publicErrRes.value, STATUS_SERVER_ERROR);
+  }
+  c.header(HEADER_SET_COOKIE, clearCookieRes.value);
   c.header(CACHE_CONTROL, CACHE_NO_STORE);
   return c.json({ ok: true });
 });
@@ -773,12 +802,15 @@ app.delete(PATH_API_BLOGS_ID, (c) => {
  * @returns {{ value: boolean | null, err: Error | null }}
  */
 function requireAdminSession(c) {
-  const token = getAdminTokenFromRequest(c);
-  if (!token) {
+  const tokenRes = getAdminTokenFromRequest(c);
+  if (tokenRes.err) {
+    return { value: null, err: tokenRes.err };
+  }
+  if (!tokenRes.value) {
     return { value: null, err: new Error(ERR_ADMIN_TOKEN_REQUIRED) };
   }
 
-  const verifyRes = verifyAdminJwt(token);
+  const verifyRes = verifyAdminJwt(tokenRes.value);
   if (verifyRes.err) {
     return { value: null, err: new Error(ERR_ADMIN_TOKEN_INVALID) };
   }
@@ -788,29 +820,32 @@ function requireAdminSession(c) {
 
 /**
  * @param {import("hono").Context} c
- * @returns {string}
+ * @returns {{ value: string | null, err: Error | null }}
  */
 function getAdminTokenFromRequest(c) {
   const cookieHeader = c.req.header(HEADER_COOKIE) || "";
-  const cookieToken = getCookieValue(cookieHeader, COOKIE_ADMIN_TOKEN);
-  if (cookieToken) {
-    return cookieToken;
+  const cookieTokenRes = getCookieValue(cookieHeader, COOKIE_ADMIN_TOKEN);
+  if (cookieTokenRes.err) {
+    return { value: null, err: cookieTokenRes.err };
+  }
+  if (cookieTokenRes.value) {
+    return { value: cookieTokenRes.value, err: null };
   }
   const headerToken = c.req.header(HEADER_ADMIN_TOKEN) || "";
   if (headerToken) {
-    return headerToken;
+    return { value: headerToken, err: null };
   }
   const authHeader = c.req.header("authorization") || "";
   if (authHeader.toLowerCase().startsWith("bearer ")) {
-    return authHeader.slice(7).trim();
+    return { value: authHeader.slice(7).trim(), err: null };
   }
-  return "";
+  return { value: "", err: null };
 }
 
 /**
  * @param {string} cookieHeader
  * @param {string} key
- * @returns {string}
+ * @returns {{ value: string | null, err: Error | null }}
  */
 function getCookieValue(cookieHeader, key) {
   const pairs = cookieHeader.split(";").map((part) => part.trim());
@@ -818,16 +853,20 @@ function getCookieValue(cookieHeader, key) {
     if (!pair.startsWith(`${key}=`)) {
       continue;
     }
-    return decodeURIComponent(pair.slice(key.length + 1));
+    return { value: decodeURIComponent(pair.slice(key.length + 1)), err: null };
   }
-  return "";
+  return { value: "", err: null };
 }
 
 /**
- * @returns {number}
+ * @returns {{ value: number | null, err: Error | null }}
  */
 function getAdminSessionTtlMs() {
-  return isProductionEnv() ? ADMIN_SESSION_TTL_MS_DEFAULT : ADMIN_SESSION_TTL_MS_DEV;
+  const isProdRes = isProductionEnv();
+  if (isProdRes.err) {
+    return { value: null, err: isProdRes.err };
+  }
+  return { value: isProdRes.value ? ADMIN_SESSION_TTL_MS_DEFAULT : ADMIN_SESSION_TTL_MS_DEV, err: null };
 }
 
 /**
@@ -877,7 +916,11 @@ function getJwtSecret() {
   if (envSecret && envSecret.trim()) {
     return { value: envSecret, err: null };
   }
-  if (isProductionEnv()) {
+  const isProdRes = isProductionEnv();
+  if (isProdRes.err) {
+    return { value: null, err: isProdRes.err };
+  }
+  if (isProdRes.value) {
     return { value: null, err: new Error(ERR_ADMIN_JWT_SECRET_REQUIRED) };
   }
   return { value: JWT_SECRET_FALLBACK, err: null };
@@ -886,26 +929,30 @@ function getJwtSecret() {
 /**
  * @param {string} token
  * @param {number} ttlMs
- * @returns {string}
+ * @returns {{ value: string | null, err: Error | null }}
  */
 function buildAdminCookie(token, ttlMs) {
   const maxAge = Math.max(1, Math.floor(ttlMs / 1000));
-  const secure = isProductionEnv() ? "; Secure" : "";
-  return `${COOKIE_ADMIN_TOKEN}=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${maxAge}${secure}`;
+  const isProdRes = isProductionEnv();
+  if (isProdRes.err) {
+    return { value: null, err: isProdRes.err };
+  }
+  const secure = isProdRes.value ? "; Secure" : "";
+  return { value: `${COOKIE_ADMIN_TOKEN}=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${maxAge}${secure}`, err: null };
 }
 
 /**
- * @returns {string}
+ * @returns {{ value: string | null, err: Error | null }}
  */
 function buildClearAdminCookie() {
-  return `${COOKIE_ADMIN_TOKEN}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`;
+  return { value: `${COOKIE_ADMIN_TOKEN}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`, err: null };
 }
 
 /**
- * @returns {boolean}
+ * @returns {{ value: boolean | null, err: Error | null }}
  */
 function isProductionEnv() {
-  return (process.env[ENV_NODE_ENV] || "").trim().toLowerCase() === NODE_ENV_PRODUCTION;
+  return { value: (process.env[ENV_NODE_ENV] || "").trim().toLowerCase() === NODE_ENV_PRODUCTION, err: null };
 }
 
 const port = Number(process.env[ENV_API_PORT] || DEFAULT_API_PORT);
@@ -915,10 +962,13 @@ if (bootLogRes.err) {
   console.error(bootLogRes.err.message);
 }
 console.log(`${LOG_BOOT_TEXT} ${port}`);
-startAnimeReleaseCron();
+const cronBootRes = startAnimeReleaseCron();
+if (cronBootRes.err) {
+  console.error(cronBootRes.err.message);
+}
 
 /**
- * @returns {void}
+ * @returns {{ value: boolean | null, err: Error | null }}
  */
 function startAnimeReleaseCron() {
   const enabledRaw = String(process.env[ENV_ANIME_RELEASE_CRON_ENABLED] || DEFAULT_ANIME_CRON_ENABLED).trim().toLowerCase();
@@ -928,7 +978,7 @@ function startAnimeReleaseCron() {
     if (logRes.err) {
       console.error(logRes.err.message);
     }
-    return;
+    return { value: true, err: null };
   }
 
   const schedule = String(process.env[ENV_ANIME_RELEASE_CRON_SCHEDULE] || DEFAULT_ANIME_CRON_SCHEDULE).trim();
@@ -938,7 +988,7 @@ function startAnimeReleaseCron() {
     if (logRes.err) {
       console.error(logRes.err.message);
     }
-    return;
+    return { value: null, err: new Error("Invalid cron schedule") };
   }
 
   cron.schedule(schedule, () => {
@@ -948,10 +998,11 @@ function startAnimeReleaseCron() {
   if (logRes.err) {
     console.error(logRes.err.message);
   }
+  return { value: true, err: null };
 }
 
 /**
- * @returns {Promise<void>}
+ * @returns {Promise<{ value: boolean | null, err: Error | null }>}
  */
 async function runAnimeReleaseCronTick() {
   if (isAnimeCronRunning) {
@@ -959,7 +1010,7 @@ async function runAnimeReleaseCronTick() {
     if (logRes.err) {
       console.error(logRes.err.message);
     }
-    return;
+    return { value: true, err: null };
   }
 
   isAnimeCronRunning = true;
@@ -976,10 +1027,11 @@ async function runAnimeReleaseCronTick() {
     if (errorLogRes.err) {
       console.error(errorLogRes.err.message);
     }
-    return;
+    return { value: null, err: runRes.err };
   }
   const doneLogRes = logEvent(LEVEL_INFO, EVENT_ANIME_CRON_TICK_COMPLETE, { durationMs: Date.now() - startedAt });
   if (doneLogRes.err) {
     console.error(doneLogRes.err.message);
   }
+  return { value: true, err: null };
 }

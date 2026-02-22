@@ -1,6 +1,6 @@
 import React, { Suspense, lazy, useEffect, useRef, useState } from "react";
-import { getYearLabel, buildNavItems } from "./core.pure.js";
-import { createBlog, createBlogCategory, deleteBlog, downloadResumePdf, fetchMessageOfDay, fetchSlackAnimeQuestionOfDay, getBlog, getBlogAdminToken, getBlogsDashboard, getCurrentYear, getPublicBlog, getSlackAnimeFeedUrls, listBlogCategories, listBlogs, listBlogTags, listTrackedSlackAnime, loginBlogAdmin, logoutBlogAdmin, searchSlackAnime, setBlogPublished, trackSlackAnime, untrackSlackAnime, updateBlog, uploadBlogImage } from "./core.impure.js";
+import { getYearLabel, buildNavItems, getDailyHomeContent } from "./core.pure.js";
+import { createBlog, createBlogCategory, deleteBlog, downloadResumePdf, fetchHomeContent, fetchMessageOfDay, fetchSlackAnimeQuestionOfDay, getBlog, getBlogAdminToken, getBlogsDashboard, getCurrentYear, getPublicBlog, getSlackAnimeFeedUrls, listBlogCategories, listBlogs, listBlogTags, listTrackedSlackAnime, loginBlogAdmin, logoutBlogAdmin, searchSlackAnime, setBlogPublished, trackSlackAnime, untrackSlackAnime, updateBlog, uploadBlogImage } from "./core.impure.js";
 import hljs from "highlight.js/lib/common";
 import "highlight.js/styles/github-dark.css";
 import "./ui.css";
@@ -38,6 +38,43 @@ const LINK_YOUTUBE_VIDEO = "https://www.youtube.com/watch?v=N1dBCwI6A7M";
 const LINK_YOUTUBE_EMBED = "https://www.youtube.com/embed/N1dBCwI6A7M";
 const TEXT_MOTD_LOADING = "Generating today's message...";
 const TEXT_MOTD_FALLBACK = "Build with intention, ship with clarity, and keep improving one decision at a time.";
+
+const IconHome = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>;
+const IconResume = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>;
+const IconProjects = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>;
+const IconBlog = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>;
+const IconGitHub = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/></svg>;
+const IconLinkedIn = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6z"/><rect x="2" y="9" width="4" height="12"/><circle cx="4" cy="4" r="2"/></svg>;
+const IconYouTube = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22.54 6.42a2.78 2.78 0 0 0-1.94-2C18.88 4 12 4 12 4s-6.88 0-8.6.46a2.78 2.78 0 0 0-1.94 2A29 29 0 0 0 1 11.75a29 29 0 0 0 .46 5.33A2.78 2.78 0 0 0 3.4 19c1.72.46 8.6.46 8.6.46s6.88 0 8.6-.46a2.78 2.78 0 0 0 1.94-2 29 29 0 0 0 .46-5.25 29 29 0 0 0-.46-5.33z"/><polygon points="9.75 15.02 15.5 11.75 9.75 8.48 9.75 15.02"/></svg>;
+const IconRSS = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 11a9 9 0 0 1 9 9"/><path d="M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1"/></svg>;
+const IconExternal = () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>;
+const IconMail = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>;
+const IconDownload = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>;
+const IconEdit = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>;
+const IconTrash = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>;
+const IconArrowLeft = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>;
+const IconArrowRight = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>;
+const IconSettings = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>;
+const IconPlus = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>;
+const IconEye = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>;
+const IconEyeOff = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>;
+const IconTerminal = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>;
+const IconDollar = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>;
+const IconBot = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="10" rx="2"/><circle cx="12" cy="5" r="2"/><path d="M12 7v4"/><line x1="8" y1="16" x2="8" y2="16"/><line x1="16" y1="16" x2="16" y2="16"/></svg>;
+
+const ICON_MAP = {
+  IconHome,
+  IconResume,
+  IconProjects,
+  IconTerminal,
+  IconDollar,
+  IconBlog,
+  IconBot,
+  IconGitHub,
+  IconLinkedIn,
+  IconYouTube,
+  IconRSS
+};
 
 const PATH_HOME = "/";
 const PATH_RESUME = "/resume";
@@ -97,24 +134,27 @@ export function App() {
 
   const pathname = window.location.pathname;
   const [motd, setMotd] = useState({ quote: TEXT_MOTD_LOADING, loading: true });
+  const [homeContent, setHomeContent] = useState(null);
 
   useEffect(() => {
     let active = true;
-    const loadMotd = async () => {
-      const motdRes = await fetchMessageOfDay(true);
+    const loadHome = async () => {
+      const [motdRes, homeRes] = await Promise.all([fetchMessageOfDay(), fetchHomeContent()]);
       if (!active) {
         return;
       }
 
       if (motdRes.err) {
         setMotd({ quote: TEXT_MOTD_FALLBACK, loading: false });
-        return;
+      } else {
+        setMotd({ quote: motdRes.value, loading: false });
       }
-
-      setMotd({ quote: motdRes.value, loading: false });
+      if (!homeRes.err && homeRes.value) {
+        setHomeContent(homeRes.value);
+      }
     };
 
-    loadMotd();
+    loadHome();
     return () => {
       active = false;
     };
@@ -155,23 +195,27 @@ export function App() {
       <nav aria-label={ARIA_PRIMARY} className="nav-wrap">
         <div className="container nav-shell">
           <div className="nav-row">
-          {navRes.value.map((item) => (
-            <a
-              key={item.href}
-              href={item.href}
-              className={`nav-link ${pathname === item.href ? "is-active" : ""}`}
-              target={item.external ? "_blank" : undefined}
-              rel={item.external ? "noreferrer noopener" : undefined}
-            >
-              {item.label}
-              {item.external ? <span className="nav-ext">↗</span> : null}
-            </a>
-          ))}
+          {navRes.value.map((item) => {
+            const IconComponent = item.icon ? ICON_MAP[item.icon] : null;
+            return (
+              <a
+                key={item.href}
+                href={item.href}
+                className={`nav-link ${pathname === item.href ? "is-active" : ""}`}
+                target={item.external ? "_blank" : undefined}
+                rel={item.external ? "noreferrer noopener" : undefined}
+              >
+                {IconComponent && <span className="nav-icon"><IconComponent /></span>}
+                {item.label}
+                {item.external ? <span className="nav-ext"><IconExternal /></span> : null}
+              </a>
+            );
+          })}
           </div>
         </div>
       </nav>
 
-      <main className="container main-grid">{renderPage(pathname, handleResumeDownload, motd)}</main>
+      <main className="container main-grid">{renderPage(pathname, handleResumeDownload, motd, homeContent)}</main>
 
       <footer className="footer">
         <div className="container footer-inner">
@@ -196,10 +240,11 @@ export function App() {
  * @param {string} pathname
  * @param {(event: React.MouseEvent<HTMLAnchorElement>) => Promise<void>} onResumeDownload
  * @param {{quote: string, loading: boolean}} motd
+ * @param {unknown} homeContent
  * @returns {JSX.Element}
  */
-function renderPage(pathname, onResumeDownload, motd) {
-  if (pathname === PATH_HOME) return <HomePage motd={motd} />;
+function renderPage(pathname, onResumeDownload, motd, homeContent) {
+  if (pathname === PATH_HOME) return <HomePage motd={motd} homeContentOverride={homeContent} />;
   if (pathname === PATH_RESUME) return <ResumePage onResumeDownload={onResumeDownload} />;
   if (pathname === PATH_BUDGET) return <BudgetToolRoutePage />;
   if (pathname === PATH_SLACKANIME) return <SlackAnimePage />;
@@ -219,27 +264,51 @@ function BudgetToolRoutePage() {
   );
 }
 
-function HomePage({ motd }) {
+function HomePage({ motd, homeContentOverride }) {
+  const dateKey = new Date().toISOString().slice(0, 10);
+  const homeRes = getDailyHomeContent(dateKey);
+  const fallbackHomeContent = homeRes.err
+    ? {
+      heroTitle: "Systems thinker. Builder. Pragmatist.",
+      heroBody: "I frame problems as interacting subsystems and push toward buildable outcomes with clear tradeoffs.",
+      heroCaption: "Tokyo, after-hours systems thinking.",
+      todayLens: "Today's lens: clear interfaces and practical delivery.",
+      metrics: ["Cross-Domain Architecture", "HPC & AI Tooling", "Hardware/Software Integration", "High-Signal Execution"],
+      operatingHeading: "Operating Principles",
+      operatingItems: [
+        { key: "Design-to-Build", val: "Pushing concepts into manufacturable, serviceable artifacts." },
+        { key: "Tradeoff-Driven", val: "Balancing performance with real constraints." },
+        { key: "Constraint-First", val: "Selecting architecture from hard requirements first." },
+        { key: "Team Signal", val: "Keeping decisions explicit and actionable." }
+      ],
+      beyondHeading: "Engineering & Exploration",
+      beyondItems: [
+        { key: "Maker Systems", val: "Hardware and software systems built with real constraints." },
+        { key: "Compute + AI", val: "Practical runtime and model deployment tradeoffs." },
+        { key: "Operations Mindset", val: "Instrumentation, reliability, and maintainability first." },
+        { key: "Life Outside Work", val: "Travel, sport, and structured self-optimization." }
+      ],
+      youtubeLead: "Current build notes and execution walkthroughs."
+    }
+    : homeRes.value;
+  const homeContent = homeContentOverride && typeof homeContentOverride === "object" ? homeContentOverride : fallbackHomeContent;
+
   return (
     <>
       <section className="panel hero hero-intro">
         <div className="hero-intro-grid">
           <div className="hero-copy">
             <p className="eyebrow">SENIOR SOFTWARE ENGINEER</p>
-            <h2>Systems thinker. Builder. Pragmatist.</h2>
-            <p>
-              I frame problems as interacting subsystems—balancing software architecture, hardware constraints, and operational realities. I don't stop at concepts; I push toward manufacturable artifacts, clear tradeoffs, and high-leverage production outcomes.
-            </p>
+            <h2>{homeContent.heroTitle}</h2>
+            <p>{homeContent.heroBody}</p>
+            <p className="home-day-lens">{homeContent.todayLens}</p>
             <div className="hero-mini-metrics">
-              <span className="metric-pill">Cross-Domain Architecture</span>
-              <span className="metric-pill">HPC & AI Tooling</span>
-              <span className="metric-pill">Hardware/Software Integration</span>
-              <span className="metric-pill">High-Signal Execution</span>
+              {homeContent.metrics.map((metric) => <span className="metric-pill" key={metric}>{metric}</span>)}
             </div>
           </div>
           <div className="hero-anchor-wrap">
             <img className="home-anchor-image" src={LINK_PROFILE_ANCHOR_IMAGE} alt={ALT_PROFILE_ANCHOR_IMAGE} />
-            <p className="hero-caption">Tokyo, after-hours systems thinking.</p>
+            <p className="hero-caption">{homeContent.heroCaption}</p>
           </div>
         </div>
       </section>
@@ -252,53 +321,34 @@ function HomePage({ motd }) {
         </section>
 
         <section className="panel">
-          <h3>Operating Principles</h3>
+          <h3>{homeContent.operatingHeading}</h3>
           <div className="kv-grid">
-            <div>
-              <p className="key">Design-to-Build</p>
-              <p className="val">Pushing past theory into manufacturable artifacts: tolerances, packaging, BOMs, and maintenance paths.</p>
-            </div>
-            <div>
-              <p className="key">Tradeoff-Driven</p>
-              <p className="val">Balancing high-performance ideas against practical limits (power, cost, time) to ship reliable solutions.</p>
-            </div>
-            <div>
-              <p className="key">Constraint-First</p>
-              <p className="val">Starting with hard constraints and selecting architectures that satisfy them through iterative, concrete steps.</p>
-            </div>
-            <div>
-              <p className="key">High Signal</p>
-              <p className="val">Low tolerance for ambiguity. Prioritizing precise language, explicit assumptions, and decision-ready recommendations.</p>
-            </div>
+            {homeContent.operatingItems.map((item) => (
+              <div key={item.key}>
+                <p className="key">{item.key}</p>
+                <p className="val">{item.val}</p>
+              </div>
+            ))}
           </div>
         </section>
 
         <section className="panel">
           <p className="eyebrow">BEYOND THE CODE</p>
-          <h3>Engineering & Exploration</h3>
+          <h3>{homeContent.beyondHeading}</h3>
           <div className="kv-grid">
-            <div>
-              <p className="key">Hardware & Fabrication</p>
-              <p className="val">Mechanical packaging, electrification, and building tangible systems with real-world constraints.</p>
-            </div>
-            <div>
-              <p className="key">Worldbuilding</p>
-              <p className="val">Designing coherent universes, factions, and systems of conflict with strict internal consistency.</p>
-            </div>
-            <div>
-              <p className="key">Logistics & Optimization</p>
-              <p className="val">High-leverage travel planning, budgeting dashboards, and building systems that reflect reality.</p>
-            </div>
-            <div>
-              <p className="key">Active Pursuits</p>
-              <p className="val">Tennis, distance walking, and beginner skiing progression.</p>
-            </div>
+            {homeContent.beyondItems.map((item) => (
+              <div key={item.key}>
+                <p className="key">{item.key}</p>
+                <p className="val">{item.val}</p>
+              </div>
+            ))}
           </div>
         </section>
 
         <section className="panel">
           <p className="eyebrow">YOUTUBE</p>
           <h3>Latest Video</h3>
+          <p>{homeContent.youtubeLead}</p>
           <div className="video-wrap">
             <iframe
               className="video-frame"
@@ -310,14 +360,13 @@ function HomePage({ motd }) {
             />
           </div>
           <p>
-            <a href={LINK_YOUTUBE_VIDEO} target="_blank" rel="noreferrer noopener">Watch on YouTube</a>
+            <a href={LINK_YOUTUBE_VIDEO} target="_blank" rel="noreferrer noopener"><IconYouTube /> Watch on YouTube</a>
           </p>
         </section>
       </section>
     </>
   );
 }
-
 function ResumePage({ onResumeDownload }) {
   return (
     <section className="panel" id={RESUME_PRINT_ROOT_ID}>
@@ -327,11 +376,11 @@ function ResumePage({ onResumeDownload }) {
           <h2 className="resume-title">Earl Cameron</h2>
           <p className="resume-subtitle">Senior Software Engineer</p>
           <p className="resume-contact">
-            <a href={`mailto:${TEXT_EMAIL}`}>{TEXT_EMAIL}</a>
+            <a href={`mailto:${TEXT_EMAIL}`}><IconMail /> {TEXT_EMAIL}</a>
             <span className="dot-sep">•</span>
-            <a href={LINK_LINKEDIN} target="_blank" rel="noreferrer noopener">LinkedIn</a>
+            <a href={LINK_LINKEDIN} target="_blank" rel="noreferrer noopener"><IconLinkedIn /> LinkedIn</a>
             <span className="dot-sep">•</span>
-            <a href={LINK_GITHUB} target="_blank" rel="noreferrer noopener">GitHub</a>
+            <a href={LINK_GITHUB} target="_blank" rel="noreferrer noopener"><IconGitHub /> GitHub</a>
           </p>
           <p className="resume-summary">
             Senior software engineer who combines systems-level thinking with collaborative execution.
@@ -343,7 +392,7 @@ function ResumePage({ onResumeDownload }) {
           </p>
         </div>
         <div className="resume-hero-cta">
-          <a className="cta-link" href="/resume/EarlCameron.pdf" onClick={onResumeDownload}>Download Full Resume (PDF)</a>
+          <a className="cta-link" href="/resume/EarlCameron.pdf" onClick={onResumeDownload}><IconDownload /> Download Full Resume (PDF)</a>
         </div>
       </section>
 
@@ -433,16 +482,6 @@ function ProjectsPage() {
         A collection of tools built to solve specific problems, explore new architectures, or push hardware constraints. I focus on observability, performance, and practical utility over glossy features.
       </p>
       <div className="cards">
-        <article className="card">
-          <div className="project-card-head">
-            <h3><a href="/slackanime">SlackAnime Tracker Port</a></h3>
-            <span className="chip chip-zero">React / SQLite / AniList</span>
-          </div>
-          <p><strong>The Build:</strong> A JavaScript port of core SlackAnime workflows: airing-anime search, tracked list management, and local SQLite persistence via API.</p>
-          <p><strong>The Why:</strong> I wanted the tracker integrated into this website stack so it can be iterated quickly with shared auth, logging, and deployment patterns.</p>
-          <p><a href="https://github.com/monstercameron/SlackAnimeTracker" target="_blank" rel="noreferrer noopener">Original Go Project</a></p>
-        </article>
-
         <article className="card">
           <div className="project-card-head">
             <h3><a href="https://github.com/monstercameron/Zerver" target="_blank" rel="noreferrer noopener">Zerver</a></h3>
@@ -1025,10 +1064,10 @@ function BlogPage() {
           ) : null}
         </div>
         <div className="blog-header-actions">
-          <button className={`tab-btn ${view === "list" ? "is-active" : ""}`} type="button" onClick={() => goTo(PATH_BLOG)}>Public Logs</button>
-          {!isAdmin ? <button className={`tab-btn ${view === "login" ? "is-active" : ""}`} type="button" onClick={() => goTo(PATH_BLOG_DASHBOARD)}>Authenticate</button> : null}
-          {isAdmin ? <button className={`tab-btn ${view === "dashboard" ? "is-active" : ""}`} type="button" onClick={() => goTo(PATH_BLOG_DASHBOARD)}>Dashboard</button> : null}
-          {isAdmin ? <button className={`tab-btn ${view === "editor" ? "is-active" : ""}`} type="button" onClick={() => { setPreviousView(view); goTo("/blog/0/new"); }}>New Entry</button> : null}
+          <button className={`tab-btn ${view === "list" ? "is-active" : ""}`} type="button" onClick={() => goTo(PATH_BLOG)}><IconBlog /> Public Logs</button>
+          {!isAdmin ? <button className={`tab-btn ${view === "login" ? "is-active" : ""}`} type="button" onClick={() => goTo(PATH_BLOG_DASHBOARD)}><IconSettings /> Authenticate</button> : null}
+          {isAdmin ? <button className={`tab-btn ${view === "dashboard" ? "is-active" : ""}`} type="button" onClick={() => goTo(PATH_BLOG_DASHBOARD)}><IconSettings /> Dashboard</button> : null}
+          {isAdmin ? <button className={`tab-btn ${view === "editor" ? "is-active" : ""}`} type="button" onClick={() => { setPreviousView(view); goTo("/blog/0/new"); }}><IconPlus /> New Entry</button> : null}
           {isAdmin ? <button className="tab-btn danger" type="button" onClick={async () => { await logoutBlogAdmin(); setIsAdmin(false); goTo(PATH_BLOG); }}>Disconnect</button> : null}
         </div>
       </header>
@@ -1049,7 +1088,7 @@ function BlogDetailView({ detailRow, detailNav, goToAnimated, activeVariant = BL
   return (
     <article className="blog-post-detail">
       <div className="blog-post-topbar">
-        <button className="cta-link cta-button" type="button" onClick={(event) => goToAnimated(PATH_BLOG, event)}>← Back to System Logs</button>
+        <button className="cta-link cta-button" type="button" onClick={(event) => goToAnimated(PATH_BLOG, event)}><IconArrowLeft /> Back to System Logs</button>
       </div>
       <div className="blog-detail-inner">
         <div className="blog-detail-stage">
@@ -1082,8 +1121,8 @@ function BlogDetailView({ detailRow, detailNav, goToAnimated, activeVariant = BL
         )}
         </div>
         <div className="blog-row-actions blog-detail-nav">
-          {detailNav.prevId ? <a className="cta-link" href={`/blog/${detailNav.prevId}`} onClick={(event) => goToAnimated(`/blog/${detailNav.prevId}`, event)}>← Previous Log</a> : <span />}
-          {detailNav.nextId ? <a className="cta-link" href={`/blog/${detailNav.nextId}`} onClick={(event) => goToAnimated(`/blog/${detailNav.nextId}`, event)}>Next Log →</a> : <span />}
+          {detailNav.prevId ? <a className="cta-link" href={`/blog/${detailNav.prevId}`} onClick={(event) => goToAnimated(`/blog/${detailNav.prevId}`, event)}><IconArrowLeft /> Previous Log</a> : <span />}
+          {detailNav.nextId ? <a className="cta-link" href={`/blog/${detailNav.nextId}`} onClick={(event) => goToAnimated(`/blog/${detailNav.nextId}`, event)}>Next Log <IconArrowRight /></a> : <span />}
         </div>
       </div>
     </article>
@@ -1113,21 +1152,21 @@ function BlogDashboardView({ dashboard, dashboardPageData, dashboardPage, setDas
         <article className="dash-card">
           <div className="dash-stat-head">
             <p className="dash-stat-label">Total Logs</p>
-            <span className="dash-stat-icon">∑</span>
+            <span className="dash-stat-icon"><IconTerminal /></span>
           </div>
           <h3 className="dash-stat-value">{dashboard.total}</h3>
         </article>
         <article className="dash-card">
           <div className="dash-stat-head">
             <p className="dash-stat-label">Published</p>
-            <span className="dash-stat-icon dash-stat-icon-accent">●</span>
+            <span className="dash-stat-icon dash-stat-icon-accent"><IconEye /></span>
           </div>
           <h3 className="dash-stat-value">{dashboard.published}</h3>
         </article>
         <article className="dash-card">
           <div className="dash-stat-head">
             <p className="dash-stat-label">Drafts</p>
-            <span className="dash-stat-icon">○</span>
+            <span className="dash-stat-icon"><IconEyeOff /></span>
           </div>
           <h3 className="dash-stat-value">{dashboard.drafts}</h3>
         </article>
@@ -1180,9 +1219,9 @@ function BlogDashboardView({ dashboard, dashboardPageData, dashboardPage, setDas
                   </div>
                 ) : null}
                 <div className="dash-actions">
-                  <a className="cta-link" href={`/blog/${row.id}/edit`} onClick={(event) => onNavigate(`/blog/${row.id}/edit`, event)}>Edit</a>
-                  <button className="cta-link cta-button" type="button" onClick={() => onTogglePublish(row)}>{row.published ? "Unpublish" : "Publish"}</button>
-                  <button className="cta-link cta-button cta-danger" type="button" onClick={(event) => onDelete(row.id, event)}>Delete</button>
+                  <a className="cta-link" href={`/blog/${row.id}/edit`} onClick={(event) => onNavigate(`/blog/${row.id}/edit`, event)}><IconEdit /> Edit</a>
+                  <button className="cta-link cta-button" type="button" onClick={() => onTogglePublish(row)}>{row.published ? <><IconEyeOff /> Unpublish</> : <><IconEye /> Publish</>}</button>
+                  <button className="cta-link cta-button cta-danger" type="button" onClick={(event) => onDelete(row.id, event)}><IconTrash /> Delete</button>
                 </div>
               </div>
             );
@@ -1245,8 +1284,8 @@ function BlogListView({ listPageData, listPage, setListPage, isAdmin, onDelete, 
           ) : null}
           {isAdmin ? (
             <div className="blog-row-actions admin-card-actions">
-              <a className="cta-link" href={`/blog/${row.id}/edit`} onClick={(event) => onNavigate(`/blog/${row.id}/edit`, event)}>Edit</a>
-              <button className="cta-link cta-button cta-danger" type="button" onClick={(event) => onDelete(row.id, event)}>Delete</button>
+              <a className="cta-link" href={`/blog/${row.id}/edit`} onClick={(event) => onNavigate(`/blog/${row.id}/edit`, event)}><IconEdit /> Edit</a>
+              <button className="cta-link cta-button cta-danger" type="button" onClick={(event) => onDelete(row.id, event)}><IconTrash /> Delete</button>
             </div>
           ) : null}
         </article>
@@ -1273,7 +1312,7 @@ function BlogEditorView({ form, onField, onSave, goBack, previousView, applyEdit
     <section className="editor-shell">
       <form className="blog-form editor-main" onSubmit={onSave}>
         <div className="blog-row-actions editor-back-row">
-          <button className="cta-link cta-button" type="button" onClick={() => goBack(previousView === "dashboard" ? PATH_BLOG_DASHBOARD : PATH_BLOG)}>← Back to Console</button>
+          <button className="cta-link cta-button" type="button" onClick={() => goBack(previousView === "dashboard" ? PATH_BLOG_DASHBOARD : PATH_BLOG)}><IconArrowLeft /> Back to Console</button>
         </div>
         <label>
           <span className="field-label">Entry Title</span>
@@ -1354,7 +1393,7 @@ function BlogEditorView({ form, onField, onSave, goBack, previousView, applyEdit
           </select>
           <div className="blog-inline-form editor-inline-form">
             <input className="editor-inline-input" value={newCategoryName} onChange={(e) => setNewCategoryName(e.target.value)} placeholder="New category..." />
-            <button className="cta-link cta-button" type="button" onClick={createCategory}>Add</button>
+            <button className="cta-link cta-button" type="button" onClick={createCategory}><IconPlus /> Add</button>
           </div>
         </div>
         <div className="editor-side-card">
@@ -1375,9 +1414,9 @@ function BlogEditorView({ form, onField, onSave, goBack, previousView, applyEdit
 function PaginationControls(props) {
   return (
     <div className="pagination-row">
-      <button className="tab-btn pagination-btn" type="button" onClick={props.onPrevious} disabled={props.page <= 1}>← Previous</button>
+      <button className="tab-btn pagination-btn" type="button" onClick={props.onPrevious} disabled={props.page <= 1}><IconArrowLeft /> Previous</button>
       <span className="pagination-meta">Page {props.page} of {props.totalPages}</span>
-      <button className="tab-btn pagination-btn" type="button" onClick={props.onNext} disabled={props.page >= props.totalPages}>Next →</button>
+      <button className="tab-btn pagination-btn" type="button" onClick={props.onNext} disabled={props.page >= props.totalPages}>Next <IconArrowRight /></button>
     </div>
   );
 }
@@ -1561,4 +1600,3 @@ function CodeBlock(props) {
     </div>
   );
 }
-

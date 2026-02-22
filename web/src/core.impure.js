@@ -14,6 +14,7 @@ const PDF_PORTRAIT = "p";
 const PDF_MARGIN = 20;
 const PDF_FILENAME_DEFAULT = "EarlCameron-Resume.pdf";
 const API_MESSAGE_OF_DAY_PATH = "/api/message-of-day";
+const API_HOME_CONTENT_PATH = "/api/home-content";
 const API_BLOGS_PATH = "/api/blogs";
 const API_BLOGS_PUBLISH_SUFFIX = "/publish";
 const API_BLOGS_PUBLIC_PATH = "/api/blogs/public";
@@ -42,6 +43,7 @@ const STORAGE_BLOG_ADMIN_TOKEN = "blog_admin_token";
 const STORAGE_BLOG_ADMIN_FLAG = "1";
 const CACHE_PREFIX_BLOGS = "/api/blogs";
 const ERR_INVALID_MOTD_RESPONSE = "Invalid message-of-day response";
+const ERR_INVALID_HOME_RESPONSE = "Invalid home content response";
 const ERR_ADMIN_LOGIN_REQUIRED = "Admin login required";
 const ERR_FAILED_LOAD_IMAGE = "Failed to load image";
 const ERR_CANVAS_CONTEXT_MISSING = "Could not get canvas context";
@@ -124,6 +126,38 @@ export async function fetchMessageOfDay(forceRefresh = false) {
   }
 
   return { value: motdRes.value.quote, err: null };
+}
+
+/**
+ * @param {boolean} [forceRefresh]
+ * @returns {Promise<Result<{
+ * heroTitle: string,
+ * heroBody: string,
+ * todayLens: string,
+ * heroCaption: string,
+ * metrics: string[],
+ * operatingHeading: string,
+ * operatingItems: Array<{key: string, val: string}>,
+ * beyondHeading: string,
+ * beyondItems: Array<{key: string, val: string}>,
+ * youtubeLead: string,
+ * source?: string
+ * }>>}
+ */
+export async function fetchHomeContent(forceRefresh = false) {
+  const homeUrl = forceRefresh
+    ? `${API_HOME_CONTENT_PATH}?refresh=1&t=${Date.now()}`
+    : API_HOME_CONTENT_PATH;
+  const homeRes = forceRefresh
+    ? await apiRequest(homeUrl)
+    : await apiRequestCached(homeUrl, undefined, MESSAGE_CACHE_TTL_MS);
+  if (homeRes.err) {
+    return { value: null, err: homeRes.err };
+  }
+  if (!homeRes.value || typeof homeRes.value !== "object" || !homeRes.value.content || typeof homeRes.value.content !== "object") {
+    return { value: null, err: new Error(ERR_INVALID_HOME_RESPONSE) };
+  }
+  return { value: homeRes.value.content, err: null };
 }
 
 /**

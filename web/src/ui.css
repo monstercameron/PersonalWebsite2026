@@ -73,6 +73,12 @@ h1, h2, h3, h4 { margin-top: 0; color: var(--ink); font-weight: 600; letter-spac
 .hero-copy { max-width: 64ch; }
 .hero-copy h2 { background: linear-gradient(to right, #fff, #a1a1aa); -webkit-background-clip: text; -webkit-text-fill-color: transparent; line-height: 1.15; }
 .hero-copy p { font-size: 1.1rem; }
+.home-day-lens {
+  margin: 8px 0 0;
+  color: var(--accent-soft) !important;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
 .hero-mini-metrics { margin-top: 24px; display: flex; flex-wrap: wrap; gap: 10px; }
 .metric-pill { font-size: 0.75rem; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; border: 1px solid var(--line); padding: 6px 12px; border-radius: 20px; color: var(--muted); background: rgba(255,255,255,0.02); }
 .hero-anchor-wrap { width: 100%; display: flex; flex-direction: column; gap: 12px; align-items: center; }
