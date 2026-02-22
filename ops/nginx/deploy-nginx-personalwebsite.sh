@@ -21,7 +21,7 @@ ROLLBACK_ON_FAILURE="${ROLLBACK_ON_FAILURE:-1}"
 PRECHECK_UPSTREAMS="${PRECHECK_UPSTREAMS:-1}"
 REQUIRE_HOST_ASSERTS="${REQUIRE_HOST_ASSERTS:-1}"
 VERIFY_REDIRECTS="${VERIFY_REDIRECTS:-1}"
-UPSTREAM_MAIN_URL="${UPSTREAM_MAIN_URL:-http://127.0.0.1:8080${API_HEALTH_PATH}}"
+UPSTREAM_MAIN_URL="${UPSTREAM_MAIN_URL:-http://127.0.0.1:8081${API_HEALTH_PATH}}"
 UPSTREAM_READER_URL="${UPSTREAM_READER_URL:-http://127.0.0.1:3001/}"
 SOURCE_CONFIG="${1:-$DEFAULT_SOURCE_CONFIG}"
 
@@ -126,7 +126,7 @@ assert_config_sanity() {
   assert_config_contains "$file_path" "server_name ${WWW_HOST};" "www server_name"
   assert_config_contains "$file_path" "server_name ${READER_HOST};" "reader server_name"
   assert_config_contains "$file_path" "upstream personalwebsite_app" "main upstream block"
-  assert_config_contains "$file_path" "server 127.0.0.1:8080;" "main upstream port 8080"
+  assert_config_contains "$file_path" "server 127.0.0.1:8081;" "main upstream port 8081"
   assert_config_contains "$file_path" "proxy_pass http://personalwebsite_app" "main proxy_pass upstream alias"
   if [[ "${TEST_READER}" == "1" ]]; then
     assert_config_contains "$file_path" "upstream reader_app" "reader upstream block"
