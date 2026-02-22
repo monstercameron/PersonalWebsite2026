@@ -42,7 +42,6 @@ import {
   importCompleteFinancialProfileFromJsonTextSnapshot,
   loadSupabaseWebConfigFromLocalStorageCache,
   persistSupabaseWebConfigIntoLocalStorageCache,
-  startSupabaseEmailOtpSignInWithRedirect,
   verifySupabaseEmailOtpCodeAndCreateSession,
   readSupabaseAuthenticatedUserSummary,
   signOutFromSupabaseCurrentSession,
@@ -109,10 +108,6 @@ const SYNC_MSG_NETWORK_HINT = 'Check API server availability and auth session.'
 const SYNC_MSG_NOT_FOUND_HINT = 'No remote profile exists yet for this user.'
 const SYNC_MSG_SAVING_CONFIG = 'Saving API sync config...'
 const SYNC_MSG_CONFIG_SAVED = 'API sync config saved.'
-const SYNC_MSG_PREPARING_LOGIN = 'Preparing API sync login...'
-const SYNC_MSG_PREPARING_LOGIN_DETAIL = 'Enter your password and connect.'
-const SYNC_MSG_READY_TO_CONNECT = 'Ready to connect.'
-const SYNC_MSG_READY_TO_CONNECT_DETAIL = 'Password auth is ready.'
 const SYNC_MSG_VERIFYING = 'Authenticating password...'
 const SYNC_MSG_OTP_REQUIRED = 'Enter password first.'
 const SYNC_MSG_SESSION_ACTIVE = 'API session active.'
@@ -130,6 +125,7 @@ const SYNC_SECTION_TITLE = 'API Sync'
 const SYNC_SECTION_DESC = 'Authenticate with admin password and sync profile JSON to your API + SQLite.'
 const SYNC_LABEL_ENABLED = 'Enabled'
 const SYNC_LABEL_ADMIN_PASSWORD = 'Admin Password'
+const SYNC_BTN_SAVE_CONFIG = 'Save Sync Setting'
 const SYNC_BTN_CONNECT = 'Connect'
 const SYNC_BTN_REFRESH_SESSION = 'Refresh Session'
 const SYNC_BTN_DISCONNECT = 'Disconnect'
@@ -138,6 +134,15 @@ const SYNC_BTN_PULL = 'Pull API'
 const SYNC_PROGRESS_TEXT = 'Sync in progress...'
 const API_SYNC_STORAGE_NOTE = 'Remote profile is stored in API SQLite tables: budget_profile_current + budget_profile_history.'
 const SYNC_AUTH_NOT_SIGNED_IN = 'Not signed in'
+const SYNC_NOTICE_HIDE_DELAY_MS = 2200
+const SYNC_NOTICE_TONE_SUCCESS = 'success'
+const SYNC_NOTICE_TONE_FAILURE = 'failure'
+const SYNC_NOTICE_CONNECT_SUCCESS = 'API session connected.'
+const SYNC_NOTICE_CONNECT_FAILURE = 'Could not connect API session.'
+const SYNC_NOTICE_PUSH_SUCCESS = 'Profile synced to API.'
+const SYNC_NOTICE_PUSH_FAILURE = 'API push failed.'
+const SYNC_NOTICE_PULL_SUCCESS = 'Profile loaded from API.'
+const SYNC_NOTICE_PULL_FAILURE = 'API pull failed.'
 
 function normalizePersonaNameForDisplay(rawName) {
   const sourceName = typeof rawName === 'string' ? rawName.trim() : ''
@@ -832,8 +837,21 @@ export default function App() {
   const [trendWindowMonths, setTrendWindowMonths] = React.useState(6)
   const [netWorthProjectionProfileId, setNetWorthProjectionProfileId] = React.useState('base')
   const [loanCalculatorFormState, setLoanCalculatorFormState] = React.useState(buildInitialLoanCalculatorFormState)
+  const [syncNoticeState, setSyncNoticeState] = React.useState({ tone: '', message: '' })
   const transactionUndoStackRef = React.useRef([])
+  const syncNoticeTimeoutRef = React.useRef(/** @type {ReturnType<typeof setTimeout>|null} */ (null))
   const [transactionUndoDepth, setTransactionUndoDepth] = React.useState(0)
+
+  function showSyncNotice(tone, message) {
+    if (syncNoticeTimeoutRef.current) {
+      clearTimeout(syncNoticeTimeoutRef.current)
+    }
+    setSyncNoticeState({ tone, message })
+    syncNoticeTimeoutRef.current = setTimeout(() => {
+      setSyncNoticeState({ tone: '', message: '' })
+      syncNoticeTimeoutRef.current = null
+    }, SYNC_NOTICE_HIDE_DELAY_MS)
+  }
 
   React.useEffect(() => {
     let isMounted = true
@@ -921,6 +939,13 @@ export default function App() {
     void loadCollectionsStateIntoComponent()
     return () => { isMounted = false }
   }, [defaultCollectionsState, defaultCollectionsStateError])
+
+  React.useEffect(() => () => {
+    if (syncNoticeTimeoutRef.current) {
+      clearTimeout(syncNoticeTimeoutRef.current)
+      syncNoticeTimeoutRef.current = null
+    }
+  }, [])
 
   React.useEffect(() => {
     const [ok, err] = applyThemeNameToDocumentBodyDataAttribute(themeName)
@@ -2189,74 +2214,48 @@ export default function App() {
       setSupabaseSyncStatusState(buildSupabaseUiStatusFromError(persistError))
       return
     }
-    setSupabaseSyncStatusState({ tone: SYNC_STATUS_TONE_SUCCESS, message: SYNC_MSG_CONFIG_SAVED, detail: supabaseSyncFormState.supabaseUrl || SYNC_DETAIL_CURRENT_ORIGIN })
+    setSupabaseSyncStatusState({ tone: SYNC_STATUS_TONE_SUCCESS, message: SYNC_MSG_CONFIG_SAVED, detail: '' })
     console.info('[api-sync] API sync config saved.')
   }
-  async function startSupabaseEmailOtpSignInFromModal() {
+  async function connectSupabaseSessionFromModal() {
     setIsSupabaseOperationInFlight(true)
-    setSupabaseSyncStatusState({ tone: SYNC_STATUS_TONE_NEUTRAL, message: SYNC_MSG_PREPARING_LOGIN, detail: SYNC_MSG_PREPARING_LOGIN_DETAIL })
+    setSupabaseSyncStatusState({ tone: SYNC_STATUS_TONE_NEUTRAL, message: SYNC_MSG_VERIFYING, detail: '' })
     const [isConfigValid, configValidationMessage] = validateSupabaseSyncConfigShapeForClientUsage(supabaseSyncFormState)
     if (!isConfigValid) {
       setSupabaseSyncStatusState({ tone: 'warning', message: configValidationMessage, detail: '' })
       setIsSupabaseOperationInFlight(false)
       return
     }
-    const [startSuccess, startError] = await startSupabaseEmailOtpSignInWithRedirect(supabaseSyncFormState, supabaseSyncFormState.email)
-    if (startError || !startSuccess) {
-      console.warn('[api-sync] Sign-in start failed.', startError)
-      setSupabaseSyncStatusState(buildSupabaseUiStatusFromError(startError))
-      setIsSupabaseOperationInFlight(false)
-      return
-    }
-    const otpRequestedAtIso = new Date().toISOString()
-    const nextFormState = {
-      ...supabaseSyncFormState,
-      otpPendingEmail: typeof supabaseSyncFormState.email === 'string' ? supabaseSyncFormState.email.trim() : '',
-      otpRequestedAtIso
-    }
-    setSupabaseSyncFormState(nextFormState)
-    const [persistSuccess, persistError] = await persistSupabaseWebConfigIntoLocalStorageCache(nextFormState)
-    if (persistError || !persistSuccess) {
-      console.warn('[api-sync] Failed to persist pending login metadata.', persistError)
-    }
-    console.info('[api-sync] Login flow initialized.', { username: supabaseSyncFormState.email, otpRequestedAtIso })
-    setSupabaseSyncStatusState({ tone: SYNC_STATUS_TONE_SUCCESS, message: SYNC_MSG_READY_TO_CONNECT, detail: SYNC_MSG_READY_TO_CONNECT_DETAIL })
-    setIsSupabaseOperationInFlight(false)
-  }
-  async function verifySupabaseEmailOtpCodeFromModal() {
-    setIsSupabaseOperationInFlight(true)
-    setSupabaseSyncStatusState({ tone: SYNC_STATUS_TONE_NEUTRAL, message: SYNC_MSG_VERIFYING, detail: '' })
-    const pendingEmail = typeof supabaseSyncFormState.email === 'string' ? supabaseSyncFormState.email.trim() : ''
-    if (typeof supabaseSyncFormState.otpCode !== 'string' || supabaseSyncFormState.otpCode.trim().length === 0) {
+    if (typeof supabaseSyncFormState.password !== 'string' || supabaseSyncFormState.password.trim().length === 0) {
       setSupabaseSyncStatusState({ tone: SYNC_STATUS_TONE_WARNING, message: SYNC_MSG_OTP_REQUIRED, detail: '' })
       setIsSupabaseOperationInFlight(false)
       return
     }
     const [verifiedUser, verifyError] = await verifySupabaseEmailOtpCodeAndCreateSession(
       supabaseSyncFormState,
-      pendingEmail,
-      supabaseSyncFormState.otpCode
+      '',
+      supabaseSyncFormState.password
     )
     if (verifyError || !verifiedUser) {
       console.warn('[api-sync] Login verify failed.', verifyError)
       setSupabaseSyncStatusState(buildSupabaseUiStatusFromError(verifyError))
+      showSyncNotice(SYNC_NOTICE_TONE_FAILURE, SYNC_NOTICE_CONNECT_FAILURE)
       setIsSupabaseOperationInFlight(false)
       return
     }
     const nextFormState = {
       ...supabaseSyncFormState,
-      otpCode: '',
-      otpPendingEmail: '',
-      otpRequestedAtIso: ''
+      password: ''
     }
     setSupabaseSyncFormState(nextFormState)
     const [persistSuccess, persistError] = await persistSupabaseWebConfigIntoLocalStorageCache(nextFormState)
     if (persistError || !persistSuccess) {
-      console.warn('[api-sync] Failed to clear pending login metadata.', persistError)
+      console.warn('[api-sync] Failed to persist sync config after login.', persistError)
     }
     setSupabaseAuthUserSummary({ id: verifiedUser.id, email: verifiedUser.email })
     setSupabaseSyncStatusState({ tone: SYNC_STATUS_TONE_SUCCESS, message: SYNC_MSG_SESSION_ACTIVE, detail: verifiedUser.email || verifiedUser.id })
     console.info('[api-sync] Login verify success.', { id: verifiedUser.id, email: verifiedUser.email })
+    showSyncNotice(SYNC_NOTICE_TONE_SUCCESS, SYNC_NOTICE_CONNECT_SUCCESS)
     setIsSupabaseOperationInFlight(false)
   }
   async function refreshSupabaseAuthUserSummaryFromSession() {
@@ -2268,11 +2267,11 @@ export default function App() {
     }
     setSupabaseAuthUserSummary(userSummary)
     if (userSummary) {
-      if (supabaseSyncFormState.otpPendingEmail || supabaseSyncFormState.otpRequestedAtIso || supabaseSyncFormState.otpCode) {
-        const nextFormState = { ...supabaseSyncFormState, otpCode: '', otpPendingEmail: '', otpRequestedAtIso: '' }
+      if (supabaseSyncFormState.password) {
+        const nextFormState = { ...supabaseSyncFormState, password: '' }
         setSupabaseSyncFormState(nextFormState)
         const [persistSuccess, persistError] = await persistSupabaseWebConfigIntoLocalStorageCache(nextFormState)
-        if (persistError || !persistSuccess) console.warn('[api-sync] Failed to clear login state after refresh.', persistError)
+        if (persistError || !persistSuccess) console.warn('[api-sync] Failed to persist config after refresh.', persistError)
       }
       setSupabaseSyncStatusState({ tone: SYNC_STATUS_TONE_SUCCESS, message: SYNC_MSG_SESSION_ACTIVE, detail: userSummary.email || userSummary.id })
     } else {
@@ -2290,10 +2289,10 @@ export default function App() {
       return
     }
     setSupabaseAuthUserSummary(null)
-    const nextFormState = { ...supabaseSyncFormState, otpCode: '', otpPendingEmail: '', otpRequestedAtIso: '' }
+    const nextFormState = { ...supabaseSyncFormState, password: '' }
     setSupabaseSyncFormState(nextFormState)
     const [persistSuccess, persistError] = await persistSupabaseWebConfigIntoLocalStorageCache(nextFormState)
-    if (persistError || !persistSuccess) console.warn('[api-sync] Failed to clear login state on sign-out.', persistError)
+    if (persistError || !persistSuccess) console.warn('[api-sync] Failed to persist config on sign-out.', persistError)
     setSupabaseSyncStatusState({ tone: SYNC_STATUS_TONE_NEUTRAL, message: SYNC_MSG_SIGNED_OUT, detail: '' })
     setIsSupabaseOperationInFlight(false)
   }
@@ -2309,10 +2308,12 @@ export default function App() {
     if (syncError || !syncResult) {
       console.warn('[api-sync] Push failed.', syncError)
       setSupabaseSyncStatusState(buildSupabaseUiStatusFromError(syncError))
+      showSyncNotice(SYNC_NOTICE_TONE_FAILURE, SYNC_NOTICE_PUSH_FAILURE)
       setIsSupabaseOperationInFlight(false)
       return
     }
     setSupabaseSyncStatusState({ tone: SYNC_STATUS_TONE_SUCCESS, message: SYNC_MSG_PUSH_DONE, detail: syncResult.savedAtIso })
+    showSyncNotice(SYNC_NOTICE_TONE_SUCCESS, SYNC_NOTICE_PUSH_SUCCESS)
     setIsSupabaseOperationInFlight(false)
   }
   async function pullProfileSnapshotFromSupabase() {
@@ -2322,6 +2323,7 @@ export default function App() {
     if (importedProfileError || !importedProfile) {
       console.warn('[api-sync] Pull failed.', importedProfileError)
       setSupabaseSyncStatusState(buildSupabaseUiStatusFromError(importedProfileError))
+      showSyncNotice(SYNC_NOTICE_TONE_FAILURE, SYNC_NOTICE_PULL_FAILURE)
       setIsSupabaseOperationInFlight(false)
       return
     }
@@ -2331,6 +2333,7 @@ export default function App() {
       return
     }
     setSupabaseSyncStatusState({ tone: SYNC_STATUS_TONE_SUCCESS, message: SYNC_MSG_PULL_DONE, detail: SYNC_MSG_PULL_DONE_DETAIL })
+    showSyncNotice(SYNC_NOTICE_TONE_SUCCESS, SYNC_NOTICE_PULL_SUCCESS)
     setIsSupabaseOperationInFlight(false)
   }
   async function saveFirebaseWebConfigIntoCache() {
@@ -3810,27 +3813,19 @@ export default function App() {
                       <option value="true">Enabled</option>
                     </select>
                   </label>
-                  <label className="text-xs font-medium text-slate-700">{SYNC_LABEL_BASE_URL}
-                    <input className="mt-1 h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none transition focus:border-indigo-400" type="text" value={supabaseSyncFormState.supabaseUrl} onChange={(event) => updateSupabaseSyncFormFieldValue('supabaseUrl', event.target.value)} />
-                  </label>
-                  <label className="text-xs font-medium text-slate-700">{SYNC_LABEL_ADMIN_USER}
-                    <input className="mt-1 h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none transition focus:border-indigo-400" type="email" value={supabaseSyncFormState.email || ''} onChange={(event) => updateSupabaseSyncFormFieldValue('email', event.target.value)} />
-                  </label>
                   <label className="text-xs font-medium text-slate-700 sm:col-span-2">{SYNC_LABEL_ADMIN_PASSWORD}
-                    <input className="mt-1 h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none transition focus:border-indigo-400" type="text" value={supabaseSyncFormState.otpCode || ''} onChange={(event) => updateSupabaseSyncFormFieldValue('otpCode', event.target.value)} />
+                    <input className="mt-1 h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none transition focus:border-indigo-400" type="password" value={supabaseSyncFormState.password || ''} onChange={(event) => updateSupabaseSyncFormFieldValue('password', event.target.value)} />
                   </label>
                 </div>
                 <div className="mt-2 flex flex-wrap justify-end gap-2">
                   <button className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 disabled:cursor-not-allowed disabled:opacity-40" disabled={isSupabaseOperationInFlight} onClick={() => { void saveSupabaseWebConfigIntoCache() }} type="button">{SYNC_BTN_SAVE_CONFIG}</button>
-                  <button className="rounded-xl border border-violet-300 bg-violet-50 px-3 py-2 text-xs font-semibold text-violet-700 disabled:cursor-not-allowed disabled:opacity-40" disabled={isSupabaseOperationInFlight} onClick={() => { void startSupabaseEmailOtpSignInFromModal() }} type="button">{SYNC_BTN_PREPARE_LOGIN}</button>
-                  <button className="rounded-xl border border-indigo-300 bg-indigo-50 px-3 py-2 text-xs font-semibold text-indigo-700 disabled:cursor-not-allowed disabled:opacity-40" disabled={isSupabaseOperationInFlight} onClick={() => { void verifySupabaseEmailOtpCodeFromModal() }} type="button">{SYNC_BTN_CONNECT}</button>
+                  <button className="rounded-xl border border-indigo-300 bg-indigo-50 px-3 py-2 text-xs font-semibold text-indigo-700 disabled:cursor-not-allowed disabled:opacity-40" disabled={isSupabaseOperationInFlight} onClick={() => { void connectSupabaseSessionFromModal() }} type="button">{SYNC_BTN_CONNECT}</button>
                   <button className="rounded-xl border border-slate-300 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-700 disabled:cursor-not-allowed disabled:opacity-40" disabled={isSupabaseOperationInFlight} onClick={() => { void refreshSupabaseAuthUserSummaryFromSession() }} type="button">{SYNC_BTN_REFRESH_SESSION}</button>
                   <button className="rounded-xl border border-rose-300 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700 disabled:cursor-not-allowed disabled:opacity-40" disabled={!supabaseAuthUserSummary || isSupabaseOperationInFlight} onClick={() => { void signOutFromSupabaseSessionFromModal() }} type="button">{SYNC_BTN_DISCONNECT}</button>
                   <button className="rounded-xl border border-emerald-300 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700 disabled:cursor-not-allowed disabled:opacity-40" disabled={!supabaseAuthUserSummary || isSupabaseOperationInFlight} onClick={() => { void pushCurrentProfileSnapshotToSupabase() }} type="button">{SYNC_BTN_PUSH}</button>
                   <button className="rounded-xl border border-sky-300 bg-sky-50 px-3 py-2 text-xs font-semibold text-sky-700 disabled:cursor-not-allowed disabled:opacity-40" disabled={!supabaseAuthUserSummary || isSupabaseOperationInFlight} onClick={() => { void pullProfileSnapshotFromSupabase() }} type="button">{SYNC_BTN_PULL}</button>
                 </div>
                 <p className="mt-2 text-[11px] text-slate-500">Auth: {supabaseAuthUserSummary ? `${supabaseAuthUserSummary.email || supabaseAuthUserSummary.id}` : SYNC_AUTH_NOT_SIGNED_IN}.</p>
-                {supabaseSyncFormState.otpPendingEmail ? <p className="mt-1 text-[11px] text-slate-500">{SYNC_PENDING_USER_PREFIX}{supabaseSyncFormState.otpPendingEmail}{supabaseSyncFormState.otpRequestedAtIso ? ` (${new Date(supabaseSyncFormState.otpRequestedAtIso).toLocaleString()})` : ''}</p> : null}
                 <p className={`mt-1 text-[11px] ${supabaseSyncStatusState.tone === SYNC_STATUS_TONE_SUCCESS ? 'text-emerald-600' : (supabaseSyncStatusState.tone === SYNC_STATUS_TONE_WARNING ? 'text-amber-700' : 'text-slate-500')}`}>Status: {supabaseSyncStatusState.message}</p>
                 {isSupabaseOperationInFlight ? <p className="mt-1 text-[11px] font-semibold text-indigo-600">{SYNC_PROGRESS_TEXT}</p> : null}
                 {supabaseSyncStatusState.detail ? <p className="mt-1 text-[11px] text-slate-500">{supabaseSyncStatusState.detail}</p> : null}
@@ -3994,6 +3989,19 @@ export default function App() {
               <label className="text-sm font-medium text-slate-700 sm:col-span-2">Description<input className="mt-1 h-11 w-full rounded-2xl border border-slate-200/90 bg-slate-50/90 px-3 text-slate-900 outline-none transition focus:border-teal-400 focus:bg-white" type="text" value={editRecordFormState.description} onChange={(event) => updateEditRecordFormFieldValue('description', event.target.value)} /></label>
               <div className="sm:col-span-2 flex flex-wrap justify-end gap-2"><button className="rounded-2xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700" onClick={() => setIsEditRecordModalOpen(false)} type="button">Cancel</button>{editRecordFormState.collectionName === 'assetHoldings' ? <button className="rounded-2xl border border-rose-300 bg-rose-50 px-4 py-2 text-sm font-semibold text-rose-700" onClick={() => { void deleteRecordFromCollectionByCollectionNameAndId('assetHoldings', editRecordFormState.recordId); setIsEditRecordModalOpen(false) }} type="button"><span aria-hidden="true" className="mr-1">{renderIconGlyphForAction('delete')}</span>Delete Asset</button> : null}<button className="rounded-2xl bg-teal-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-teal-700" type="submit">Save Changes</button></div>
             </form>
+          </div>
+        </section>
+      ) : null}
+      {syncNoticeState.message ? (
+        <section aria-live="polite" className="pointer-events-none fixed bottom-4 right-4 z-[5200]">
+          <div
+            className={`rounded-xl border px-3 py-2 text-xs font-medium shadow-lg backdrop-blur ${
+              syncNoticeState.tone === SYNC_NOTICE_TONE_SUCCESS
+                ? 'border-emerald-200/80 bg-emerald-50/90 text-emerald-800'
+                : 'border-rose-200/80 bg-rose-50/90 text-rose-800'
+            }`}
+          >
+            {syncNoticeState.message}
           </div>
         </section>
       ) : null}
