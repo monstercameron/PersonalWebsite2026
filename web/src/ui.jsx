@@ -544,23 +544,12 @@ function ResumePage({ onResumeDownload }) {
         <section className="resume-block resume-projects-block">
           <h3>Notable Projects</h3>
           <ul className="list">
-            <li><a href="https://github.com/monstercameron/GoWebComponents" target="_blank" rel="noreferrer noopener">GoWebComponents</a>: Architected a Go-powered component architecture focused on reusable frontend primitives, utilizing TEMPL for type-safe HTML rendering.</li>
-            <li><a href="https://github.com/monstercameron/LatentSpaceBrowser" target="_blank" rel="noreferrer noopener">LatentSpaceBrowser</a>: Developed an interactive AI exploration experience built around latent-space navigation using SOTA AI/ML models.</li>
-            <li><a href="https://github.com/monstercameron/Zerver" target="_blank" rel="noreferrer noopener">Zerver</a>: Engineered a C-based server project emphasizing low-level performance and runtime fundamentals.</li>
-            <li><a href="https://github.com/monstercameron/Budgetting_tool_vibecoded" target="_blank" rel="noreferrer noopener" title="Repo: Budgetting_tool_vibecoded">Budgeting Tool</a>: Implemented a finance tracking app for expenses, debt, and goal progress workflows.</li>
-            <li><a href="https://github.com/monstercameron/pi-camera-gui" target="_blank" rel="noreferrer noopener">Pi Camera GUI</a>: Built a Python + Pygame interface for Raspberry Pi HQ camera controls and capture workflows.</li>
+            <li><a href="https://github.com/monstercameron/GoWebComponents" target="_blank" rel="noreferrer noopener">GoWebComponents</a>: Built a Go + WebAssembly frontend framework with a React-like hook model, virtual DOM rendering, and shared typed logic across frontend/backend code.</li>
+            <li><a href="https://github.com/monstercameron/LatentSpaceBrowser" target="_blank" rel="noreferrer noopener">LatentSpaceBrowser</a>: Created a recursive generative "latent web" browser that synthesizes articles on demand and turns highlighted terms into follow-on exploration paths.</li>
+            <li><a href="https://github.com/monstercameron/Zerver" target="_blank" rel="noreferrer noopener">Zerver</a>: Designed an observability-first backend framework in Zig with trace-first request timelines, deterministic step pipelines, and structured error/logging semantics.</li>
+            <li><a href="https://github.com/monstercameron/Budgetting_tool_vibecoded" target="_blank" rel="noreferrer noopener" title="Repo: Budgetting_tool_vibecoded">Budgeting Tool</a>: Built a React + Vite budgeting app for tracking income, expenses, debt, loans, goals, and dashboard metrics with local persistence and import/export flows.</li>
+            <li><a href="https://github.com/monstercameron/pi-camera-gui" target="_blank" rel="noreferrer noopener">Pi Camera GUI</a>: Built a Pygame-driven Raspberry Pi HQ camera interface with manual controls, EXIF metadata support, mock desktop mode, and SQLite-backed settings.</li>
           </ul>
-        </section>
-
-        <section className="resume-block education-block">
-          <h3>Education</h3>
-          <article className="xp-item">
-            <div className="xp-head">
-              <p className="xp-role">Full Stack Web Development Certificate</p>
-              <p className="xp-time">2019</p>
-            </div>
-            <p className="xp-company">4Geeks Academy</p>
-          </article>
         </section>
 
         <section className="resume-block resume-interests-block">
