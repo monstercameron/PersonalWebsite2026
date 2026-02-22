@@ -512,7 +512,7 @@ function ResumePage({ onResumeDownload }) {
               <li>Engineered an award-winning AI chatbot prototype that reduced support case resolution time by 30%, recognized through internal innovation awards.</li>
               <li>Spearheaded critical war-room response for infrastructure and product-impacting incidents, reducing mean time to resolution (MTTR) by 25%.</li>
               <li>Developed internal dashboards using HONO.js JSX, HTMX, and MSSQL to streamline development and infrastructure Jira case tracking, improving team efficiency by 40%.</li>
-              <li>Mentored 5+ interns and conducted training sessions for support teams on engineering workflows, simplifying complex technical concepts for non-specialist audiences.</li>
+              <li>Mentored 5+ interns and conducted training sessions for support teams on engineering workflows, simplifying complex technical concepts for non-specialist audiences, resulting in a 15% decrease in escalated support tickets.</li>
             </ul>
           </article>
 
@@ -524,7 +524,7 @@ function ResumePage({ onResumeDownload }) {
             <ul className="list">
               <li>Instructed and guided 50+ students through full-stack web development foundations and project delivery, achieving a 90% graduation rate.</li>
               <li>Delivered structured training on practical engineering best practices, translating complex programming paradigms into accessible lessons.</li>
-              <li>Evaluated student projects and provided actionable code reviews to improve code quality and architecture understanding.</li>
+              <li>Evaluated student projects and provided actionable code reviews to improve code quality and architecture understanding, leading to a 20% increase in average project scores.</li>
               <li>Collaborated with lead instructors to refine curriculum materials based on student feedback and industry trends.</li>
             </ul>
           </article>
@@ -550,6 +550,17 @@ function ResumePage({ onResumeDownload }) {
             <li><a href="https://github.com/monstercameron/Budgetting_tool_vibecoded" target="_blank" rel="noreferrer noopener" title="Repo: Budgetting_tool_vibecoded">Budgeting Tool</a>: Implemented a finance tracking app for expenses, debt, and goal progress workflows.</li>
             <li><a href="https://github.com/monstercameron/pi-camera-gui" target="_blank" rel="noreferrer noopener">Pi Camera GUI</a>: Built a Python + Pygame interface for Raspberry Pi HQ camera controls and capture workflows.</li>
           </ul>
+        </section>
+
+        <section className="resume-block education-block">
+          <h3>Education</h3>
+          <article className="xp-item">
+            <div className="xp-head">
+              <p className="xp-role">Full Stack Web Development Certificate</p>
+              <p className="xp-time">2019</p>
+            </div>
+            <p className="xp-company">4Geeks Academy</p>
+          </article>
         </section>
 
         <section className="resume-block resume-interests-block">
