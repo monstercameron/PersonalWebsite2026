@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { Suspense, lazy, useEffect, useRef, useState } from "react";
 import { getYearLabel, buildNavItems } from "./core.pure.js";
 import { createBlog, createBlogCategory, deleteBlog, downloadResumePdf, fetchMessageOfDay, getBlog, getBlogAdminToken, getBlogsDashboard, getCurrentYear, getPublicBlog, listBlogCategories, listBlogs, listBlogTags, loginBlogAdmin, logoutBlogAdmin, setBlogPublished, updateBlog, uploadBlogImage } from "./core.impure.js";
 import hljs from "highlight.js/lib/common";
@@ -43,6 +43,7 @@ const PATH_HOME = "/";
 const PATH_RESUME = "/resume";
 const PATH_PROJECTS = "/projects";
 const PATH_RCTS = "/rcts";
+const PATH_BUDGET = "/budget";
 const PATH_BLOG = "/blog";
 const PATH_BLOG_PREFIX = "/blog/";
 const PATH_BLOG_DASHBOARD = "/blog/dashboard";
@@ -62,6 +63,8 @@ const TEXT_VLOG_URL_LABEL = "YouTube Link";
 const TEXT_VLOG_URL_PLACEHOLDER = "https://www.youtube.com/watch?v=...";
 const TEXT_VLOG_URL_HELP = "Paste a full YouTube URL for this vlog entry.";
 const TEXT_VLOG_URL_INVALID = "Enter a valid YouTube URL to preview the embed.";
+const TEXT_BUDGET_LOADING = "Loading budget tool...";
+const BudgetToolPageLazy = lazy(() => import("./budget/entry.jsx"));
 
 /**
  * @param {string} text
@@ -193,10 +196,19 @@ export function App() {
 function renderPage(pathname, onResumeDownload, motd) {
   if (pathname === PATH_HOME) return <HomePage motd={motd} />;
   if (pathname === PATH_RESUME) return <ResumePage onResumeDownload={onResumeDownload} />;
+  if (pathname === PATH_BUDGET) return <BudgetToolRoutePage />;
   if (pathname === PATH_PROJECTS || pathname === PATH_RCTS) return <ProjectsPage />;
   if (pathname === PATH_BLOG || pathname.startsWith(PATH_BLOG_PREFIX)) return <BlogPage />;
   if (pathname === PATH_AI_WORKSHOP) return <AiWorkshopPage />;
   return <NotFoundPage />;
+}
+
+function BudgetToolRoutePage() {
+  return (
+    <Suspense fallback={<section className="panel"><p>{TEXT_BUDGET_LOADING}</p></section>}>
+      <BudgetToolPageLazy />
+    </Suspense>
+  );
 }
 
 function HomePage({ motd }) {
