@@ -57,6 +57,10 @@ const CACHE_PUBLIC_PROMPTS = "public, max-age=15, stale-while-revalidate=30";
 const EVENT_REQUEST_START = "request_start";
 const EVENT_REQUEST_COMPLETE = "request_complete";
 const EVENT_REQUEST_PIPELINE_ERROR = "request_pipeline_error";
+const EVENT_REQUEST_HANDLER_ERROR = "request_handler_error";
+const EVENT_REQUEST_RESPONSE_ERROR = "request_response_error";
+const EVENT_REQUEST_RESPONSE_CLIENT_ERROR = "request_response_client_error";
+const EVENT_REQUEST_RESPONSE_SERVER_ERROR = "request_response_server_error";
 const EVENT_API_BOOT = "api_boot";
 const EVENT_ANIME_CRON_BOOT = "anime_cron_boot";
 const EVENT_ANIME_CRON_DISABLED = "anime_cron_disabled";
@@ -65,6 +69,12 @@ const EVENT_ANIME_CRON_TICK_COMPLETE = "anime_cron_tick_complete";
 const EVENT_ANIME_CRON_TICK_ERROR = "anime_cron_tick_error";
 const EVENT_ANIME_CRON_TICK_SKIPPED = "anime_cron_tick_skipped";
 const EVENT_RATE_LIMIT_EXCEEDED = "rate_limit_exceeded";
+const EVENT_AUTHN_FAILURE = "authn_failure";
+const EVENT_AUTHN_ERROR = "authn_error";
+const EVENT_AUTHN_SUCCESS = "authn_success";
+const EVENT_AUTHZ_FAILURE = "authz_failure";
+const EVENT_AUTHZ_ERROR = "authz_error";
+const EVENT_AUTH_CONFIG = "auth_config";
 const EVENT_SHUTDOWN_SIGNAL = "shutdown_signal";
 const EVENT_SHUTDOWN_COMPLETE = "shutdown_complete";
 const EVENT_SHUTDOWN_ERROR = "shutdown_error";
@@ -104,9 +114,12 @@ const HEADER_RETRY_AFTER = "Retry-After";
 const HEADER_X_FORWARDED_FOR = "x-forwarded-for";
 const HEADER_X_REAL_IP = "x-real-ip";
 const HEADER_CONTENT_TYPE = "Content-Type";
+const HEADER_AUTHORIZATION = "authorization";
 const CODE_NOT_FOUND = "NOT_FOUND";
 const CODE_RATE_LIMITED = "RATE_LIMITED";
 const CODE_SHUTTING_DOWN = "SHUTTING_DOWN";
+const CODE_UNAUTHORIZED = "UNAUTHORIZED";
+const CODE_INTERNAL_ERROR = "INTERNAL_ERROR";
 const ERR_BUDGET_PROFILE_NOT_FOUND = "Budget profile not found";
 const ERR_BUDGET_PROFILE_PAYLOAD_REQUIRED = "Budget profile payload is required";
 const ERR_ANIME_SEARCH_QUERY_REQUIRED = "Anime search query is required";
@@ -174,6 +187,19 @@ const ERR_ADMIN_TOKEN_REQUIRED = "Admin token is required";
 const ERR_ADMIN_TOKEN_INVALID = "Admin session expired or invalid";
 const ERR_IMAGE_REQUIRED = "Image file is required";
 const ERR_IMAGE_TYPE_INVALID = "Only png, jpg, jpeg, webp are allowed";
+const ERR_INTERNAL_SERVER_ERROR = "Internal server error";
+const AUTH_SCOPE_BLOG_ADMIN_LOGIN = "blog_admin_login";
+const AUTH_SCOPE_ADMIN_SESSION = "admin_session";
+const AUTH_REASON_MISSING_PASSWORD = "missing_password";
+const AUTH_REASON_INVALID_PASSWORD = "invalid_password";
+const AUTH_REASON_INVALID_LOGIN_BODY = "invalid_login_body";
+const AUTH_REASON_TOKEN_READ_ERROR = "token_read_error";
+const AUTH_REASON_TOKEN_MISSING = "token_missing";
+const AUTH_REASON_TOKEN_INVALID = "token_invalid";
+const AUTH_STAGE_SESSION_TTL = "session_ttl";
+const AUTH_STAGE_TOKEN_CREATE = "token_create";
+const AUTH_STAGE_COOKIE_BUILD = "cookie_build";
+const AUTH_STAGE_REQUEST_BODY_PARSE = "request_body_parse";
 const ALLOWED_IMAGE_TYPES = new Set(["image/png", "image/jpeg", "image/jpg", "image/webp"]);
 const JWT_ALG = "HS256";
 const JWT_SECRET_FALLBACK = "local-blog-admin-jwt-secret-change-me";
@@ -291,6 +317,39 @@ app.use("*", async (c, next) => {
   if (endLogRes.err) {
     console.error(endLogRes.err.message);
   }
+
+  if (c.res.status >= STATUS_BAD_REQUEST) {
+    const responseErrorEvent = c.res.status >= STATUS_SERVER_ERROR
+      ? EVENT_REQUEST_RESPONSE_SERVER_ERROR
+      : EVENT_REQUEST_RESPONSE_CLIENT_ERROR;
+    const responseErrorLogRes = logEvent(c.res.status >= STATUS_SERVER_ERROR ? LEVEL_ERROR : LEVEL_INFO, EVENT_REQUEST_RESPONSE_ERROR, {
+      requestId,
+      method: c.req.method,
+      path: c.req.path,
+      status: c.res.status,
+      categoryEvent: responseErrorEvent,
+      durationMs: Date.now() - startedAt
+    });
+    if (responseErrorLogRes.err) {
+      console.error(responseErrorLogRes.err.message);
+    }
+  }
+});
+
+app.onError((err, c) => {
+  const requestId = getRequestId(c);
+  const errorLogRes = logEvent(LEVEL_ERROR, EVENT_REQUEST_HANDLER_ERROR, {
+    requestId,
+    method: c.req.method,
+    path: c.req.path,
+    error: err instanceof Error ? err.message : String(err),
+    stack: err instanceof Error ? (err.stack || "") : ""
+  });
+  if (errorLogRes.err) {
+    console.error(errorLogRes.err.message);
+  }
+  c.header(CACHE_CONTROL, CACHE_NO_STORE);
+  return c.json({ message: ERR_INTERNAL_SERVER_ERROR, code: CODE_INTERNAL_ERROR }, STATUS_SERVER_ERROR);
 });
 
 app.get(PATH_API_HEALTH, (c) => {
@@ -320,6 +379,15 @@ app.post(PATH_API_AI, async (c) => {
   }
   const bodyRes = await fromPromise(c.req.json());
   if (bodyRes.err) {
+    const authLogRes = logAuthEvent(c, EVENT_AUTHN_ERROR, STATUS_BAD_REQUEST, {
+      scope: AUTH_SCOPE_BLOG_ADMIN_LOGIN,
+      stage: AUTH_STAGE_REQUEST_BODY_PARSE,
+      reason: AUTH_REASON_INVALID_LOGIN_BODY,
+      error: bodyRes.err.message
+    });
+    if (authLogRes.err) {
+      console.error(authLogRes.err.message);
+    }
     const publicErrRes = toPublicError(bodyRes.err);
     return c.json(publicErrRes.value, STATUS_BAD_REQUEST);
   }
@@ -457,33 +525,85 @@ app.post(PATH_API_BLOGS_ADMIN_LOGIN, async (c) => {
 
   const password = typeof bodyRes.value?.password === "string" ? bodyRes.value.password : "";
   if (!password.trim()) {
-    return c.json({ message: ERR_ADMIN_PASSWORD_REQUIRED, code: "UNAUTHORIZED" }, STATUS_UNAUTHORIZED);
+    const authLogRes = logAuthEvent(c, EVENT_AUTHN_FAILURE, STATUS_UNAUTHORIZED, {
+      scope: AUTH_SCOPE_BLOG_ADMIN_LOGIN,
+      reason: AUTH_REASON_MISSING_PASSWORD
+    });
+    if (authLogRes.err) {
+      console.error(authLogRes.err.message);
+    }
+    return c.json({ message: ERR_ADMIN_PASSWORD_REQUIRED, code: CODE_UNAUTHORIZED }, STATUS_UNAUTHORIZED);
   }
 
   const expectedPassword = process.env[ENV_BLOG_ADMIN_PASSWORD];
   if (!expectedPassword || password !== expectedPassword) {
-    return c.json({ message: ERR_ADMIN_PASSWORD_INVALID, code: "UNAUTHORIZED" }, STATUS_UNAUTHORIZED);
+    const authLogRes = logAuthEvent(c, EVENT_AUTHN_FAILURE, STATUS_UNAUTHORIZED, {
+      scope: AUTH_SCOPE_BLOG_ADMIN_LOGIN,
+      reason: AUTH_REASON_INVALID_PASSWORD,
+      passwordConfigured: Boolean(expectedPassword)
+    });
+    if (authLogRes.err) {
+      console.error(authLogRes.err.message);
+    }
+    return c.json({ message: ERR_ADMIN_PASSWORD_INVALID, code: CODE_UNAUTHORIZED }, STATUS_UNAUTHORIZED);
   }
 
   const ttlRes = getAdminSessionTtlMs();
   if (ttlRes.err) {
+    const authLogRes = logAuthEvent(c, EVENT_AUTHN_ERROR, STATUS_SERVER_ERROR, {
+      scope: AUTH_SCOPE_BLOG_ADMIN_LOGIN,
+      stage: AUTH_STAGE_SESSION_TTL,
+      error: ttlRes.err.message
+    });
+    if (authLogRes.err) {
+      console.error(authLogRes.err.message);
+    }
     const publicErrRes = toPublicError(ttlRes.err);
     return c.json(publicErrRes.value, STATUS_SERVER_ERROR);
   }
   const ttlMs = ttlRes.value;
   const tokenRes = createAdminJwt(process.env[ENV_BLOG_ADMIN_USER] || DEFAULT_BLOG_ADMIN_USER, ttlMs);
   if (tokenRes.err) {
+    const authLogRes = logAuthEvent(c, EVENT_AUTHN_ERROR, STATUS_SERVER_ERROR, {
+      scope: AUTH_SCOPE_BLOG_ADMIN_LOGIN,
+      stage: AUTH_STAGE_TOKEN_CREATE,
+      error: tokenRes.err.message
+    });
+    if (authLogRes.err) {
+      console.error(authLogRes.err.message);
+    }
     const publicErrRes = toPublicError(tokenRes.err);
     return c.json(publicErrRes.value, STATUS_SERVER_ERROR);
   }
   const expiresAt = Date.now() + ttlMs;
   const cookieRes = buildAdminCookie(tokenRes.value, ttlMs);
   if (cookieRes.err) {
+    const authLogRes = logAuthEvent(c, EVENT_AUTHN_ERROR, STATUS_SERVER_ERROR, {
+      scope: AUTH_SCOPE_BLOG_ADMIN_LOGIN,
+      stage: AUTH_STAGE_COOKIE_BUILD,
+      error: cookieRes.err.message
+    });
+    if (authLogRes.err) {
+      console.error(authLogRes.err.message);
+    }
     const publicErrRes = toPublicError(cookieRes.err);
     return c.json(publicErrRes.value, STATUS_SERVER_ERROR);
   }
   c.header(HEADER_SET_COOKIE, cookieRes.value);
   c.header(CACHE_CONTROL, CACHE_NO_STORE);
+  const authSuccessLogRes = logEvent(LEVEL_INFO, EVENT_AUTHN_SUCCESS, {
+    requestId: getRequestId(c),
+    method: c.req.method,
+    path: c.req.path,
+    status: 200,
+    scope: AUTH_SCOPE_BLOG_ADMIN_LOGIN,
+    ttlMs,
+    user: process.env[ENV_BLOG_ADMIN_USER] || DEFAULT_BLOG_ADMIN_USER,
+    ip: getClientIp(c)
+  });
+  if (authSuccessLogRes.err) {
+    console.error(authSuccessLogRes.err.message);
+  }
   return c.json({ expiresAt, user: process.env[ENV_BLOG_ADMIN_USER] || DEFAULT_BLOG_ADMIN_USER });
 });
 
@@ -499,7 +619,7 @@ app.post(PATH_API_BLOGS_ADMIN_LOGOUT, (c) => {
 });
 
 app.get(PATH_API_BUDGET_PROFILE, async (c) => {
-  const authRes = requireAdminSession(c);
+  const authRes = requireAdminSessionLogged(c);
   if (authRes.err) {
     return c.json({ message: authRes.err.message, code: "UNAUTHORIZED" }, STATUS_UNAUTHORIZED);
   }
@@ -521,7 +641,7 @@ app.get(PATH_API_BUDGET_PROFILE, async (c) => {
 });
 
 app.put(PATH_API_BUDGET_PROFILE, async (c) => {
-  const authRes = requireAdminSession(c);
+  const authRes = requireAdminSessionLogged(c);
   if (authRes.err) {
     return c.json({ message: authRes.err.message, code: "UNAUTHORIZED" }, STATUS_UNAUTHORIZED);
   }
@@ -546,7 +666,7 @@ app.put(PATH_API_BUDGET_PROFILE, async (c) => {
 });
 
 app.get(PATH_API_ANIME_SEARCH, async (c) => {
-  const authRes = requireAdminSession(c);
+  const authRes = requireAdminSessionLogged(c);
   if (authRes.err) {
     return c.json({ message: authRes.err.message, code: "UNAUTHORIZED" }, STATUS_UNAUTHORIZED);
   }
@@ -564,7 +684,7 @@ app.get(PATH_API_ANIME_SEARCH, async (c) => {
 });
 
 app.get(PATH_API_ANIME_TRACKED, (c) => {
-  const authRes = requireAdminSession(c);
+  const authRes = requireAdminSessionLogged(c);
   if (authRes.err) {
     return c.json({ message: authRes.err.message, code: "UNAUTHORIZED" }, STATUS_UNAUTHORIZED);
   }
@@ -578,7 +698,7 @@ app.get(PATH_API_ANIME_TRACKED, (c) => {
 });
 
 app.post(PATH_API_ANIME_TRACKED, async (c) => {
-  const authRes = requireAdminSession(c);
+  const authRes = requireAdminSessionLogged(c);
   if (authRes.err) {
     return c.json({ message: authRes.err.message, code: "UNAUTHORIZED" }, STATUS_UNAUTHORIZED);
   }
@@ -600,7 +720,7 @@ app.post(PATH_API_ANIME_TRACKED, async (c) => {
 });
 
 app.delete(PATH_API_ANIME_TRACKED_ID, (c) => {
-  const authRes = requireAdminSession(c);
+  const authRes = requireAdminSessionLogged(c);
   if (authRes.err) {
     return c.json({ message: authRes.err.message, code: "UNAUTHORIZED" }, STATUS_UNAUTHORIZED);
   }
@@ -618,7 +738,7 @@ app.delete(PATH_API_ANIME_TRACKED_ID, (c) => {
 });
 
 app.get(PATH_API_ANIME_QUESTION, async (c) => {
-  const authRes = requireAdminSession(c);
+  const authRes = requireAdminSessionLogged(c);
   if (authRes.err) {
     return c.json({ message: authRes.err.message, code: "UNAUTHORIZED" }, STATUS_UNAUTHORIZED);
   }
@@ -671,7 +791,7 @@ app.get(PATH_API_ANIME_FEED_QUESTIONS, async (c) => {
 });
 
 app.post(PATH_API_BLOG_CATEGORIES, async (c) => {
-  const authRes = requireAdminSession(c);
+  const authRes = requireAdminSessionLogged(c);
   if (authRes.err) {
     return c.json({ message: authRes.err.message, code: "UNAUTHORIZED" }, STATUS_UNAUTHORIZED);
   }
@@ -698,7 +818,7 @@ app.post(PATH_API_BLOG_CATEGORIES, async (c) => {
 });
 
 app.post(PATH_API_BLOG_TAGS, async (c) => {
-  const authRes = requireAdminSession(c);
+  const authRes = requireAdminSessionLogged(c);
   if (authRes.err) {
     return c.json({ message: authRes.err.message, code: "UNAUTHORIZED" }, STATUS_UNAUTHORIZED);
   }
@@ -725,7 +845,7 @@ app.post(PATH_API_BLOG_TAGS, async (c) => {
 });
 
 app.post(PATH_API_BLOGS_UPLOAD_IMAGE, async (c) => {
-  const authRes = requireAdminSession(c);
+  const authRes = requireAdminSessionLogged(c);
   if (authRes.err) {
     return c.json({ message: authRes.err.message, code: "UNAUTHORIZED" }, STATUS_UNAUTHORIZED);
   }
@@ -763,7 +883,7 @@ app.post(PATH_API_BLOGS_UPLOAD_IMAGE, async (c) => {
 });
 
 app.get(PATH_API_BLOGS_DASHBOARD, (c) => {
-  const authRes = requireAdminSession(c);
+  const authRes = requireAdminSessionLogged(c);
   if (authRes.err) {
     return c.json({ message: authRes.err.message, code: "UNAUTHORIZED" }, STATUS_UNAUTHORIZED);
   }
@@ -779,7 +899,7 @@ app.get(PATH_API_BLOGS_DASHBOARD, (c) => {
 });
 
 app.get(PATH_API_BLOGS_ID, (c) => {
-  const authRes = requireAdminSession(c);
+  const authRes = requireAdminSessionLogged(c);
   if (authRes.err) {
     return c.json({ message: authRes.err.message, code: "UNAUTHORIZED" }, STATUS_UNAUTHORIZED);
   }
@@ -827,7 +947,7 @@ app.get(PATH_API_BLOGS_PUBLIC_ID, (c) => {
 });
 
 app.post(PATH_API_BLOGS, async (c) => {
-  const authRes = requireAdminSession(c);
+  const authRes = requireAdminSessionLogged(c);
   if (authRes.err) {
     return c.json({ message: authRes.err.message, code: "UNAUTHORIZED" }, STATUS_UNAUTHORIZED);
   }
@@ -855,7 +975,7 @@ app.post(PATH_API_BLOGS, async (c) => {
 });
 
 app.put(PATH_API_BLOGS_ID, async (c) => {
-  const authRes = requireAdminSession(c);
+  const authRes = requireAdminSessionLogged(c);
   if (authRes.err) {
     return c.json({ message: authRes.err.message, code: "UNAUTHORIZED" }, STATUS_UNAUTHORIZED);
   }
@@ -893,7 +1013,7 @@ app.put(PATH_API_BLOGS_ID, async (c) => {
 });
 
 app.patch(PATH_API_BLOGS_PUBLISH, async (c) => {
-  const authRes = requireAdminSession(c);
+  const authRes = requireAdminSessionLogged(c);
   if (authRes.err) {
     return c.json({ message: authRes.err.message, code: "UNAUTHORIZED" }, STATUS_UNAUTHORIZED);
   }
@@ -931,7 +1051,7 @@ app.patch(PATH_API_BLOGS_PUBLISH, async (c) => {
 });
 
 app.delete(PATH_API_BLOGS_ID, (c) => {
-  const authRes = requireAdminSession(c);
+  const authRes = requireAdminSessionLogged(c);
   if (authRes.err) {
     return c.json({ message: authRes.err.message, code: "UNAUTHORIZED" }, STATUS_UNAUTHORIZED);
   }
@@ -955,6 +1075,62 @@ app.delete(PATH_API_BLOGS_ID, (c) => {
   c.header(CACHE_CONTROL, CACHE_NO_STORE);
   return c.json({ deleted: deleteRes.value, id: idRes.value });
 });
+
+/**
+ * @param {import("hono").Context} c
+ * @returns {string}
+ */
+function getRequestId(c) {
+  return String(c.get("requestId") || "");
+}
+
+/**
+ * @param {import("hono").Context} c
+ * @param {string} eventName
+ * @param {number} status
+ * @param {Record<string, unknown>} meta
+ * @returns {{ value: boolean | null, err: Error | null }}
+ */
+function logAuthEvent(c, eventName, status, meta) {
+  return logEvent(LEVEL_ERROR, eventName, {
+    requestId: getRequestId(c),
+    method: c.req.method,
+    path: c.req.path,
+    status,
+    ip: getClientIp(c),
+    ...meta
+  });
+}
+
+/**
+ * @param {import("hono").Context} c
+ * @param {string} scope
+ * @returns {{ value: boolean | null, err: Error | null }}
+ */
+function requireAdminSessionLogged(c, scope = AUTH_SCOPE_ADMIN_SESSION) {
+  const authRes = requireAdminSession(c);
+  if (authRes.err) {
+    const authEventRes = logAuthEvent(
+      c,
+      authRes.err.message === ERR_ADMIN_TOKEN_REQUIRED || authRes.err.message === ERR_ADMIN_TOKEN_INVALID ? EVENT_AUTHZ_FAILURE : EVENT_AUTHZ_ERROR,
+      authRes.err.message === ERR_ADMIN_TOKEN_REQUIRED || authRes.err.message === ERR_ADMIN_TOKEN_INVALID ? STATUS_UNAUTHORIZED : STATUS_SERVER_ERROR,
+      {
+        scope,
+        reason:
+          authRes.err.message === ERR_ADMIN_TOKEN_REQUIRED
+            ? AUTH_REASON_TOKEN_MISSING
+            : authRes.err.message === ERR_ADMIN_TOKEN_INVALID
+              ? AUTH_REASON_TOKEN_INVALID
+              : AUTH_REASON_TOKEN_READ_ERROR,
+        error: authRes.err.message
+      }
+    );
+    if (authEventRes.err) {
+      console.error(authEventRes.err.message);
+    }
+  }
+  return authRes;
+}
 
 /**
  * @param {import("hono").Context} c
@@ -994,7 +1170,7 @@ function getAdminTokenFromRequest(c) {
   if (headerToken) {
     return { value: headerToken, err: null };
   }
-  const authHeader = c.req.header("authorization") || "";
+  const authHeader = c.req.header(HEADER_AUTHORIZATION) || "";
   if (authHeader.toLowerCase().startsWith("bearer ")) {
     return { value: authHeader.slice(7).trim(), err: null };
   }
@@ -1175,6 +1351,17 @@ if (webStaticRoutesRes.err) {
 }
 
 const port = readEnvIntOrDefault(ENV_API_PORT, DEFAULT_API_PORT);
+const authConfigLogRes = logEvent(LEVEL_INFO, EVENT_AUTH_CONFIG, {
+  nodeEnv: String(process.env[ENV_NODE_ENV] || ""),
+  blogAdminUserConfigured: Boolean(String(process.env[ENV_BLOG_ADMIN_USER] || "").trim()),
+  blogAdminPasswordConfigured: Boolean(String(process.env[ENV_BLOG_ADMIN_PASSWORD] || "").trim()),
+  blogAdminJwtSecretConfigured: Boolean(String(process.env[ENV_BLOG_ADMIN_JWT_SECRET] || "").trim()),
+  trustProxyHeaders: TRUST_PROXY_HEADERS,
+  trustedProxyCount: TRUSTED_PROXY_IPS.size
+});
+if (authConfigLogRes.err) {
+  console.error(authConfigLogRes.err.message);
+}
 const serverHandle = serve({ fetch: app.fetch, port });
 const bootLogRes = logEvent(LEVEL_INFO, EVENT_API_BOOT, { port });
 if (bootLogRes.err) {
