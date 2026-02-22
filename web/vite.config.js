@@ -4,7 +4,7 @@ import react from "@vitejs/plugin-react";
 const DEFAULT_DEV_HOST = "0.0.0.0";
 const DEFAULT_DEV_PORT = 4000;
 const DEFAULT_DEV_STRICT_PORT = true;
-const DEFAULT_API_PROXY_TARGET = "http://localhost:8787";
+const DEFAULT_API_PROXY_TARGET = "http://localhost:8080";
 
 /**
  * @param {string} value
