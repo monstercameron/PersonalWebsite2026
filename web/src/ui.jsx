@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { getYearLabel, buildNavItems } from "./core.pure.js";
-import { createBlog, createBlogCategory, deleteBlog, downloadResumePdf, fetchMessageOfDay, getBlogAdminToken, getBlogsDashboard, getCurrentYear, getPublicBlog, listBlogCategories, listBlogs, listBlogTags, loginBlogAdmin, logoutBlogAdmin, setBlogPublished, updateBlog, uploadBlogImage } from "./core.impure.js";
+import { createBlog, createBlogCategory, deleteBlog, downloadResumePdf, fetchMessageOfDay, getBlog, getBlogAdminToken, getBlogsDashboard, getCurrentYear, getPublicBlog, listBlogCategories, listBlogs, listBlogTags, loginBlogAdmin, logoutBlogAdmin, setBlogPublished, updateBlog, uploadBlogImage } from "./core.impure.js";
 import hljs from "highlight.js/lib/common";
 import "highlight.js/styles/github-dark.css";
 import javascriptLang from "highlight.js/lib/languages/javascript";
@@ -50,6 +50,7 @@ const RESUME_PRINT_ROOT_ID = "resume-print-root";
 const RESUME_PDF_FILENAME = "EarlCameron-Resume.pdf";
 const RESUME_PDF_EXPORT_CLASS = "pdf-export";
 const BLOG_PAGE_SIZE = 10;
+const BLOG_ACTION_ANIMATION_MS = 100;
 const TEXT_CODE_COPY = "Copy";
 const TEXT_CODE_COPIED = "Copied";
 const TEXT_CODE_FALLBACK_LANG = "code";
@@ -60,6 +61,14 @@ const TEXT_CODE_FALLBACK_LANG = "code";
  */
 function copyToClipboard(text) {
   return navigator.clipboard.writeText(text).then(() => [true, null]).catch((err) => [null, err]);
+}
+
+/**
+ * @param {number} ms
+ * @returns {Promise<[boolean|null, Error|null]>}
+ */
+function waitMs(ms) {
+  return new Promise((resolve) => setTimeout(() => resolve([true, null]), ms));
 }
 
 /**
@@ -175,311 +184,316 @@ export function App() {
  * @returns {JSX.Element}
  */
 function renderPage(pathname, onResumeDownload, motd) {
-  if (pathname === PATH_HOME) {
-    return (
-      <>
-        <section className="panel hero hero-intro">
-          <div className="hero-intro-grid">
-            <div className="hero-copy">
-              <p className="eyebrow">SENIOR SOFTWARE ENGINEER</p>
-              <h2>Systems thinker. Builder. Pragmatist.</h2>
-              <p>
-                I frame problems as interacting subsystems—balancing software architecture, hardware constraints, and operational realities. I don't stop at concepts; I push toward manufacturable artifacts, clear tradeoffs, and high-leverage production outcomes.
-              </p>
-              <div className="hero-mini-metrics">
-                <span className="metric-pill">Cross-Domain Architecture</span>
-                <span className="metric-pill">HPC & AI Tooling</span>
-                <span className="metric-pill">Hardware/Software Integration</span>
-                <span className="metric-pill">High-Signal Execution</span>
-              </div>
-            </div>
-            <div className="hero-anchor-wrap">
-              <img className="home-anchor-image" src={LINK_PROFILE_ANCHOR_IMAGE} alt={ALT_PROFILE_ANCHOR_IMAGE} />
-              <p className="hero-caption">Tokyo, after-hours systems thinking.</p>
-            </div>
-          </div>
-        </section>
+  if (pathname === PATH_HOME) return <HomePage motd={motd} />;
+  if (pathname === PATH_RESUME) return <ResumePage onResumeDownload={onResumeDownload} />;
+  if (pathname === PATH_PROJECTS || pathname === PATH_RCTS) return <ProjectsPage />;
+  if (pathname === PATH_BLOG || pathname.startsWith(PATH_BLOG_PREFIX)) return <BlogPage />;
+  if (pathname === PATH_AI_WORKSHOP) return <AiWorkshopPage />;
+  return <NotFoundPage />;
+}
 
-        <section className="home-grid">
-          <section className="panel motd-panel">
-            <p className="eyebrow">MESSAGE OF THE DAY</p>
-            <p className="motd-quote">{motd.quote}</p>
-            {motd.loading ? <p className="motd-status">Thinking...</p> : null}
-          </section>
-
-          <section className="panel">
-            <h3>Operating Principles</h3>
-            <div className="kv-grid">
-              <div>
-                <p className="key">Design-to-Build</p>
-                <p className="val">Pushing past theory into manufacturable artifacts: tolerances, packaging, BOMs, and maintenance paths.</p>
-              </div>
-              <div>
-                <p className="key">Tradeoff-Driven</p>
-                <p className="val">Balancing high-performance ideas against practical limits (power, cost, time) to ship reliable solutions.</p>
-              </div>
-              <div>
-                <p className="key">Constraint-First</p>
-                <p className="val">Starting with hard constraints and selecting architectures that satisfy them through iterative, concrete steps.</p>
-              </div>
-              <div>
-                <p className="key">High Signal</p>
-                <p className="val">Low tolerance for ambiguity. Prioritizing precise language, explicit assumptions, and decision-ready recommendations.</p>
-              </div>
-            </div>
-          </section>
-
-          <section className="panel">
-            <p className="eyebrow">BEYOND THE CODE</p>
-            <h3>Engineering & Exploration</h3>
-            <div className="kv-grid">
-              <div>
-                <p className="key">Hardware & Fabrication</p>
-                <p className="val">Mechanical packaging, electrification, and building tangible systems with real-world constraints.</p>
-              </div>
-              <div>
-                <p className="key">Worldbuilding</p>
-                <p className="val">Designing coherent universes, factions, and systems of conflict with strict internal consistency.</p>
-              </div>
-              <div>
-                <p className="key">Logistics & Optimization</p>
-                <p className="val">High-leverage travel planning, budgeting dashboards, and building systems that reflect reality.</p>
-              </div>
-              <div>
-                <p className="key">Active Pursuits</p>
-                <p className="val">Tennis, distance walking, and beginner skiing progression.</p>
-              </div>
-            </div>
-          </section>
-
-          <section className="panel">
-            <p className="eyebrow">YOUTUBE</p>
-            <h3>Latest Video</h3>
-            <div className="video-wrap">
-              <iframe
-                className="video-frame"
-                src={LINK_YOUTUBE_EMBED}
-                title="Earl Cameron YouTube video"
-                loading="lazy"
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                allowFullScreen
-              />
-            </div>
+function HomePage({ motd }) {
+  return (
+    <>
+      <section className="panel hero hero-intro">
+        <div className="hero-intro-grid">
+          <div className="hero-copy">
+            <p className="eyebrow">SENIOR SOFTWARE ENGINEER</p>
+            <h2>Systems thinker. Builder. Pragmatist.</h2>
             <p>
-              <a href={LINK_YOUTUBE_VIDEO} target="_blank" rel="noreferrer noopener">Watch on YouTube</a>
+              I frame problems as interacting subsystems—balancing software architecture, hardware constraints, and operational realities. I don't stop at concepts; I push toward manufacturable artifacts, clear tradeoffs, and high-leverage production outcomes.
             </p>
-          </section>
-        </section>
-      </>
-    );
-  }
-
-  if (pathname === PATH_RESUME) {
-    return (
-      <section className="panel" id={RESUME_PRINT_ROOT_ID}>
-        <p className="eyebrow">RESUME</p>
-        <section className="resume-hero">
-          <div>
-            <h2 className="resume-title">Earl Cameron</h2>
-            <p className="resume-subtitle">Senior Software Engineer</p>
-            <p className="resume-contact">
-              <a href={`mailto:${TEXT_EMAIL}`}>{TEXT_EMAIL}</a>
-              <span className="dot-sep">•</span>
-              <a href={LINK_LINKEDIN} target="_blank" rel="noreferrer noopener">LinkedIn</a>
-              <span className="dot-sep">•</span>
-              <a href={LINK_GITHUB} target="_blank" rel="noreferrer noopener">GitHub</a>
-            </p>
-            <p className="resume-summary">
-              Senior software engineer who combines systems-level thinking with collaborative execution.
-              I partner across engineering, support, and product teams to turn ambiguous requirements into
-              clear plans and reliable implementations. I bring strong ownership, pragmatic decision-making,
-              and a build-first mindset that helps teams ship faster, reduce risk, and maintain high quality
-              in production. Led critical incident war-room response and mentored support engineers across
-              4+ years in production engineering environments.
-            </p>
-          </div>
-          <div className="resume-hero-cta">
-            <a className="cta-link" href="/resume/EarlCameron.pdf" onClick={onResumeDownload}>Download Full Resume (PDF)</a>
-          </div>
-        </section>
-
-        <div className="resume-grid">
-          <section className="resume-block skills-block">
-            <h3>Core Skills</h3>
-            <div className="chip-row">
-              <span className="chip chip-label">Languages</span><span className="chip">JavaScript / ES6+</span><span className="chip">Go</span><span className="chip">Python</span><span className="chip">C (Systems)</span><span className="chip">SQL</span>
-              <span className="chip chip-label">Web / APIs</span><span className="chip">React</span><span className="chip">Vite</span><span className="chip">Node.js</span><span className="chip">REST APIs</span>
-              <span className="chip chip-label">AI</span><span className="chip">OpenAI API</span><span className="chip">LLM Application Development</span>
-              <span className="chip chip-label">Ops / Platforms</span><span className="chip">WebAssembly</span><span className="chip">Observability / Reliability</span><span className="chip">CI/CD and Build Tooling</span><span className="chip">Linux</span><span className="chip">Raspberry Pi</span>
+            <div className="hero-mini-metrics">
+              <span className="metric-pill">Cross-Domain Architecture</span>
+              <span className="metric-pill">HPC & AI Tooling</span>
+              <span className="metric-pill">Hardware/Software Integration</span>
+              <span className="metric-pill">High-Signal Execution</span>
             </div>
-          </section>
-
-          <section className="resume-block experience-block">
-            <h3>Professional Experience</h3>
-            <article className="xp-item">
-              <div className="xp-head">
-                <p className="xp-role">Senior Software Engineer - UKG</p>
-                <p className="xp-time">2020 - Present</p>
-              </div>
-              <ul className="list">
-                <li>Built an award-winning AI chatbot prototype recognized through internal innovation awards.</li>
-                <li>Led critical war-room response for infrastructure and product-impacting incidents.</li>
-                <li>Designed internal dashboards for development and infrastructure Jira case tracking.</li>
-                <li>Mentored interns and trained support teams on engineering workflows.</li>
-              </ul>
-            </article>
-
-            <article className="xp-item">
-              <div className="xp-head">
-                <p className="xp-role">Instructor/TA - 4Geeks Academy</p>
-                <p className="xp-time">Jan 2020 - Aug 2021</p>
-              </div>
-              <ul className="list">
-                <li>Guided students through full-stack web development foundations and project delivery.</li>
-                <li>Delivered structured training on practical engineering best practices.</li>
-              </ul>
-            </article>
-
-            <article className="xp-item">
-              <div className="xp-head">
-                <p className="xp-role">HTML/CSS and JavaScript Tutor - HeyTutor.com</p>
-                <p className="xp-time">180+ Hours Tutored</p>
-              </div>
-              <ul className="list">
-                <li>Maintained a perfect 5.0 rating across student evaluations.</li>
-                <li>Provided personalized, outcome-focused instruction to 12 students.</li>
-              </ul>
-            </article>
-          </section>
-
-          <section className="resume-block">
-            <h3>Notable Projects</h3>
-            <ul className="list">
-              <li><a href="https://github.com/monstercameron/GoWebComponents" target="_blank" rel="noreferrer noopener">GoWebComponents</a>: Go-powered component architecture focused on reusable frontend primitives.</li>
-              <li><a href="https://github.com/monstercameron/LatentSpaceBrowser" target="_blank" rel="noreferrer noopener">LatentSpaceBrowser</a>: Interactive AI exploration experience built around latent-space navigation.</li>
-              <li><a href="https://github.com/monstercameron/Zerver" target="_blank" rel="noreferrer noopener">Zerver</a>: C-based server project emphasizing low-level performance and runtime fundamentals.</li>
-              <li><a href="https://github.com/monstercameron/Budgetting_tool_vibecoded" target="_blank" rel="noreferrer noopener" title="Repo: Budgetting_tool_vibecoded">Budgeting Tool</a>: Finance tracking app for expenses, debt, and goal progress workflows.</li>
-              <li><a href="https://github.com/monstercameron/pi-camera-gui" target="_blank" rel="noreferrer noopener">Pi Camera GUI</a>: Python + Pygame interface for Raspberry Pi HQ camera controls and capture workflows.</li>
-            </ul>
-          </section>
-
-          <section className="resume-block">
-            <h3>Community & Interests</h3>
-            <ul className="list">
-              <li>Building practical software tools with strong UX and measurable utility.</li>
-              <li>Systems engineering focus: performance, observability, reliability, and reproducible delivery.</li>
-              <li>Hardware/software integration work, especially Raspberry Pi and edge-device workflows.</li>
-              <li>Tennis, long-distance walking, and beginner skiing progression.</li>
-              <li>Hackathon participation (MDC Game Jam, Mango Hacks, Shell Hacks) and mentorship.</li>
-            </ul>
-          </section>
+          </div>
+          <div className="hero-anchor-wrap">
+            <img className="home-anchor-image" src={LINK_PROFILE_ANCHOR_IMAGE} alt={ALT_PROFILE_ANCHOR_IMAGE} />
+            <p className="hero-caption">Tokyo, after-hours systems thinking.</p>
+          </div>
         </div>
       </section>
-    );
-  }
 
-  if (pathname === PATH_PROJECTS || pathname === PATH_RCTS) {
-    return (
-      <section className="panel">
-        <p className="eyebrow">PROJECTS & EXPERIMENTS</p>
-        <h2>Systems, Tools, and Hardware</h2>
-        <p style={{ marginBottom: "32px", maxWidth: "70ch" }}>
-          A collection of tools built to solve specific problems, explore new architectures, or push hardware constraints. I focus on observability, performance, and practical utility over glossy features.
-        </p>
-        <div className="cards">
-          <article className="card">
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "12px" }}>
-              <h3><a href="https://github.com/monstercameron/Zerver" target="_blank" rel="noreferrer noopener">Zerver</a></h3>
-              <span className="chip" style={{ margin: 0 }}>Zig</span>
-            </div>
-            <p><strong>The Build:</strong> A backend framework built around pure-step request pipelines, explicit side effects, and built-in tracing.</p>
-            <p><strong>The Why:</strong> I wanted to make API behavior observable by default, so bottlenecks and failures are easier to diagnose and fix in production without relying on heavy external APM tools.</p>
-          </article>
+      <section className="home-grid">
+        <section className="panel motd-panel">
+          <p className="eyebrow">MESSAGE OF THE DAY</p>
+          <p className="motd-quote">{motd.quote}</p>
+          {motd.loading ? <p className="motd-status">Thinking...</p> : null}
+        </section>
 
-          <article className="card">
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "12px" }}>
-              <h3><a href="https://github.com/monstercameron/SchemaFlow" target="_blank" rel="noreferrer noopener">SchemaFlow</a></h3>
-              <span className="chip" style={{ margin: 0 }}>Go</span>
+        <section className="panel">
+          <h3>Operating Principles</h3>
+          <div className="kv-grid">
+            <div>
+              <p className="key">Design-to-Build</p>
+              <p className="val">Pushing past theory into manufacturable artifacts: tolerances, packaging, BOMs, and maintenance paths.</p>
             </div>
-            <p><strong>The Build:</strong> A library for type-safe LLM extraction and structured output validation.</p>
-            <p><strong>The Why:</strong> Parsing JSON from LLMs is notoriously fragile. I built this to replace runtime guessing with compile-time safety, making LLM pipelines actually production-friendly.</p>
-          </article>
+            <div>
+              <p className="key">Tradeoff-Driven</p>
+              <p className="val">Balancing high-performance ideas against practical limits (power, cost, time) to ship reliable solutions.</p>
+            </div>
+            <div>
+              <p className="key">Constraint-First</p>
+              <p className="val">Starting with hard constraints and selecting architectures that satisfy them through iterative, concrete steps.</p>
+            </div>
+            <div>
+              <p className="key">High Signal</p>
+              <p className="val">Low tolerance for ambiguity. Prioritizing precise language, explicit assumptions, and decision-ready recommendations.</p>
+            </div>
+          </div>
+        </section>
 
-          <article className="card">
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "12px" }}>
-              <h3><a href="https://github.com/monstercameron/pi-camera-gui" target="_blank" rel="noreferrer noopener">Pi Camera Rig</a></h3>
-              <span className="chip" style={{ margin: 0 }}>Python / Hardware</span>
+        <section className="panel">
+          <p className="eyebrow">BEYOND THE CODE</p>
+          <h3>Engineering & Exploration</h3>
+          <div className="kv-grid">
+            <div>
+              <p className="key">Hardware & Fabrication</p>
+              <p className="val">Mechanical packaging, electrification, and building tangible systems with real-world constraints.</p>
             </div>
-            <p><strong>The Build:</strong> A Pygame-based GUI that turns a bare Raspberry Pi HQ camera setup into a menu-driven, standalone camera experience.</p>
-            <p><strong>The Why:</strong> Command-line camera control isn't practical in the field. I needed a reliable interface with deep settings, metadata support, and a desktop mock mode for rapid iteration.</p>
-          </article>
+            <div>
+              <p className="key">Worldbuilding</p>
+              <p className="val">Designing coherent universes, factions, and systems of conflict with strict internal consistency.</p>
+            </div>
+            <div>
+              <p className="key">Logistics & Optimization</p>
+              <p className="val">High-leverage travel planning, budgeting dashboards, and building systems that reflect reality.</p>
+            </div>
+            <div>
+              <p className="key">Active Pursuits</p>
+              <p className="val">Tennis, distance walking, and beginner skiing progression.</p>
+            </div>
+          </div>
+        </section>
 
-          <article className="card">
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "12px" }}>
-              <h3><a href="https://github.com/monstercameron/LatentSpaceBrowser" target="_blank" rel="noreferrer noopener">Latent Space Browser</a></h3>
-              <span className="chip" style={{ margin: 0 }}>React / LLMs</span>
-            </div>
-            <p><strong>The Build:</strong> A generative encyclopedia UI where every linked term recursively generates new, context-aware AI content.</p>
-            <p><strong>The Why:</strong> Exploring a new interaction model for LLMs that moves beyond the standard chat interface, focusing on low-latency exploration and transparent token/cost metrics.</p>
-          </article>
+        <section className="panel">
+          <p className="eyebrow">YOUTUBE</p>
+          <h3>Latest Video</h3>
+          <div className="video-wrap">
+            <iframe
+              className="video-frame"
+              src={LINK_YOUTUBE_EMBED}
+              title="Earl Cameron YouTube video"
+              loading="lazy"
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+              allowFullScreen
+            />
+          </div>
+          <p>
+            <a href={LINK_YOUTUBE_VIDEO} target="_blank" rel="noreferrer noopener">Watch on YouTube</a>
+          </p>
+        </section>
+      </section>
+    </>
+  );
+}
 
-          <article className="card">
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "12px" }}>
-              <h3><a href="https://github.com/monstercameron/GoScript" target="_blank" rel="noreferrer noopener">GoScript</a></h3>
-              <span className="chip" style={{ margin: 0 }}>Go / WebAssembly</span>
-            </div>
-            <p><strong>The Build:</strong> A browser-based Go environment running the real Go compiler entirely client-side via WebAssembly.</p>
-            <p><strong>The Why:</strong> To make Go runnable in documentation, tutorials, and playgrounds instantly, without requiring users to install a local toolchain or rely on a backend execution server.</p>
-          </article>
-
-          <article className="card">
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "12px" }}>
-              <h3><a href="https://github.com/monstercameron/MetaHumanServer" target="_blank" rel="noreferrer noopener">MetaHuman Server</a></h3>
-              <span className="chip" style={{ margin: 0 }}>Python / Audio</span>
-            </div>
-            <p><strong>The Build:</strong> A voice-interactive chatbot server that combines NLP and real-time audio processing pipelines.</p>
-            <p><strong>The Why:</strong> Text chat is slow. I wanted to build a more human-like, low-latency voice interaction layer that could be integrated into games or online services.</p>
-          </article>
-
-          <article className="card">
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "12px" }}>
-              <h3><a href="https://github.com/monstercameron/mdchem" target="_blank" rel="noreferrer noopener">MDChem Backend</a></h3>
-              <span className="chip" style={{ margin: 0 }}>Node.js / REST</span>
-            </div>
-            <p><strong>The Build:</strong> Backend services for an educational chemistry game, handling data capture, reporting workflows, and educator access.</p>
-            <p><strong>The Why:</strong> Gameplay is only half the product. I built the infrastructure to store telemetry, generate useful trends, and manage controlled access for teachers.</p>
-          </article>
-
-          <article className="card">
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "12px" }}>
-              <h3><a href="https://github.com/monstercameron/Budgetting_tool_vibecoded" target="_blank" rel="noreferrer noopener">Personal Finance Dashboard</a></h3>
-              <span className="chip" style={{ margin: 0 }}>React / Vite</span>
-            </div>
-            <p><strong>The Build:</strong> A fast, client-side budgeting app for tracking income, expenses, debt, and goal progress.</p>
-            <p><strong>The Why:</strong> Off-the-shelf tools were too slow or lacked specific workflows. I built this to centralize my personal finance tracking with instant feedback and high-visibility metrics.</p>
-          </article>
+function ResumePage({ onResumeDownload }) {
+  return (
+    <section className="panel" id={RESUME_PRINT_ROOT_ID}>
+      <p className="eyebrow">RESUME</p>
+      <section className="resume-hero">
+        <div>
+          <h2 className="resume-title">Earl Cameron</h2>
+          <p className="resume-subtitle">Senior Software Engineer</p>
+          <p className="resume-contact">
+            <a href={`mailto:${TEXT_EMAIL}`}>{TEXT_EMAIL}</a>
+            <span className="dot-sep">•</span>
+            <a href={LINK_LINKEDIN} target="_blank" rel="noreferrer noopener">LinkedIn</a>
+            <span className="dot-sep">•</span>
+            <a href={LINK_GITHUB} target="_blank" rel="noreferrer noopener">GitHub</a>
+          </p>
+          <p className="resume-summary">
+            Senior software engineer who combines systems-level thinking with collaborative execution.
+            I partner across engineering, support, and product teams to turn ambiguous requirements into
+            clear plans and reliable implementations. I bring strong ownership, pragmatic decision-making,
+            and a build-first mindset that helps teams ship faster, reduce risk, and maintain high quality
+            in production. Led critical incident war-room response and mentored support engineers across
+            4+ years in production engineering environments.
+          </p>
+        </div>
+        <div className="resume-hero-cta">
+          <a className="cta-link" href="/resume/EarlCameron.pdf" onClick={onResumeDownload}>Download Full Resume (PDF)</a>
         </div>
       </section>
-    );
-  }
 
-  if (pathname === PATH_BLOG || pathname.startsWith(PATH_BLOG_PREFIX)) {
-    return <BlogPage />;
-  }
+      <div className="resume-grid">
+        <section className="resume-block skills-block">
+          <h3>Core Skills</h3>
+          <div className="chip-row">
+            <span className="chip chip-label">Languages</span><span className="chip">JavaScript / ES6+</span><span className="chip">Go</span><span className="chip">Python</span><span className="chip">C (Systems)</span><span className="chip">SQL</span>
+            <span className="chip chip-label">Web / APIs</span><span className="chip">React</span><span className="chip">Vite</span><span className="chip">Node.js</span><span className="chip">REST APIs</span>
+            <span className="chip chip-label">AI</span><span className="chip">OpenAI API</span><span className="chip">LLM Application Development</span>
+            <span className="chip chip-label">Ops / Platforms</span><span className="chip">WebAssembly</span><span className="chip">Observability / Reliability</span><span className="chip">CI/CD and Build Tooling</span><span className="chip">Linux</span><span className="chip">Raspberry Pi</span>
+          </div>
+        </section>
 
-  if (pathname === PATH_AI_WORKSHOP) {
-    return (
-      <section className="panel">
-        <p className="eyebrow">AI WORKSHOP</p>
-        <h2>Applied AI, Operationally</h2>
-        <p>
-          Focused on model utility under real constraints: latency, cost ceilings, observability,
-          and integration with existing systems.
-        </p>
-      </section>
-    );
-  }
+        <section className="resume-block experience-block">
+          <h3>Professional Experience</h3>
+          <article className="xp-item">
+            <div className="xp-head">
+              <p className="xp-role">Senior Software Engineer - UKG</p>
+              <p className="xp-time">2020 - Present</p>
+            </div>
+            <ul className="list">
+              <li>Built an award-winning AI chatbot prototype recognized through internal innovation awards.</li>
+              <li>Led critical war-room response for infrastructure and product-impacting incidents.</li>
+              <li>Designed internal dashboards for development and infrastructure Jira case tracking.</li>
+              <li>Mentored interns and trained support teams on engineering workflows.</li>
+            </ul>
+          </article>
 
+          <article className="xp-item">
+            <div className="xp-head">
+              <p className="xp-role">Instructor/TA - 4Geeks Academy</p>
+              <p className="xp-time">Jan 2020 - Aug 2021</p>
+            </div>
+            <ul className="list">
+              <li>Guided students through full-stack web development foundations and project delivery.</li>
+              <li>Delivered structured training on practical engineering best practices.</li>
+            </ul>
+          </article>
+
+          <article className="xp-item">
+            <div className="xp-head">
+              <p className="xp-role">HTML/CSS and JavaScript Tutor - HeyTutor.com</p>
+              <p className="xp-time">180+ Hours Tutored</p>
+            </div>
+            <ul className="list">
+              <li>Maintained a perfect 5.0 rating across student evaluations.</li>
+              <li>Provided personalized, outcome-focused instruction to 12 students.</li>
+            </ul>
+          </article>
+        </section>
+
+        <section className="resume-block">
+          <h3>Notable Projects</h3>
+          <ul className="list">
+            <li><a href="https://github.com/monstercameron/GoWebComponents" target="_blank" rel="noreferrer noopener">GoWebComponents</a>: Go-powered component architecture focused on reusable frontend primitives.</li>
+            <li><a href="https://github.com/monstercameron/LatentSpaceBrowser" target="_blank" rel="noreferrer noopener">LatentSpaceBrowser</a>: Interactive AI exploration experience built around latent-space navigation.</li>
+            <li><a href="https://github.com/monstercameron/Zerver" target="_blank" rel="noreferrer noopener">Zerver</a>: C-based server project emphasizing low-level performance and runtime fundamentals.</li>
+            <li><a href="https://github.com/monstercameron/Budgetting_tool_vibecoded" target="_blank" rel="noreferrer noopener" title="Repo: Budgetting_tool_vibecoded">Budgeting Tool</a>: Finance tracking app for expenses, debt, and goal progress workflows.</li>
+            <li><a href="https://github.com/monstercameron/pi-camera-gui" target="_blank" rel="noreferrer noopener">Pi Camera GUI</a>: Python + Pygame interface for Raspberry Pi HQ camera controls and capture workflows.</li>
+          </ul>
+        </section>
+
+        <section className="resume-block">
+          <h3>Community & Interests</h3>
+          <ul className="list">
+            <li>Building practical software tools with strong UX and measurable utility.</li>
+            <li>Systems engineering focus: performance, observability, reliability, and reproducible delivery.</li>
+            <li>Hardware/software integration work, especially Raspberry Pi and edge-device workflows.</li>
+            <li>Tennis, long-distance walking, and beginner skiing progression.</li>
+            <li>Hackathon participation (MDC Game Jam, Mango Hacks, Shell Hacks) and mentorship.</li>
+          </ul>
+        </section>
+      </div>
+    </section>
+  );
+}
+
+function ProjectsPage() {
+  return (
+    <section className="panel">
+      <p className="eyebrow">PROJECTS & EXPERIMENTS</p>
+      <h2>Systems, Tools, and Hardware</h2>
+      <p style={{ marginBottom: "32px", maxWidth: "70ch" }}>
+        A collection of tools built to solve specific problems, explore new architectures, or push hardware constraints. I focus on observability, performance, and practical utility over glossy features.
+      </p>
+      <div className="cards">
+        <article className="card">
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "12px" }}>
+            <h3><a href="https://github.com/monstercameron/Zerver" target="_blank" rel="noreferrer noopener">Zerver</a></h3>
+            <span className="chip" style={{ margin: 0 }}>Zig</span>
+          </div>
+          <p><strong>The Build:</strong> A backend framework built around pure-step request pipelines, explicit side effects, and built-in tracing.</p>
+          <p><strong>The Why:</strong> I wanted to make API behavior observable by default, so bottlenecks and failures are easier to diagnose and fix in production without relying on heavy external APM tools.</p>
+        </article>
+
+        <article className="card">
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "12px" }}>
+            <h3><a href="https://github.com/monstercameron/SchemaFlow" target="_blank" rel="noreferrer noopener">SchemaFlow</a></h3>
+            <span className="chip" style={{ margin: 0 }}>Go</span>
+          </div>
+          <p><strong>The Build:</strong> A library for type-safe LLM extraction and structured output validation.</p>
+          <p><strong>The Why:</strong> Parsing JSON from LLMs is notoriously fragile. I built this to replace runtime guessing with compile-time safety, making LLM pipelines actually production-friendly.</p>
+        </article>
+
+        <article className="card">
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "12px" }}>
+            <h3><a href="https://github.com/monstercameron/pi-camera-gui" target="_blank" rel="noreferrer noopener">Pi Camera Rig</a></h3>
+            <span className="chip" style={{ margin: 0 }}>Python / Hardware</span>
+          </div>
+          <p><strong>The Build:</strong> A Pygame-based GUI that turns a bare Raspberry Pi HQ camera setup into a menu-driven, standalone camera experience.</p>
+          <p><strong>The Why:</strong> Command-line camera control isn't practical in the field. I needed a reliable interface with deep settings, metadata support, and a desktop mock mode for rapid iteration.</p>
+        </article>
+
+        <article className="card">
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "12px" }}>
+            <h3><a href="https://github.com/monstercameron/LatentSpaceBrowser" target="_blank" rel="noreferrer noopener">Latent Space Browser</a></h3>
+            <span className="chip" style={{ margin: 0 }}>React / LLMs</span>
+          </div>
+          <p><strong>The Build:</strong> A generative encyclopedia UI where every linked term recursively generates new, context-aware AI content.</p>
+          <p><strong>The Why:</strong> Exploring a new interaction model for LLMs that moves beyond the standard chat interface, focusing on low-latency exploration and transparent token/cost metrics.</p>
+        </article>
+
+        <article className="card">
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "12px" }}>
+            <h3><a href="https://github.com/monstercameron/GoScript" target="_blank" rel="noreferrer noopener">GoScript</a></h3>
+            <span className="chip" style={{ margin: 0 }}>Go / WebAssembly</span>
+          </div>
+          <p><strong>The Build:</strong> A browser-based Go environment running the real Go compiler entirely client-side via WebAssembly.</p>
+          <p><strong>The Why:</strong> To make Go runnable in documentation, tutorials, and playgrounds instantly, without requiring users to install a local toolchain or rely on a backend execution server.</p>
+        </article>
+
+        <article className="card">
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "12px" }}>
+            <h3><a href="https://github.com/monstercameron/MetaHumanServer" target="_blank" rel="noreferrer noopener">MetaHuman Server</a></h3>
+            <span className="chip" style={{ margin: 0 }}>Python / Audio</span>
+          </div>
+          <p><strong>The Build:</strong> A voice-interactive chatbot server that combines NLP and real-time audio processing pipelines.</p>
+          <p><strong>The Why:</strong> Text chat is slow. I wanted to build a more human-like, low-latency voice interaction layer that could be integrated into games or online services.</p>
+        </article>
+
+        <article className="card">
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "12px" }}>
+            <h3><a href="https://github.com/monstercameron/mdchem" target="_blank" rel="noreferrer noopener">MDChem Backend</a></h3>
+            <span className="chip" style={{ margin: 0 }}>Node.js / REST</span>
+          </div>
+          <p><strong>The Build:</strong> Backend services for an educational chemistry game, handling data capture, reporting workflows, and educator access.</p>
+          <p><strong>The Why:</strong> Gameplay is only half the product. I built the infrastructure to store telemetry, generate useful trends, and manage controlled access for teachers.</p>
+        </article>
+
+        <article className="card">
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "12px" }}>
+            <h3><a href="https://github.com/monstercameron/Budgetting_tool_vibecoded" target="_blank" rel="noreferrer noopener">Personal Finance Dashboard</a></h3>
+            <span className="chip" style={{ margin: 0 }}>React / Vite</span>
+          </div>
+          <p><strong>The Build:</strong> A fast, client-side budgeting app for tracking income, expenses, debt, and goal progress.</p>
+          <p><strong>The Why:</strong> Off-the-shelf tools were too slow or lacked specific workflows. I built this to centralize my personal finance tracking with instant feedback and high-visibility metrics.</p>
+        </article>
+      </div>
+    </section>
+  );
+}
+
+function AiWorkshopPage() {
+  return (
+    <section className="panel">
+      <p className="eyebrow">AI WORKSHOP</p>
+      <h2>Applied AI, Operationally</h2>
+      <p>
+        Focused on model utility under real constraints: latency, cost ceilings, observability,
+        and integration with existing systems.
+      </p>
+    </section>
+  );
+}
+
+function NotFoundPage() {
   return (
     <section className="panel">
       <p className="eyebrow">NOT FOUND</p>
@@ -525,6 +539,17 @@ function BlogPage() {
   const [form, setForm] = useState({ id: null, title: "", summary: "", content: "", published: 0, categoryId: "", tagsText: "" });
   const imageInputRef = useRef(null);
   const goTo = (path) => window.location.assign(path);
+  const goToAnimated = async (path, event) => {
+    if (isModifiedNavEvent(event)) {
+      return;
+    }
+    if (event && event.preventDefault) {
+      event.preventDefault();
+    }
+    applyActionPulse(event?.currentTarget);
+    await waitMs(BLOG_ACTION_ANIMATION_MS);
+    window.location.assign(path);
+  };
   const goBack = (fallbackPath = PATH_BLOG) => {
     if (window.history.length > 1) {
       window.history.back();
@@ -539,15 +564,15 @@ function BlogPage() {
 
   const load = async () => {
     if (isDetailView) {
-      const [rowRes, listRes] = await Promise.all([getPublicBlog(detailId), listBlogs()]);
+      const [rowRes, listRes] = await Promise.all([isAdmin ? getBlog(detailId) : getPublicBlog(detailId), listBlogs()]);
       if (rowRes.err || !rowRes.value) {
         setStatus({ text: rowRes.err ? rowRes.err.message : "Blog not found", error: true });
         return;
       }
       setDetailRow(rowRes.value);
       if (!listRes.err) {
-        const published = listRes.value.filter((row) => row.published);
-        const sorted = [...published].sort((a, b) => Number(a.id) - Number(b.id));
+        const navRows = isAdmin ? listRes.value : listRes.value.filter((row) => row.published);
+        const sorted = [...navRows].sort((a, b) => Number(a.id) - Number(b.id));
         const currentIndex = sorted.findIndex((row) => Number(row.id) === detailId);
         const prevRow = currentIndex > 0 ? sorted[currentIndex - 1] : null;
         const nextRow = currentIndex >= 0 && currentIndex < sorted.length - 1 ? sorted[currentIndex + 1] : null;
@@ -650,7 +675,13 @@ function BlogPage() {
     goTo(`/blog/${row.id}/edit`);
   };
 
-  const onDelete = async (id) => {
+  const onDelete = async (id, event) => {
+    applyActionPulse(event?.currentTarget);
+    const confirmed = window.confirm("Delete this blog post permanently?");
+    if (!confirmed) {
+      return;
+    }
+    await waitMs(BLOG_ACTION_ANIMATION_MS);
     const res = await deleteBlog(id);
     if (res.err) {
       setStatus({ text: res.err.message, error: true });
@@ -709,12 +740,53 @@ function BlogPage() {
   };
 
   if (isDetailView && detailRow) {
-    return (
-      <article className="panel blog-post-detail">
-        <div className="blog-post-topbar">
-          <button className="cta-link cta-button" type="button" onClick={() => goTo(PATH_BLOG)}>Back to Blog List</button>
+    return <BlogDetailView detailRow={detailRow} detailNav={detailNav} goToAnimated={goToAnimated} />;
+  }
+
+  return (
+    <section className="panel blog-shell">
+      <header className="blog-header">
+        <div>
+          <p className="eyebrow">SYSTEM LOGS</p>
+          <h2>{isAdmin ? "Command Console" : "Build Logs & Notes"}</h2>
+          <p className="blog-subhead">Engineering notes, architectural decisions, and operational experiments.</p>
+          {(activeCategory || activeTag) ? (
+            <p className="blog-subhead" style={{ marginTop: "8px", display: "flex", gap: "8px", alignItems: "center" }}>
+              <span style={{ color: "var(--muted)" }}>Active Filter:</span>
+              {activeCategory ? <span className="meta-pill" style={{ borderColor: "var(--accent)", color: "var(--accent-soft)" }}>{activeCategory}</span> : null}
+              {activeTag ? <span className="meta-pill" style={{ borderColor: "var(--accent)", color: "var(--accent-soft)" }}>{activeTag}</span> : null}
+              <a href={PATH_BLOG} style={{ fontSize: "0.85rem", color: "var(--muted)", textDecoration: "underline" }}>Clear</a>
+            </p>
+          ) : null}
         </div>
-        <p className="eyebrow">BLOG POST</p>
+        <div className="blog-header-actions">
+          <button className={`tab-btn ${view === "list" ? "is-active" : ""}`} type="button" onClick={() => goTo(PATH_BLOG)}>Public Logs</button>
+          {!isAdmin ? <button className={`tab-btn ${view === "login" ? "is-active" : ""}`} type="button" onClick={() => goTo(PATH_BLOG_DASHBOARD)}>Authenticate</button> : null}
+          {isAdmin ? <button className={`tab-btn ${view === "dashboard" ? "is-active" : ""}`} type="button" onClick={() => goTo(PATH_BLOG_DASHBOARD)}>Dashboard</button> : null}
+          {isAdmin ? <button className={`tab-btn ${view === "editor" ? "is-active" : ""}`} type="button" onClick={() => { setPreviousView(view); goTo("/blog/0/new"); }}>New Entry</button> : null}
+          {isAdmin ? <button className="tab-btn danger" type="button" onClick={() => { logoutBlogAdmin(); setIsAdmin(false); goTo(PATH_BLOG); }}>Disconnect</button> : null}
+        </div>
+      </header>
+
+      {status.text ? <p className={status.error ? "blog-error" : "blog-success"}>{status.text}</p> : null}
+
+      {view === "login" && !isAdmin ? <BlogLoginView password={password} setPassword={setPassword} onLogin={onLogin} /> : null}
+      {view === "dashboard" && isAdmin ? <BlogDashboardView dashboard={dashboard} dashboardPageData={dashboardPageData} dashboardPage={dashboardPage} setDashboardPage={setDashboardPage} onDelete={onDelete} onTogglePublish={onTogglePublish} onNavigate={goToAnimated} /> : null}
+      {view === "list" ? <BlogListView listPageData={listPageData} listPage={listPage} setListPage={setListPage} isAdmin={isAdmin} onDelete={onDelete} onNavigate={goToAnimated} /> : null}
+      {view === "editor" && isAdmin ? <BlogEditorView form={form} onField={onField} onSave={onSave} goBack={goBack} previousView={previousView} applyEditorWrap={applyEditorWrap} imageInputRef={imageInputRef} imageScalePct={imageScalePct} setImageScalePct={setImageScalePct} onImagePick={onImagePick} categories={categories} newCategoryName={newCategoryName} setNewCategoryName={setNewCategoryName} createCategory={createCategory} tags={tags} /> : null}
+    </section>
+  );
+}
+
+function BlogDetailView({ detailRow, detailNav, goToAnimated }) {
+  return (
+    <article className="blog-post-detail">
+      <div className="blog-post-topbar">
+        <button className="cta-link cta-button" type="button" onClick={(event) => goToAnimated(PATH_BLOG, event)}>← Back to System Logs</button>
+      </div>
+      <div style={{ maxWidth: "75ch", margin: "0 auto", width: "100%" }}>
+        <div className="blog-detail-stage">
+        <p className="eyebrow">SYSTEM LOG</p>
         <h2>{detailRow.title}</h2>
         {detailRow.summary ? <p className="blog-post-summary">{detailRow.summary}</p> : null}
         <div className="blog-post-meta">
@@ -722,83 +794,91 @@ function BlogPage() {
           {Array.isArray(detailRow.tags) ? detailRow.tags.map((tag) => <a className="meta-pill meta-link" key={tag.id} href={buildBlogFilterHref({ tag: tag.name })}>{tag.name}</a>) : null}
         </div>
         <div className="blog-content blog-detail-content">{renderRichContent(detailRow.content)}</div>
+        </div>
         <div className="blog-row-actions blog-detail-nav">
-          {detailNav.prevId ? <a className="cta-link" href={`/blog/${detailNav.prevId}`}>Previous</a> : <span />}
-          {detailNav.nextId ? <a className="cta-link" href={`/blog/${detailNav.nextId}`}>Next</a> : <span />}
+          {detailNav.prevId ? <a className="cta-link" href={`/blog/${detailNav.prevId}`} onClick={(event) => goToAnimated(`/blog/${detailNav.prevId}`, event)}>← Previous Log</a> : <span />}
+          {detailNav.nextId ? <a className="cta-link" href={`/blog/${detailNav.nextId}`} onClick={(event) => goToAnimated(`/blog/${detailNav.nextId}`, event)}>Next Log →</a> : <span />}
         </div>
-      </article>
-    );
-  }
+      </div>
+    </article>
+  );
+}
 
+function BlogLoginView({ password, setPassword, onLogin }) {
   return (
-    <section className="panel blog-shell">
-      <header className="blog-header">
-        <div>
-          <p className="eyebrow">BLOG</p>
-          <h2>{isAdmin ? "Publishing Console" : "Journal & Notes"}</h2>
-          <p className="blog-subhead">Engineering notes, experiments, and build logs.</p>
-          {(activeCategory || activeTag) ? (
-            <p className="blog-subhead">
-              Filter:
-              {activeCategory ? ` category=${activeCategory}` : ""}
-              {activeCategory && activeTag ? " |" : ""}
-              {activeTag ? ` tag=${activeTag}` : ""}
-              {" "}
-              <a href={PATH_BLOG}>Clear</a>
-            </p>
-          ) : null}
-        </div>
-        <div className="blog-header-actions">
-          <button className={`tab-btn ${view === "list" ? "is-active" : ""}`} type="button" onClick={() => goTo(PATH_BLOG)}>Posts</button>
-          {!isAdmin ? <button className={`tab-btn ${view === "login" ? "is-active" : ""}`} type="button" onClick={() => goTo(PATH_BLOG_DASHBOARD)}>Admin</button> : null}
-          {isAdmin ? <button className={`tab-btn ${view === "dashboard" ? "is-active" : ""}`} type="button" onClick={() => goTo(PATH_BLOG_DASHBOARD)}>Dashboard</button> : null}
-          {isAdmin ? <button className={`tab-btn ${view === "editor" ? "is-active" : ""}`} type="button" onClick={() => { setPreviousView(view); goTo("/blog/0/new"); }}>New Post</button> : null}
-          {isAdmin ? <button className="tab-btn danger" type="button" onClick={() => { logoutBlogAdmin(); setIsAdmin(false); goTo(PATH_BLOG); }}>Logout</button> : null}
-        </div>
-      </header>
+    <form className="blog-login-card" onSubmit={onLogin}>
+      <div style={{ marginBottom: "24px", textAlign: "center" }}>
+        <h3 style={{ margin: "0 0 8px 0" }}>System Authentication</h3>
+        <p style={{ color: "var(--muted)", margin: 0, fontSize: "0.9rem" }}>Enter credentials to access the command console.</p>
+      </div>
+      <label>
+        <span style={{ color: "var(--muted)", fontSize: "0.85rem", textTransform: "uppercase", letterSpacing: "0.05em" }}>Access Key</span>
+        <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" style={{ marginTop: "8px" }} />
+      </label>
+      <button className="cta-link cta-button" type="submit" style={{ width: "100%", justifyContent: "center", marginTop: "16px" }}>Authenticate</button>
+    </form>
+  );
+}
 
-      {status.text ? <p className={status.error ? "blog-error" : "blog-success"}>{status.text}</p> : null}
-
-      {view === "login" && !isAdmin ? (
-        <form className="blog-login-card" onSubmit={onLogin}>
-          <label>
-            <span>Admin Password</span>
-            <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
-          </label>
-          <button className="cta-link cta-button" type="submit">Login</button>
-        </form>
-      ) : null}
-
-      {view === "dashboard" && isAdmin ? (
-        <section className="blog-dash">
-          <div className="dash-stats">
-            <article className="dash-card"><p>Total Posts</p><h3>{dashboard.total}</h3></article>
-            <article className="dash-card"><p>Published</p><h3>{dashboard.published}</h3></article>
-            <article className="dash-card"><p>Drafts</p><h3>{dashboard.drafts}</h3></article>
+function BlogDashboardView({ dashboard, dashboardPageData, dashboardPage, setDashboardPage, onDelete, onTogglePublish, onNavigate }) {
+  return (
+    <section className="blog-dash">
+      <div className="dash-stats">
+        <article className="dash-card">
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+            <p style={{ color: "var(--muted)", fontSize: "0.85rem", textTransform: "uppercase", letterSpacing: "0.05em", margin: 0 }}>Total Logs</p>
+            <span style={{ color: "var(--muted)", fontSize: "1.2rem", lineHeight: 1 }}>∑</span>
           </div>
-          <div className="dash-list">
-            <h3>All Posts</h3>
-            <div className="dash-rows">
-              {dashboardPageData.items.map((row) => (
-                <div className="dash-row" key={row.id}>
-                  <div className="dash-row-main">
-                    <a href={`/blog/${row.id}`}>{row.title}</a>
-                    <div className="dash-row-meta">
-                      <span className="meta-pill">{row.published ? "Published" : "Draft"}</span>
-                      {row.category ? <a className="meta-pill meta-link" href={buildBlogFilterHref({ category: row.category.name })}>{row.category.name}</a> : <span className="meta-pill">No category</span>}
-                      {Array.isArray(row.tags) && row.tags.length > 0
-                        ? row.tags.map((tag) => <a className="meta-pill meta-link" key={`${row.id}-${tag.id}`} href={buildBlogFilterHref({ tag: tag.name })}>{tag.name}</a>)
-                        : <span className="meta-pill">Tags: none</span>}
-                    </div>
-                  </div>
-                  <div className="dash-actions">
-                    <button className="cta-link cta-button" type="button" onClick={() => onEdit(row)}>Edit</button>
-                    <button className="cta-link cta-button cta-danger" type="button" onClick={() => onDelete(row.id)}>Delete</button>
-                    <button className="cta-link cta-button" type="button" onClick={() => onTogglePublish(row)}>{row.published ? "Unpublish" : "Publish"}</button>
-                  </div>
+          <h3 style={{ fontSize: "2rem", margin: "16px 0 0 0" }}>{dashboard.total}</h3>
+        </article>
+        <article className="dash-card">
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+            <p style={{ color: "var(--muted)", fontSize: "0.85rem", textTransform: "uppercase", letterSpacing: "0.05em", margin: 0 }}>Published</p>
+            <span style={{ color: "var(--accent)", fontSize: "1.2rem", lineHeight: 1 }}>●</span>
+          </div>
+          <h3 style={{ fontSize: "2rem", margin: "16px 0 0 0" }}>{dashboard.published}</h3>
+        </article>
+        <article className="dash-card">
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+            <p style={{ color: "var(--muted)", fontSize: "0.85rem", textTransform: "uppercase", letterSpacing: "0.05em", margin: 0 }}>Drafts</p>
+            <span style={{ color: "var(--muted)", fontSize: "1.2rem", lineHeight: 1 }}>○</span>
+          </div>
+          <h3 style={{ fontSize: "2rem", margin: "16px 0 0 0" }}>{dashboard.drafts}</h3>
+        </article>
+      </div>
+      <div className="dash-list">
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "24px", borderBottom: "1px solid var(--line)", paddingBottom: "16px" }}>
+          <h3 style={{ margin: 0, border: "none", padding: 0, fontSize: "1.1rem" }}>System Entries</h3>
+          <span className="meta-pill" style={{ margin: 0 }}>Page {dashboardPageData.page}</span>
+        </div>
+        <div className="dash-rows">
+          {dashboardPageData.items.length === 0 ? (
+            <p style={{ color: "var(--muted)", fontStyle: "italic", padding: "20px 0", textAlign: "center" }}>No entries found in the system.</p>
+          ) : null}
+          {dashboardPageData.items.map((row) => (
+            <div className="dash-row" key={row.id}>
+              <div className="dash-row-main">
+                <a href={`/blog/${row.id}`} onClick={(event) => onNavigate(`/blog/${row.id}`, event)} style={{ fontWeight: 500, fontSize: "1.05rem" }}>{row.title || "Untitled Entry"}</a>
+                <div className="dash-row-meta" style={{ marginTop: "8px" }}>
+                  <span className="meta-pill" style={{ borderColor: row.published ? "var(--accent)" : "var(--line)", color: row.published ? "var(--accent-soft)" : "var(--muted)" }}>
+                    {row.published ? "Published" : "Draft"}
+                  </span>
+                  {row.category ? <a className="meta-pill meta-link" href={buildBlogFilterHref({ category: row.category.name })}>{row.category.name}</a> : <span className="meta-pill">Uncategorized</span>}
+                  {Array.isArray(row.tags) && row.tags.length > 0
+                    ? row.tags.map((tag) => <a className="meta-pill meta-link" key={`${row.id}-${tag.id}`} href={buildBlogFilterHref({ tag: tag.name })}>{tag.name}</a>)
+                    : null}
                 </div>
-              ))}
+              </div>
+              <div className="dash-actions">
+                <a className="cta-link" href={`/blog/${row.id}/edit`} onClick={(event) => onNavigate(`/blog/${row.id}/edit`, event)}>Edit</a>
+                <button className="cta-link cta-button" type="button" onClick={() => onTogglePublish(row)}>{row.published ? "Unpublish" : "Publish"}</button>
+                <button className="cta-link cta-button cta-danger" type="button" onClick={(event) => onDelete(row.id, event)}>Delete</button>
+              </div>
             </div>
+          ))}
+        </div>
+        {dashboardPageData.totalPages > 1 ? (
+          <div style={{ marginTop: "24px", paddingTop: "24px", borderTop: "1px solid var(--line)" }}>
             <PaginationControls
               page={dashboardPageData.page}
               totalPages={dashboardPageData.totalPages}
@@ -806,88 +886,116 @@ function BlogPage() {
               onNext={() => setDashboardPage((prev) => Math.min(dashboardPageData.totalPages, prev + 1))}
             />
           </div>
-        </section>
-      ) : null}
+        ) : null}
+      </div>
+    </section>
+  );
+}
 
-      {view === "list" ? (
-        <section className="blog-grid">
-          {listPageData.items.map((row) => (
-            <article className="blog-card" key={row.id}>
-              <h3><a href={`/blog/${row.id}`}>{row.title}</a></h3>
-              <p className="blog-card-summary">{row.summary || "No summary yet."}</p>
-              <div className="blog-card-meta">
-                {row.category ? <a className="meta-pill meta-link" href={buildBlogFilterHref({ category: row.category.name })}>{row.category.name}</a> : null}
-                {Array.isArray(row.tags) ? row.tags.slice(0, 3).map((tag) => <a className="meta-pill meta-link" key={tag.id} href={buildBlogFilterHref({ tag: tag.name })}>{tag.name}</a>) : null}
-              </div>
-              {isAdmin ? (
-                <div className="blog-row-actions">
-                  <button className="cta-link cta-button" type="button" onClick={() => onEdit(row)}>Edit</button>
-                  <button className="cta-link cta-button cta-danger" type="button" onClick={() => onDelete(row.id)}>Delete</button>
-                </div>
-              ) : null}
-            </article>
-          ))}
-          <div className="blog-pagination-wrap">
-            <PaginationControls
-              page={listPageData.page}
-              totalPages={listPageData.totalPages}
-              onPrevious={() => setListPage((prev) => Math.max(1, prev - 1))}
-              onNext={() => setListPage((prev) => Math.min(listPageData.totalPages, prev + 1))}
-            />
+function BlogListView({ listPageData, listPage, setListPage, isAdmin, onDelete, onNavigate }) {
+  return (
+    <section className="blog-grid">
+      {listPageData.items.length === 0 ? (
+        <div style={{ gridColumn: "1 / -1", padding: "40px", textAlign: "center", border: "1px dashed var(--line)", borderRadius: "12px" }}>
+          <p style={{ color: "var(--muted)", fontSize: "1.1rem" }}>No entries found matching the current filters.</p>
+        </div>
+      ) : null}
+      {listPageData.items.map((row) => (
+        <article className="blog-card blog-card-spawn" key={row.id}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "12px" }}>
+            <h3 style={{ margin: 0 }}><a href={`/blog/${row.id}`} onClick={(event) => onNavigate(`/blog/${row.id}`, event)}>{row.title}</a></h3>
+            {!row.published && isAdmin ? <span className="meta-pill" style={{ borderColor: "var(--muted)", color: "var(--muted)", margin: 0 }}>Draft</span> : null}
           </div>
-        </section>
-      ) : null}
-
-      {view === "editor" && isAdmin ? (
-        <section className="editor-shell">
-          <form className="blog-form editor-main" onSubmit={onSave}>
-            <div className="blog-row-actions">
-              <button className="cta-link cta-button" type="button" onClick={() => goBack(previousView === "dashboard" ? PATH_BLOG_DASHBOARD : PATH_BLOG)}>Back</button>
+          <p className="blog-card-summary">{row.summary || "No summary provided for this entry."}</p>
+          <div className="blog-card-meta">
+            {row.category ? <a className="meta-pill meta-link" href={buildBlogFilterHref({ category: row.category.name })}>{row.category.name}</a> : null}
+            {Array.isArray(row.tags) ? row.tags.slice(0, 3).map((tag) => <a className="meta-pill meta-link" key={tag.id} href={buildBlogFilterHref({ tag: tag.name })}>{tag.name}</a>) : null}
+          </div>
+          {isAdmin ? (
+            <div className="blog-row-actions" style={{ marginTop: "16px", paddingTop: "16px", borderTop: "1px solid rgba(255,255,255,0.05)" }}>
+              <a className="cta-link" href={`/blog/${row.id}/edit`} onClick={(event) => onNavigate(`/blog/${row.id}/edit`, event)}>Edit</a>
+              <button className="cta-link cta-button cta-danger" type="button" onClick={(event) => onDelete(row.id, event)}>Delete</button>
             </div>
-            <label><span>Title</span><input value={form.title} onChange={(e) => onField("title", e.target.value)} /></label>
-            <label><span>Summary</span><input value={form.summary} onChange={(e) => onField("summary", e.target.value)} /></label>
-            <label>
-              <span>Content</span>
-              <div className="blog-editor-toolbar">
-                <button className="cta-link cta-button" type="button" onClick={() => applyEditorWrap("**")}>Bold</button>
-                <button className="cta-link cta-button" type="button" onClick={() => applyEditorWrap("__")}>Underline</button>
-                <button className="cta-link cta-button" type="button" onClick={() => applyEditorWrap("[tc]", "[/tc]")}>TC</button>
-                <button className="cta-link cta-button" type="button" onClick={() => applyEditorWrap("```\n", "\n```")}>Code</button>
-                <button className="cta-link cta-button" type="button" onClick={() => imageInputRef.current && imageInputRef.current.click()}>Image</button>
-                <label>Scale %<input type="number" min="10" max="100" value={imageScalePct} onChange={(e) => setImageScalePct(Number(e.target.value || 60))} /></label>
-                <input ref={imageInputRef} type="file" accept="image/*" onChange={onImagePick} style={{ display: "none" }} />
-              </div>
-              <textarea id="blog-content-editor" rows={14} value={form.content} onChange={(e) => onField("content", e.target.value)} />
-              <div className="editor-preview">
-                <p className="editor-help">Live Preview</p>
-                <div className="blog-content">{renderRichContent(form.content)}</div>
-              </div>
+          ) : null}
+        </article>
+      ))}
+      {listPageData.totalPages > 1 ? (
+        <div className="blog-pagination-wrap">
+          <PaginationControls
+            page={listPageData.page}
+            totalPages={listPageData.totalPages}
+            onPrevious={() => setListPage((prev) => Math.max(1, prev - 1))}
+            onNext={() => setListPage((prev) => Math.min(listPageData.totalPages, prev + 1))}
+          />
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
+function BlogEditorView({ form, onField, onSave, goBack, previousView, applyEditorWrap, imageInputRef, imageScalePct, setImageScalePct, onImagePick, categories, newCategoryName, setNewCategoryName, createCategory, tags }) {
+  return (
+    <section className="editor-shell">
+      <form className="blog-form editor-main" onSubmit={onSave}>
+        <div className="blog-row-actions" style={{ marginBottom: "24px" }}>
+          <button className="cta-link cta-button" type="button" onClick={() => goBack(previousView === "dashboard" ? PATH_BLOG_DASHBOARD : PATH_BLOG)}>← Back to Console</button>
+        </div>
+        <label>
+          <span style={{ color: "var(--muted)", fontSize: "0.85rem", textTransform: "uppercase", letterSpacing: "0.05em" }}>Entry Title</span>
+          <input value={form.title} onChange={(e) => onField("title", e.target.value)} placeholder="e.g., Migrating to a new infrastructure..." />
+        </label>
+        <label>
+          <span style={{ color: "var(--muted)", fontSize: "0.85rem", textTransform: "uppercase", letterSpacing: "0.05em" }}>Summary</span>
+          <input value={form.summary} onChange={(e) => onField("summary", e.target.value)} placeholder="Brief overview of this log entry..." />
+        </label>
+        <label>
+          <span style={{ color: "var(--muted)", fontSize: "0.85rem", textTransform: "uppercase", letterSpacing: "0.05em" }}>Log Content</span>
+          <div className="blog-editor-toolbar">
+            <button className="cta-link cta-button" type="button" onClick={() => applyEditorWrap("**")}>Bold</button>
+            <button className="cta-link cta-button" type="button" onClick={() => applyEditorWrap("__")}>Underline</button>
+            <button className="cta-link cta-button" type="button" onClick={() => applyEditorWrap("[tc]", "[/tc]")}>TC</button>
+            <button className="cta-link cta-button" type="button" onClick={() => applyEditorWrap("```\n", "\n```")}>Code</button>
+            <button className="cta-link cta-button" type="button" onClick={() => imageInputRef.current && imageInputRef.current.click()}>Image</button>
+            <label style={{ display: "flex", alignItems: "center", gap: "8px", margin: 0 }}>
+              <span style={{ fontSize: "0.85rem", color: "var(--muted)" }}>Scale %</span>
+              <input type="number" min="10" max="100" value={imageScalePct} onChange={(e) => setImageScalePct(Number(e.target.value || 60))} style={{ width: "60px", padding: "4px 8px" }} />
             </label>
-            <label className="blog-check"><input type="checkbox" checked={Boolean(form.published)} onChange={(e) => onField("published", e.target.checked ? 1 : 0)} /><span>Published</span></label>
-            <button className="cta-link cta-button" type="submit">{form.id ? "Save Changes" : "Create Blog"}</button>
-          </form>
+            <input ref={imageInputRef} type="file" accept="image/*" onChange={onImagePick} style={{ display: "none" }} />
+          </div>
+          <textarea id="blog-content-editor" rows={14} value={form.content} onChange={(e) => onField("content", e.target.value)} placeholder="Write your log entry here. Markdown is supported." />
+          <div className="editor-preview">
+            <p className="editor-help" style={{ borderBottom: "1px solid var(--line)", paddingBottom: "8px", marginBottom: "16px" }}>Live Preview</p>
+            <div className="blog-content">{renderRichContent(form.content)}</div>
+          </div>
+        </label>
+        <label className="blog-check" style={{ marginTop: "24px", padding: "16px", border: "1px solid var(--line)", borderRadius: "8px", background: "rgba(255,255,255,0.02)" }}>
+          <input type="checkbox" checked={Boolean(form.published)} onChange={(e) => onField("published", e.target.checked ? 1 : 0)} />
+          <span style={{ fontWeight: 500 }}>Publish this entry immediately</span>
+        </label>
+        <button className="cta-link cta-button" type="submit" style={{ marginTop: "24px", width: "100%", justifyContent: "center", padding: "12px" }}>
+          {form.id ? "Commit Changes" : "Create Log Entry"}
+        </button>
+      </form>
 
-          <aside className="editor-side">
-            <div className="editor-side-card">
-              <h3>Category</h3>
-              <select value={form.categoryId} onChange={(e) => onField("categoryId", e.target.value)}>
-                <option value="">No category</option>
-                {categories.map((cat) => <option key={cat.id} value={String(cat.id)}>{cat.name}</option>)}
-              </select>
-              <div className="blog-inline-form">
-                <input value={newCategoryName} onChange={(e) => setNewCategoryName(e.target.value)} placeholder="New category name" />
-                <button className="cta-link cta-button" type="button" onClick={createCategory}>Add</button>
-              </div>
-            </div>
-            <div className="editor-side-card">
-              <h3>Tags</h3>
-              <input value={form.tagsText} onChange={(e) => onField("tagsText", e.target.value)} list="blog-tags-list" placeholder="infra, ai, systems" />
-              <datalist id="blog-tags-list">{tags.map((tag) => <option key={tag.id} value={tag.name} />)}</datalist>
-              <p className="editor-help">Comma-separated tags only.</p>
-            </div>
-          </aside>
-        </section>
-      ) : null}
+      <aside className="editor-side">
+        <div className="editor-side-card">
+          <h3 style={{ fontSize: "1rem", marginBottom: "16px" }}>Classification</h3>
+          <select value={form.categoryId} onChange={(e) => onField("categoryId", e.target.value)} style={{ width: "100%", marginBottom: "16px" }}>
+            <option value="">Uncategorized</option>
+            {categories.map((cat) => <option key={cat.id} value={String(cat.id)}>{cat.name}</option>)}
+          </select>
+          <div className="blog-inline-form" style={{ display: "flex", gap: "8px" }}>
+            <input value={newCategoryName} onChange={(e) => setNewCategoryName(e.target.value)} placeholder="New category..." style={{ flex: 1 }} />
+            <button className="cta-link cta-button" type="button" onClick={createCategory}>Add</button>
+          </div>
+        </div>
+        <div className="editor-side-card">
+          <h3 style={{ fontSize: "1rem", marginBottom: "16px" }}>Metadata Tags</h3>
+          <input value={form.tagsText} onChange={(e) => onField("tagsText", e.target.value)} list="blog-tags-list" placeholder="infra, ai, systems" style={{ width: "100%", marginBottom: "8px" }} />
+          <datalist id="blog-tags-list">{tags.map((tag) => <option key={tag.id} value={tag.name} />)}</datalist>
+          <p className="editor-help" style={{ fontSize: "0.8rem" }}>Comma-separated tags for indexing.</p>
+        </div>
+      </aside>
     </section>
   );
 }
@@ -898,12 +1006,38 @@ function BlogPage() {
  */
 function PaginationControls(props) {
   return (
-    <div className="pagination-row">
-      <button className="tab-btn pagination-btn" type="button" onClick={props.onPrevious} disabled={props.page <= 1}>Previous</button>
-      <span className="pagination-meta">Page {props.page} of {props.totalPages}</span>
-      <button className="tab-btn pagination-btn" type="button" onClick={props.onNext} disabled={props.page >= props.totalPages}>Next</button>
+    <div className="pagination-row" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%" }}>
+      <button className="tab-btn pagination-btn" type="button" onClick={props.onPrevious} disabled={props.page <= 1}>← Previous</button>
+      <span className="pagination-meta" style={{ color: "var(--muted)", fontSize: "0.9rem", letterSpacing: "0.05em", textTransform: "uppercase" }}>Page {props.page} of {props.totalPages}</span>
+      <button className="tab-btn pagination-btn" type="button" onClick={props.onNext} disabled={props.page >= props.totalPages}>Next →</button>
     </div>
   );
+}
+
+/**
+ * @param {MouseEvent | undefined} event
+ * @returns {boolean}
+ */
+function isModifiedNavEvent(event) {
+  if (!event) {
+    return false;
+  }
+  return Boolean(event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0);
+}
+
+/**
+ * @param {EventTarget | null | undefined} target
+ * @returns {[boolean|null, Error|null]}
+ */
+function applyActionPulse(target) {
+  if (!target || !target.classList) {
+    return [null, null];
+  }
+  target.classList.add("is-action-pulse");
+  setTimeout(() => {
+    target.classList.remove("is-action-pulse");
+  }, BLOG_ACTION_ANIMATION_MS);
+  return [true, null];
 }
 
 /**
@@ -970,10 +1104,10 @@ function renderRichContent(content) {
           const imageMatch = part.match(/^!\[img\]\(([^|)]+)\|?(\d{1,3})?\)$/);
           if (imageMatch) {
             const widthPct = Number(imageMatch[2] || 60);
-            return <img key={`img-${partIndex}`} src={imageMatch[1]} style={{ width: `${Math.max(10, Math.min(100, widthPct))}%`, height: "auto" }} alt="Blog content" />;
+            return <img key={`img-${partIndex}`} src={imageMatch[1]} style={{ width: `${Math.max(10, Math.min(100, widthPct))}%`, height: "auto", borderRadius: "8px", border: "1px solid var(--line)", marginTop: "16px", marginBottom: "16px" }} alt="System Log Artifact" />;
           }
           const tokens = part.split(/(\*\*[^*]+\*\*|__[^_]+__|\[tc\][\s\S]*?\[\/tc\])/g).filter(Boolean);
-          return <p key={`line-${partIndex}`}>{tokens.map((token, tokenIndex) => token.startsWith("**") && token.endsWith("**") ? <strong key={tokenIndex}>{token.slice(2, -2)}</strong> : token.startsWith("__") && token.endsWith("__") ? <u key={tokenIndex}>{token.slice(2, -2)}</u> : token.startsWith("[tc]") && token.endsWith("[/tc]") ? <span key={tokenIndex} className="text-center-block">{token.slice(4, -5)}</span> : <span key={tokenIndex}>{token}</span>)}</p>;
+          return <p key={`line-${partIndex}`} style={{ lineHeight: 1.7, marginBottom: "16px" }}>{tokens.map((token, tokenIndex) => token.startsWith("**") && token.endsWith("**") ? <strong key={tokenIndex} style={{ color: "var(--fg)" }}>{token.slice(2, -2)}</strong> : token.startsWith("__") && token.endsWith("__") ? <u key={tokenIndex} style={{ textDecorationColor: "var(--accent)" }}>{token.slice(2, -2)}</u> : token.startsWith("[tc]") && token.endsWith("[/tc]") ? <span key={tokenIndex} className="text-center-block" style={{ display: "block", textAlign: "center", fontStyle: "italic", color: "var(--muted)", margin: "24px 0" }}>{token.slice(4, -5)}</span> : <span key={tokenIndex}>{token}</span>)}</p>;
         })}
       </div>
     );
@@ -1001,19 +1135,19 @@ function CodeBlock(props) {
   };
 
   return (
-    <div className="code-shell">
-      <div className="code-head">
-        <span className="code-lang">{lang || TEXT_CODE_FALLBACK_LANG}</span>
-        <button className="code-copy-btn" type="button" onClick={onCopy}>{copied ? TEXT_CODE_COPIED : TEXT_CODE_COPY}</button>
+    <div className="code-shell" style={{ margin: "24px 0", borderRadius: "8px", overflow: "hidden", border: "1px solid var(--line)", background: "#000" }}>
+      <div className="code-head" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 16px", background: "rgba(255,255,255,0.03)", borderBottom: "1px solid var(--line)" }}>
+        <span className="code-lang" style={{ color: "var(--muted)", fontSize: "0.8rem", textTransform: "uppercase", letterSpacing: "0.05em" }}>{lang || TEXT_CODE_FALLBACK_LANG}</span>
+        <button className="code-copy-btn" type="button" onClick={onCopy} style={{ background: "transparent", border: "none", color: copied ? "var(--accent)" : "var(--muted)", cursor: "pointer", fontSize: "0.85rem", transition: "color 0.2s" }}>{copied ? TEXT_CODE_COPIED : TEXT_CODE_COPY}</button>
       </div>
-      <div className="code-body">
+      <div className="code-body" style={{ padding: "16px 0", overflowX: "auto" }}>
         {lines.map((line, index) => {
           const rawLine = line || " ";
           const highlighted = lang ? hljs.highlight(rawLine, { language: lang }).value : hljs.highlightAuto(rawLine).value;
           return (
-            <div className="code-line" key={`line-${index}`}>
-              <span className="line-no">{index + 1}</span>
-              <code className="hljs" dangerouslySetInnerHTML={{ __html: highlighted }} />
+            <div className="code-line" key={`line-${index}`} style={{ display: "flex", padding: "0 16px", lineHeight: 1.5, fontFamily: "var(--font-mono)", fontSize: "0.9rem" }}>
+              <span className="line-no" style={{ color: "var(--muted)", opacity: 0.5, width: "32px", flexShrink: 0, userSelect: "none", textAlign: "right", marginRight: "16px" }}>{index + 1}</span>
+              <code className="hljs" dangerouslySetInnerHTML={{ __html: highlighted }} style={{ background: "transparent", padding: 0 }} />
             </div>
           );
         })}
@@ -1059,7 +1193,7 @@ body {
 .nav-wrap { border-bottom: 1px solid var(--line); background: rgba(5, 5, 5, 0.4); backdrop-filter: blur(12px); }
 .nav-shell { padding: 12px 0; }
 .nav-row { display: flex; flex-wrap: wrap; gap: 6px; }
-.nav-link { color: var(--muted); text-decoration: none; padding: 6px 12px; font-size: 0.85rem; font-weight: 500; border-radius: 8px; transition: all 0.2s ease; }
+.nav-link { color: var(--muted); text-decoration: none; padding: 6px 12px; font-size: 0.85rem; font-weight: 500; border-radius: 8px; transition: all 100ms ease; }
 .nav-link:hover { color: var(--ink); background: rgba(255,255,255,0.05); }
 .nav-link.is-active { color: var(--ink); background: rgba(255,255,255,0.1); }
 .nav-ext { margin-left: 4px; font-size: 0.75rem; opacity: 0.7; }
@@ -1068,7 +1202,7 @@ body {
 .main-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 24px; padding: 40px 0 60px; flex: 1; align-content: start; }
 
 /* Panels */
-.panel { background: var(--panel); backdrop-filter: blur(16px); border: 1px solid var(--line); padding: 32px; border-radius: 16px; box-shadow: 0 8px 32px -12px rgba(0,0,0,0.5); transition: transform 0.2s ease, border-color 0.2s ease; }
+.panel { background: var(--panel); backdrop-filter: blur(16px); border: 1px solid var(--line); padding: 32px; border-radius: 16px; box-shadow: 0 8px 32px -12px rgba(0,0,0,0.5); transition: transform 100ms ease, border-color 100ms ease; }
 .motd-panel { border-color: rgba(234, 179, 8, 0.3); background: linear-gradient(180deg, rgba(234, 179, 8, 0.05), transparent); }
 .motd-quote { margin: 12px 0 0; color: var(--ink); font-size: clamp(1.1rem, 1.5vw, 1.25rem); line-height: 1.6; font-weight: 500; font-style: italic; }
 .motd-status { margin-top: 12px; font-size: 0.8rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; font-weight: 600; }
@@ -1078,7 +1212,7 @@ h1, h2, h3, h4 { margin-top: 0; color: var(--ink); font-weight: 600; letter-spac
 .hero h2, .panel h2 { margin-bottom: 16px; font-size: clamp(1.75rem, 3vw, 2.5rem); }
 .eyebrow { color: var(--accent); letter-spacing: 0.15em; font-size: 0.75rem; font-weight: 700; margin: 0 0 12px 0; text-transform: uppercase; }
 .panel p { color: var(--muted); line-height: 1.7; margin-top: 0; }
-.panel a { color: var(--ink); text-decoration: none; border-bottom: 1px solid var(--line); transition: border-color 0.2s ease; }
+.panel a { color: var(--ink); text-decoration: none; border-bottom: 1px solid var(--line); transition: border-color 100ms ease; }
 .panel a:hover { border-bottom-color: var(--accent); }
 
 /* Hero */
@@ -1102,7 +1236,7 @@ h1, h2, h3, h4 { margin-top: 0; color: var(--ink); font-weight: 600; letter-spac
 
 /* Cards */
 .cards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
-.card { border: 1px solid var(--line); padding: 24px; background: rgba(255,255,255,0.02); border-radius: 12px; transition: all 0.2s ease; }
+.card { border: 1px solid var(--line); padding: 24px; background: rgba(255,255,255,0.02); border-radius: 12px; transition: all 100ms ease; }
 .card:hover { transform: translateY(-2px); border-color: rgba(255,255,255,0.15); background: rgba(255,255,255,0.04); box-shadow: 0 8px 24px -8px rgba(0,0,0,0.3); }
 .card h3 { margin: 0 0 12px; font-size: 1.1rem; }
 .card p { font-size: 0.95rem; margin-bottom: 8px; }
@@ -1138,7 +1272,7 @@ h1, h2, h3, h4 { margin-top: 0; color: var(--ink); font-weight: 600; letter-spac
 .xp-time { margin: 0; color: var(--muted); font-size: 0.9rem; font-variant-numeric: tabular-nums; }
 
 /* Buttons */
-.cta-link { display: inline-block; border: 1px solid var(--line); background: rgba(255,255,255,0.03); color: var(--ink); text-decoration: none; padding: 8px 16px; font-weight: 500; border-radius: 8px; transition: all 0.2s ease; font-size: 0.9rem; }
+.cta-link { display: inline-block; border: 1px solid var(--line); background: rgba(255,255,255,0.03); color: var(--ink); text-decoration: none; padding: 8px 16px; font-weight: 500; border-radius: 8px; transition: all 100ms ease; font-size: 0.9rem; }
 .panel a.cta-link { border-bottom: 1px solid var(--line); }
 .cta-link:hover { background: rgba(255,255,255,0.08); border-color: rgba(255,255,255,0.2); }
 .cta-button { cursor: pointer; font: inherit; }
@@ -1147,79 +1281,104 @@ h1, h2, h3, h4 { margin-top: 0; color: var(--ink); font-weight: 600; letter-spac
 
 /* Blog */
 .blog-toolbar { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
-.blog-shell { width: 100%; max-width: 960px; margin: 0 auto; }
-.blog-header { display: flex; justify-content: space-between; gap: 24px; align-items: flex-start; margin-bottom: 24px; border-bottom: 1px solid var(--line); padding-bottom: 24px; }
-.blog-subhead { margin: 8px 0 0; color: var(--muted) !important; font-size: 1.05rem; }
-.blog-header-actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
-.tab-btn { border: 1px solid var(--line); background: rgba(255,255,255,0.03); color: var(--muted); padding: 8px 16px; cursor: pointer; font: inherit; border-radius: 8px; font-size: 0.9rem; font-weight: 500; transition: all 0.2s ease; }
-.tab-btn:hover { background: rgba(255,255,255,0.08); color: var(--ink); }
-.tab-btn.is-active { border-color: var(--line); color: var(--ink); background: rgba(255,255,255,0.1); }
+.blog-shell { width: 100%; max-width: 1080px; margin: 0 auto; }
+.blog-header { display: flex; justify-content: space-between; gap: 24px; align-items: flex-start; margin-bottom: 32px; border-bottom: 1px solid var(--line); padding-bottom: 32px; }
+.blog-subhead { margin: 12px 0 0; color: var(--muted) !important; font-size: 1.1rem; max-width: 60ch; line-height: 1.6; }
+.blog-header-actions { display: flex; flex-wrap: wrap; gap: 12px; justify-content: flex-end; }
+.tab-btn { border: 1px solid var(--line); background: rgba(255,255,255,0.02); color: var(--muted); padding: 10px 20px; cursor: pointer; font: inherit; border-radius: 10px; font-size: 0.95rem; font-weight: 500; transition: none; box-shadow: 0 2px 8px rgba(0,0,0,0.2); }
+.tab-btn:hover { background: rgba(255,255,255,0.06); color: var(--ink); border-color: rgba(255,255,255,0.15); }
+.tab-btn.is-active { border-color: var(--accent); color: var(--accent-soft); background: var(--glow); box-shadow: 0 4px 12px rgba(234, 179, 8, 0.1); }
 .tab-btn.danger { border-color: rgba(239, 68, 68, 0.3); color: #fca5a5; }
-.blog-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; }
-.blog-card { border: 1px solid var(--line); background: rgba(255,255,255,0.02); padding: 24px; display: grid; gap: 12px; border-radius: 12px; transition: all 0.2s ease; }
-.blog-card:hover { border-color: rgba(255,255,255,0.15); background: rgba(255,255,255,0.04); transform: translateY(-2px); }
-.blog-card h3 { margin: 0; font-size: 1.2rem; }
-.blog-card h3 a { border: none; }
-.blog-card-summary { margin: 0; color: var(--muted) !important; font-size: 0.95rem; }
-.blog-card-meta { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 4px; }
-.meta-pill { border: 1px solid var(--line); padding: 4px 10px; font-size: 0.75rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; border-radius: 20px; background: rgba(255,255,255,0.02); }
-.meta-link { text-decoration: none; cursor: pointer; transition: all 0.2s ease; }
-.meta-link:hover { border-color: var(--muted); color: var(--ink); background: rgba(255,255,255,0.08); }
+.blog-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 24px; }
+.blog-card { border: 1px solid var(--line); background: rgba(255,255,255,0.02); padding: 32px; display: flex; flex-direction: column; gap: 16px; border-radius: 16px; transition: all 100ms ease; position: relative; overflow: hidden; }
+.blog-card-spawn { animation: blogCardSpawn 200ms ease-out both; }
+.blog-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 1px; background: linear-gradient(90deg, transparent, rgba(255,255,255,0.1), transparent); opacity: 0; transition: opacity 100ms ease; }
+.blog-card:hover { border-color: rgba(255,255,255,0.15); background: rgba(255,255,255,0.04); transform: translateY(-4px); box-shadow: 0 12px 32px -12px rgba(0,0,0,0.5); }
+.blog-card:hover::before { opacity: 1; }
+.blog-card h3 { margin: 0; font-size: 1.35rem; line-height: 1.3; letter-spacing: -0.01em; }
+.blog-card h3 a { border: none; color: var(--ink); text-decoration: none; }
+.blog-card-summary { margin: 0; color: var(--muted) !important; font-size: 1rem; line-height: 1.6; flex-grow: 1; }
+.blog-card-meta { display: flex; gap: 8px; flex-wrap: wrap; margin-top: auto; padding-top: 16px; border-top: 1px solid rgba(255,255,255,0.05); position: relative; z-index: 2; }
+.meta-pill { border: 1px solid var(--line); padding: 6px 12px; font-size: 0.75rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; font-weight: 600; border-radius: 20px; background: rgba(255,255,255,0.02); backdrop-filter: blur(4px); }
+.meta-link { text-decoration: none; cursor: pointer; transition: all 100ms ease; }
+.meta-link:hover { border-color: var(--accent); color: var(--accent-soft); background: var(--glow); }
 
 /* Dashboard */
-.blog-dash { display: grid; gap: 20px; }
-.dash-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
-.dash-card { border: 1px solid var(--line); background: rgba(255,255,255,0.02); padding: 20px; border-radius: 12px; }
-.dash-card p { margin: 0; font-size: 0.8rem; color: var(--muted) !important; text-transform: uppercase; letter-spacing: 0.08em; font-weight: 600; }
-.dash-card h3 { margin: 12px 0 0; font-size: 2rem; color: var(--ink); }
-.dash-list { border: 1px solid var(--line); background: rgba(255,255,255,0.02); padding: 24px; border-radius: 12px; }
-.dash-list h3 { margin: 0 0 16px; border-bottom: 1px solid var(--line); padding-bottom: 12px; }
-.dash-rows { display: grid; gap: 12px; }
-.dash-row { display: flex; justify-content: space-between; gap: 16px; padding: 12px 0; border-bottom: 1px solid var(--line); align-items: center; }
-.dash-row:last-child { border-bottom: 0; padding-bottom: 0; }
-.dash-row-main { min-width: 0; display: grid; gap: 8px; }
-.dash-row-main a { font-weight: 500; font-size: 1.05rem; border: none; }
+.blog-dash { display: grid; gap: 24px; }
+.dash-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; }
+.dash-card { border: 1px solid var(--line); background: rgba(255,255,255,0.02); padding: 24px; border-radius: 16px; position: relative; overflow: hidden; }
+.dash-card::after { content: ''; position: absolute; top: 0; right: 0; width: 100px; height: 100px; background: radial-gradient(circle at top right, rgba(255,255,255,0.05), transparent 70%); }
+.dash-card p { margin: 0; font-size: 0.85rem; color: var(--muted) !important; text-transform: uppercase; letter-spacing: 0.1em; font-weight: 600; }
+.dash-card h3 { margin: 16px 0 0; font-size: 2.5rem; color: var(--ink); font-weight: 500; letter-spacing: -0.02em; }
+.dash-list { border: 1px solid var(--line); background: rgba(255,255,255,0.02); padding: 32px; border-radius: 16px; }
+.dash-list h3 { margin: 0 0 24px; border-bottom: 1px solid var(--line); padding-bottom: 16px; font-size: 1.2rem; }
+.dash-rows { display: grid; gap: 0; }
+.dash-row { display: flex; justify-content: space-between; gap: 24px; padding: 20px 0; border-bottom: 1px solid var(--line); align-items: center; transition: background-color 100ms ease; }
+.dash-row:hover { background: rgba(255,255,255,0.01); margin: 0 -16px; padding: 20px 16px; border-radius: 8px; border-bottom-color: transparent; }
+.dash-row:last-child { border-bottom: 0; }
+.dash-row-main { min-width: 0; display: grid; gap: 10px; }
+.dash-row-main a { font-weight: 500; font-size: 1.1rem; border: none; color: var(--ink); text-decoration: none; }
+.dash-row-main a:hover { color: var(--accent-soft); }
 .dash-row-meta { display: flex; gap: 8px; flex-wrap: wrap; }
-.dash-actions { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+.dash-actions { display: flex; gap: 12px; flex-wrap: wrap; justify-content: flex-end; opacity: 0.7; transition: opacity 100ms ease; }
+.dash-row:hover .dash-actions { opacity: 1; }
 
 /* Pagination */
-.pagination-row { margin-top: 24px; display: flex; align-items: center; justify-content: space-between; gap: 12px; border-top: 1px solid var(--line); padding-top: 20px; }
-.pagination-btn[disabled] { opacity: 0.3; cursor: not-allowed; }
-.pagination-meta { color: var(--muted); font-size: 0.85rem; letter-spacing: 0.05em; text-transform: uppercase; font-weight: 500; }
+.pagination-row { margin-top: 32px; display: flex; align-items: center; justify-content: space-between; gap: 16px; border-top: 1px solid var(--line); padding-top: 24px; }
+.pagination-btn { min-width: 100px; }
+.pagination-btn[disabled] { opacity: 0.3; cursor: not-allowed; transform: none !important; box-shadow: none !important; }
+.pagination-meta { color: var(--muted); font-size: 0.9rem; letter-spacing: 0.08em; text-transform: uppercase; font-weight: 600; background: rgba(255,255,255,0.03); padding: 6px 16px; border-radius: 20px; border: 1px solid var(--line); }
 .blog-pagination-wrap { grid-column: 1 / -1; }
 
 /* Editor */
-.editor-shell { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 24px; }
-.editor-main { border: 1px solid var(--line); background: rgba(255,255,255,0.02); padding: 24px; display: grid; gap: 16px; border-radius: 12px; }
-.editor-side { display: grid; gap: 16px; align-content: start; }
-.editor-side-card { border: 1px solid var(--line); background: rgba(255,255,255,0.02); padding: 20px; display: grid; gap: 12px; border-radius: 12px; }
-.editor-side-card h3 { margin: 0; font-size: 1.05rem; }
-.editor-help { margin: 0; color: var(--muted) !important; font-size: 0.85rem; }
-.editor-preview { border: 1px solid var(--line); background: rgba(0,0,0,0.2); padding: 20px; margin-top: 8px; border-radius: 8px; }
-.blog-login-card { width: min(400px, 100%); border: 1px solid var(--line); background: rgba(255,255,255,0.02); padding: 24px; display: grid; gap: 16px; border-radius: 12px; margin: 40px auto; }
-.blog-form { display: grid; gap: 16px; }
-.blog-form label { display: grid; gap: 8px; color: var(--ink); font-weight: 500; font-size: 0.95rem; }
-.blog-form input, .blog-form textarea, .blog-form select { background: rgba(0,0,0,0.2); border: 1px solid var(--line); color: var(--ink); padding: 10px 12px; font: inherit; border-radius: 8px; transition: border-color 0.2s ease; }
-.blog-form input:focus, .blog-form textarea:focus, .blog-form select:focus { outline: none; border-color: var(--muted); }
-.blog-check { display: flex !important; align-items: center; gap: 10px; flex-direction: row !important; }
-.blog-row-actions { display: flex; gap: 10px; }
-.blog-editor-toolbar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; background: rgba(255,255,255,0.02); padding: 8px; border-radius: 8px; border: 1px solid var(--line); }
+.editor-shell { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 32px; align-items: start; }
+.editor-main { border: 1px solid var(--line); background: rgba(255,255,255,0.02); padding: 32px; display: grid; gap: 24px; border-radius: 16px; box-shadow: 0 8px 32px rgba(0,0,0,0.2); }
+.editor-side { display: grid; gap: 24px; position: sticky; top: 100px; }
+.editor-side-card { border: 1px solid var(--line); background: rgba(255,255,255,0.02); padding: 24px; display: grid; gap: 16px; border-radius: 16px; }
+.editor-side-card h3 { margin: 0; font-size: 1.1rem; border-bottom: 1px solid var(--line); padding-bottom: 12px; }
+.editor-help { margin: 0; color: var(--muted) !important; font-size: 0.85rem; line-height: 1.5; }
+.editor-preview { border: 1px solid var(--line); background: rgba(0,0,0,0.3); padding: 24px; margin-top: 12px; border-radius: 12px; max-height: 600px; overflow-y: auto; }
+.blog-login-card { width: min(440px, 100%); border: 1px solid var(--line); background: rgba(255,255,255,0.02); padding: 32px; display: grid; gap: 24px; border-radius: 16px; margin: 60px auto; box-shadow: 0 12px 40px rgba(0,0,0,0.4); position: relative; overflow: hidden; }
+.blog-login-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px; background: linear-gradient(90deg, transparent, var(--accent), transparent); }
+.blog-form { display: grid; gap: 20px; }
+.blog-form label { display: grid; gap: 10px; color: var(--ink); font-weight: 600; font-size: 0.95rem; letter-spacing: 0.02em; }
+.blog-form input, .blog-form textarea, .blog-form select { background: rgba(0,0,0,0.3); border: 1px solid var(--line); color: var(--ink); padding: 12px 16px; font: inherit; border-radius: 10px; transition: all 100ms ease; box-shadow: inset 0 2px 4px rgba(0,0,0,0.2); }
+.blog-form input:focus, .blog-form textarea:focus, .blog-form select:focus { outline: none; border-color: var(--accent); background: rgba(0,0,0,0.5); box-shadow: inset 0 2px 4px rgba(0,0,0,0.2), 0 0 0 2px var(--glow); }
+.blog-check { display: flex !important; align-items: center; gap: 12px; flex-direction: row !important; cursor: pointer; padding: 12px; border: 1px solid var(--line); border-radius: 10px; background: rgba(255,255,255,0.02); transition: all 100ms ease; }
+.blog-check:hover { background: rgba(255,255,255,0.05); border-color: rgba(255,255,255,0.15); }
+.blog-check input[type="checkbox"] { width: 18px; height: 18px; accent-color: var(--accent); cursor: pointer; }
+.blog-row-actions { display: flex; gap: 12px; position: relative; z-index: 3; }
+.blog-editor-toolbar { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; background: rgba(255,255,255,0.03); padding: 12px; border-radius: 10px; border: 1px solid var(--line); }
 
 /* Blog Detail */
-.blog-post-detail { width: 100%; max-width: 800px; margin: 0 auto; padding: 40px 48px; background: var(--panel); border-radius: 16px; display: flex; flex-direction: column; min-height: 70vh; }
-.blog-post-topbar { display: flex; justify-content: space-between; margin-bottom: 24px; }
-.blog-post-detail h2 { font-size: clamp(2rem, 4vw, 3rem); line-height: 1.15; margin: 8px 0 16px; color: var(--ink); letter-spacing: -0.03em; }
-.blog-post-summary { font-size: 1.15rem; line-height: 1.6; margin: 0 0 24px; color: var(--muted) !important; max-width: 65ch; }
-.blog-post-meta { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 32px; }
-.blog-detail-content { border-top: 1px solid var(--line); padding-top: 32px; font-size: 1.05rem; line-height: 1.8; }
-.blog-detail-content p { margin: 0 0 20px; color: #d4d4d8; }
-.blog-detail-nav { justify-content: space-between; margin-top: 40px; padding-top: 24px; border-top: 1px solid var(--line); }
+.blog-post-detail { width: 100%; max-width: 1200px; margin: 0 auto; padding: 0; background: transparent; display: flex; flex-direction: column; min-height: 70vh; position: relative; }
+.blog-post-topbar { display: flex; justify-content: space-between; margin-bottom: 48px; padding: 24px 0; border-bottom: 1px solid var(--line); }
+.blog-post-detail h2 { font-size: clamp(3rem, 8vw, 5rem); line-height: 1.05; margin: 16px 0 32px; color: var(--ink); letter-spacing: -0.04em; font-weight: 800; max-width: 20ch; }
+.blog-post-summary { font-size: 1.5rem; line-height: 1.6; margin: 0 0 48px; color: var(--muted) !important; max-width: 50ch; font-weight: 400; border-left: 4px solid var(--accent); padding-left: 32px; }
+.blog-post-meta { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 64px; padding-bottom: 48px; border-bottom: 1px solid var(--line); }
+.blog-detail-content { font-size: 1.2rem; line-height: 1.85; color: #e4e4e7; max-width: 75ch; width: 100%; }
+.blog-detail-stage { animation: blogDetailLoad 200ms ease-out both; }
+.blog-detail-content p { margin: 0 0 32px; }
+.blog-detail-content h3 { font-size: 2rem; margin: 64px 0 24px; color: var(--ink); letter-spacing: -0.02em; font-weight: 700; }
+.blog-detail-content h4 { font-size: 1.5rem; margin: 40px 0 16px; color: var(--ink); font-weight: 600; }
+.blog-detail-content ul, .blog-detail-content ol { margin: 0 0 32px; padding-left: 32px; }
+.blog-detail-content li { margin-bottom: 12px; }
+.blog-detail-nav { display: flex; justify-content: space-between; margin-top: 80px; padding-top: 48px; border-top: 1px solid var(--line); }
+@keyframes blogDetailLoad {
+  from { opacity: 0; transform: translateY(-10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes blogCardSpawn {
+  from { opacity: 0; transform: translateY(10px) scale(0.99); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
 
 /* Code Blocks */
 .code-shell { margin: 24px 0; border: 1px solid var(--line); background: #0a0a0a; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.4); }
 .code-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px 16px; border-bottom: 1px solid var(--line); background: rgba(255,255,255,0.03); }
 .code-lang { color: var(--muted); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.08em; font-weight: 600; }
-.code-copy-btn { border: 1px solid var(--line); background: rgba(255,255,255,0.05); color: var(--ink); font: inherit; font-size: 0.75rem; font-weight: 500; padding: 4px 12px; border-radius: 6px; cursor: pointer; transition: all 0.2s ease; }
+.code-copy-btn { border: 1px solid var(--line); background: rgba(255,255,255,0.05); color: var(--ink); font: inherit; font-size: 0.75rem; font-weight: 500; padding: 4px 12px; border-radius: 6px; cursor: pointer; transition: all 100ms ease; }
+.is-action-pulse { transform: scale(0.98); opacity: 0.82; }
 .code-copy-btn:hover { background: rgba(255,255,255,0.1); }
 .code-body { overflow-x: auto; padding: 12px 0; }
 .code-line { display: grid; grid-template-columns: 48px 1fr; gap: 16px; align-items: baseline; padding: 0 16px; min-height: 1.5rem; }
@@ -1255,7 +1414,8 @@ h1, h2, h3, h4 { margin-top: 0; color: var(--ink); font-weight: 600; letter-spac
   .blog-grid, .dash-stats, .editor-shell { grid-template-columns: 1fr; }
   .blog-header { flex-direction: column; gap: 16px; }
   .blog-header-actions { justify-content: flex-start; width: 100%; }
-  .blog-post-detail { padding: 24px 20px; }
+  .blog-post-detail { padding: 0 24px; }
+  .blog-post-summary { padding-left: 16px; font-size: 1.15rem; }
   .hero-intro-grid, .home-grid { grid-template-columns: 1fr; gap: 32px; }
   .home-grid .panel:first-child { grid-column: span 1; }
   .home-anchor-image { width: min(280px, 100%); }
