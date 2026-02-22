@@ -8,6 +8,19 @@
 # - Replace certificate paths if Certbot created per-domain cert directories.
 
 # ============================================
+# Upstreams
+# ============================================
+upstream personalwebsite_app {
+    server 127.0.0.1:8080;
+    keepalive 32;
+}
+
+upstream reader_app {
+    server 127.0.0.1:3001;
+    keepalive 16;
+}
+
+# ============================================
 # HTTP -> HTTPS redirects
 # ============================================
 server {
@@ -60,11 +73,21 @@ server {
     ssl_certificate_key /etc/letsencrypt/live/www.earlcameron.com/privkey.pem;
     include /etc/letsencrypt/options-ssl-nginx.conf;
     ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;
+    ssl_session_cache shared:SSL:20m;
+    ssl_session_timeout 1d;
+    ssl_session_tickets off;
+
+    server_tokens off;
+    client_max_body_size 16m;
+    keepalive_timeout 65s;
+    keepalive_requests 1000;
+    send_timeout 60s;
 
     add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
     add_header X-Content-Type-Options "nosniff" always;
     add_header X-Frame-Options "SAMEORIGIN" always;
     add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+    add_header Permissions-Policy "camera=(), microphone=(), geolocation=()" always;
 
     # Compression
     gzip on;
@@ -89,18 +112,121 @@ server {
     # brotli_comp_level 5;
     # brotli_types text/plain text/css text/javascript application/javascript application/json application/xml application/rss+xml image/svg+xml;
 
-    location / {
-        proxy_pass http://127.0.0.1:8080;
+    # Fast health checks, no logs
+    location = /api/health {
+        access_log off;
+        proxy_pass http://personalwebsite_app;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $remote_addr;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Host $host;
+        proxy_set_header X-Forwarded-Port $server_port;
+    }
+
+    # Static files served by the Node app (SPA build/public assets) with strong cache headers
+    location ^~ /assets/ {
+        proxy_pass http://personalwebsite_app;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $remote_addr;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Host $host;
+        proxy_set_header X-Forwarded-Port $server_port;
+        expires 1y;
+        add_header Cache-Control "public, max-age=31536000, immutable" always;
+    }
+
+    location ^~ /images/ {
+        proxy_pass http://personalwebsite_app;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $remote_addr;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Host $host;
+        proxy_set_header X-Forwarded-Port $server_port;
+        expires 30d;
+        add_header Cache-Control "public, max-age=2592000" always;
+    }
+
+    location ^~ /uploads/ {
+        proxy_pass http://personalwebsite_app;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $remote_addr;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Host $host;
+        proxy_set_header X-Forwarded-Port $server_port;
+        expires 7d;
+        add_header Cache-Control "public, max-age=604800" always;
+    }
+
+    location = /favicon.svg {
+        proxy_pass http://personalwebsite_app;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $remote_addr;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Host $host;
+        proxy_set_header X-Forwarded-Port $server_port;
+        expires 30d;
+        add_header Cache-Control "public, max-age=2592000" always;
+    }
+
+    location = /robots.txt {
+        proxy_pass http://personalwebsite_app;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $remote_addr;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Host $host;
+        proxy_set_header X-Forwarded-Port $server_port;
+        expires 1h;
+        add_header Cache-Control "public, max-age=3600" always;
+    }
+
+    # API routes should remain uncached at the proxy layer unless explicitly handled
+    location ^~ /api/ {
+        proxy_pass http://personalwebsite_app;
         proxy_http_version 1.1;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $remote_addr;   # overwrite client-provided header
         proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Host $host;
+        proxy_set_header X-Forwarded-Port $server_port;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection $connection_upgrade;
+        proxy_request_buffering on;
+        proxy_buffering on;
         proxy_read_timeout 60s;
         proxy_send_timeout 60s;
-        proxy_connect_timeout 60s;
+        proxy_connect_timeout 15s;
+        add_header Cache-Control "no-store" always;
+    }
+
+    location / {
+        proxy_pass http://personalwebsite_app;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $remote_addr;   # overwrite client-provided header
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Host $host;
+        proxy_set_header X-Forwarded-Port $server_port;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $connection_upgrade;
+        proxy_request_buffering on;
+        proxy_buffering on;
+        proxy_read_timeout 60s;
+        proxy_send_timeout 60s;
+        proxy_connect_timeout 15s;
     }
 }
 
@@ -118,22 +244,36 @@ server {
     ssl_certificate_key /etc/letsencrypt/live/www.earlcameron.com/privkey.pem;
     include /etc/letsencrypt/options-ssl-nginx.conf;
     ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;
+    ssl_session_cache shared:SSL:20m;
+    ssl_session_timeout 1d;
+    ssl_session_tickets off;
+
+    server_tokens off;
+    client_max_body_size 8m;
+    keepalive_timeout 65s;
+    keepalive_requests 1000;
+    send_timeout 60s;
 
     add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
     add_header X-Content-Type-Options "nosniff" always;
     add_header X-Frame-Options "SAMEORIGIN" always;
     add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+    add_header Permissions-Policy "camera=(), microphone=(), geolocation=()" always;
 
     location / {
-        proxy_pass http://127.0.0.1:3001/;
+        proxy_pass http://reader_app;
         proxy_http_version 1.1;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $remote_addr;   # overwrite client-provided header
         proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Host $host;
+        proxy_set_header X-Forwarded-Port $server_port;
+        proxy_request_buffering on;
+        proxy_buffering on;
         proxy_read_timeout 60s;
         proxy_send_timeout 60s;
-        proxy_connect_timeout 60s;
+        proxy_connect_timeout 15s;
     }
 }
 

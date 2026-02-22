@@ -125,9 +125,13 @@ assert_config_sanity() {
   fi
   assert_config_contains "$file_path" "server_name ${WWW_HOST};" "www server_name"
   assert_config_contains "$file_path" "server_name ${READER_HOST};" "reader server_name"
-  assert_config_contains "$file_path" "proxy_pass http://127.0.0.1:8080" "main upstream port 8080"
+  assert_config_contains "$file_path" "upstream personalwebsite_app" "main upstream block"
+  assert_config_contains "$file_path" "server 127.0.0.1:8080;" "main upstream port 8080"
+  assert_config_contains "$file_path" "proxy_pass http://personalwebsite_app" "main proxy_pass upstream alias"
   if [[ "${TEST_READER}" == "1" ]]; then
-    assert_config_contains "$file_path" "proxy_pass http://127.0.0.1:3001/" "reader upstream port 3001"
+    assert_config_contains "$file_path" "upstream reader_app" "reader upstream block"
+    assert_config_contains "$file_path" "server 127.0.0.1:3001;" "reader upstream port 3001"
+    assert_config_contains "$file_path" "proxy_pass http://reader_app" "reader proxy_pass upstream alias"
   fi
 }
 
