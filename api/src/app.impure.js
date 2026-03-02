@@ -178,6 +178,7 @@ const RSS_FEED_LANGUAGE = "en-us";
 const RSS_FEED_TTL_MINUTES = "60";
 const RSS_FEED_DOCS_URL = "https://www.rssboard.org/rss-specification";
 const RSS_FEED_GENERATOR = "website_2025 Anime Release Radar";
+const RSS_FEED_GENERATOR_BLOG = "website_2025 Blog RSS";
 const RSS_EMPTY_LAST_BUILD_DATE = "Thu, 01 Jan 1970 00:00:00 GMT";
 const RSS_FEED_TITLE_BLOG = "Earl Cameron Blog Feed";
 const RSS_FEED_DESC_BLOG = "Published engineering logs, vlogs, and system notes.";
@@ -186,6 +187,7 @@ const RSS_GUID_PREFIX_TRACKED = "slackanime-tracked-";
 const RSS_GUID_PREFIX_QUESTION = "slackanime-question-";
 const RSS_GUID_PREFIX_DEBUG = "slackanime-debug-";
 const RSS_DEBUG_TITLE = "Debug Message";
+const PATH_API_BLOGS_FEED = "/api/blogs/feed.xml";
 const PATH_API_SLACKANIME_FEED_TRACKED = "/api/slackanime/feed/tracked.xml";
 const PATH_API_SLACKANIME_FEED_QUESTIONS = "/api/slackanime/feed/questions.xml";
 const ANILIST_API_URL = "https://graphql.anilist.co";
@@ -1386,6 +1388,8 @@ export function buildBlogRssFeedXml(baseUrl) {
   if (!normalizedBase) {
     return { value: null, err: new Error(ERR_SLACKANIME_FEED_BASE_URL_REQUIRED) };
   }
+  const channelLink = `${normalizedBase}/blog`;
+  const selfLink = `${normalizedBase}${PATH_API_BLOGS_FEED}`;
 
   const blogsRes = listBlogsCached();
   if (blogsRes.err) {
@@ -1399,8 +1403,7 @@ export function buildBlogRssFeedXml(baseUrl) {
     const id = Number(row?.id || 0);
     const title = escapeXml(String(row?.title || "Untitled"));
     const summary = escapeXml(String(row?.summary || "").trim() || "Published blog entry.");
-    const updatedAt = String(row?.updated_at || row?.created_at || "");
-    const pubDate = updatedAt ? new Date(updatedAt).toUTCString() : new Date().toUTCString();
+    const pubDate = toRssDateFromIsoValue(row?.updated_at || row?.created_at, RSS_EMPTY_LAST_BUILD_DATE);
     const path = id > 0 ? `/blog/${id}` : "/blog";
     const link = `${normalizedBase}${path}`;
     const categoryText = row?.category?.name ? `<category>${escapeXml(String(row.category.name))}</category>` : "";
@@ -1418,15 +1421,27 @@ export function buildBlogRssFeedXml(baseUrl) {
     ].filter(Boolean).join("");
   }).join("");
 
-  const lastBuildDate = new Date().toUTCString();
-  const channelLink = `${normalizedBase}/blog`;
+  const lastBuildDate = publishedRows.reduce((latestValue, row) => {
+    const candidateValue = toRssDateFromIsoValue(row?.updated_at || row?.created_at, "");
+    if (!candidateValue) return latestValue;
+    const candidateTime = Date.parse(candidateValue);
+    const latestTime = Date.parse(latestValue);
+    if (!Number.isFinite(candidateTime)) return latestValue;
+    if (!Number.isFinite(latestTime) || candidateTime > latestTime) return candidateValue;
+    return latestValue;
+  }, "") || RSS_EMPTY_LAST_BUILD_DATE;
   const xml = [
     "<?xml version=\"1.0\" encoding=\"UTF-8\"?>",
-    "<rss version=\"2.0\">",
+    "<rss version=\"2.0\" xmlns:atom=\"http://www.w3.org/2005/Atom\">",
     "<channel>",
     `<title>${escapeXml(RSS_FEED_TITLE_BLOG)}</title>`,
     `<link>${escapeXml(channelLink)}</link>`,
     `<description>${escapeXml(RSS_FEED_DESC_BLOG)}</description>`,
+    `<language>${escapeXml(RSS_FEED_LANGUAGE)}</language>`,
+    `<ttl>${escapeXml(RSS_FEED_TTL_MINUTES)}</ttl>`,
+    `<docs>${escapeXml(RSS_FEED_DOCS_URL)}</docs>`,
+    `<generator>${escapeXml(RSS_FEED_GENERATOR_BLOG)}</generator>`,
+    `<atom:link href="${escapeXml(selfLink)}" rel="self" type="application/rss+xml" />`,
     `<lastBuildDate>${escapeXml(lastBuildDate)}</lastBuildDate>`,
     itemsXml,
     "</channel>",

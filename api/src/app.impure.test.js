@@ -135,3 +135,98 @@ describe("Anime RSS feeds", () => {
     expect(xmlText).toContain("<link>http://localhost:8081/slackanime</link>");
   });
 });
+
+describe("Blog RSS feed", () => {
+  const originalCwd = process.cwd();
+  const tempRoot = mkdtempSync(join(tmpdir(), "website-2025-api-blog-rss-"));
+  const tempApiDir = join(tempRoot, "api");
+  mkdirSync(tempApiDir, { recursive: true });
+  /** @type {typeof import("./app.impure.js")} */
+  let appImpure;
+
+  beforeAll(async () => {
+    process.chdir(tempApiDir);
+    const moduleUrl = new URL(`./app.impure.js?blog-test=${Date.now()}`, import.meta.url);
+    appImpure = await import(moduleUrl.href);
+  });
+
+  afterAll(() => {
+    process.chdir(originalCwd);
+    try {
+      rmSync(tempRoot, { recursive: true, force: true });
+    } catch {
+      // Windows can briefly hold SQLite handles after the module test run.
+    }
+  });
+
+  it("builds an empty blog feed with deterministic channel metadata", () => {
+    const blogsRes = appImpure.listBlogs();
+    expect(blogsRes.err).toBeNull();
+    for (const row of blogsRes.value) {
+      const deleteRes = appImpure.deleteBlog(Number(row.id));
+      expect(deleteRes.err).toBeNull();
+    }
+
+    const feedRes = appImpure.buildBlogRssFeedXml("http://localhost:8081");
+
+    expect(feedRes.err).toBeNull();
+    expect(feedRes.value).toContain('xmlns:atom="http://www.w3.org/2005/Atom"');
+    expect(feedRes.value).toContain("<language>en-us</language>");
+    expect(feedRes.value).toContain("<ttl>60</ttl>");
+    expect(feedRes.value).toContain("<docs>https://www.rssboard.org/rss-specification</docs>");
+    expect(feedRes.value).toContain("<generator>website_2025 Blog RSS</generator>");
+    expect(readAtomSelfHref(feedRes.value)).toBe("http://localhost:8081/api/blogs/feed.xml");
+    expect(readTagValue(feedRes.value, "lastBuildDate")).toBe("Thu, 01 Jan 1970 00:00:00 GMT");
+    expect(feedRes.value).toContain("<title>Earl Cameron Blog Feed</title>");
+    expect(feedRes.value).toContain("<link>http://localhost:8081/blog</link>");
+  });
+
+  it("builds a published blog feed with stable item and channel timestamps", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-03-01T12:00:00.000Z"));
+    const firstCreateRes = appImpure.createBlog({
+      title: "RSS hardening notes",
+      summary: "Stabilizing the feed output for pollers.",
+      content: "Details about the change.",
+      variant: "engineering",
+      published: 1,
+      tags: []
+    });
+    vi.setSystemTime(new Date("2026-03-02T05:30:00.000Z"));
+    const secondCreateRes = appImpure.createBlog({
+      title: "Another shipping log",
+      summary: "A newer published post.",
+      content: "More details here.",
+      variant: "log",
+      published: 1,
+      tags: []
+    });
+
+    const firstFeedRes = appImpure.buildBlogRssFeedXml("http://localhost:8081");
+    const secondFeedRes = appImpure.buildBlogRssFeedXml("http://localhost:8081");
+    vi.useRealTimers();
+
+    expect(firstCreateRes.err).toBeNull();
+    expect(secondCreateRes.err).toBeNull();
+    expect(firstFeedRes.err).toBeNull();
+    expect(secondFeedRes.err).toBeNull();
+    expect(firstFeedRes.value).toBe(secondFeedRes.value);
+
+    const xmlText = firstFeedRes.value;
+    expect(xmlText).toContain('xmlns:atom="http://www.w3.org/2005/Atom"');
+    expect(xmlText).toContain("<language>en-us</language>");
+    expect(xmlText).toContain("<ttl>60</ttl>");
+    expect(xmlText).toContain("<docs>https://www.rssboard.org/rss-specification</docs>");
+    expect(xmlText).toContain("<generator>website_2025 Blog RSS</generator>");
+    expect(readAtomSelfHref(xmlText)).toBe("http://localhost:8081/api/blogs/feed.xml");
+    expect(xmlText).toContain("<title>Earl Cameron Blog Feed</title>");
+    expect(xmlText).toContain("<link>http://localhost:8081/blog</link>");
+    expect(xmlText).toContain("<guid isPermaLink=\"false\">blog-post-");
+    expect(xmlText).toContain("<link>http://localhost:8081/blog/");
+    expect(xmlText).toContain("<category>engineering</category>");
+    expect(xmlText).toContain("<category>log</category>");
+    expect(xmlText).toContain("<pubDate>Sun, 01 Mar 2026 12:00:00 GMT</pubDate>");
+    expect(xmlText).toContain("<pubDate>Mon, 02 Mar 2026 05:30:00 GMT</pubDate>");
+    expect(readTagValue(xmlText, "lastBuildDate")).toBe("Mon, 02 Mar 2026 05:30:00 GMT");
+  });
+});
