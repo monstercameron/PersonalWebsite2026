@@ -568,7 +568,7 @@ function renderHoverMetadataBoxForElement(props) {
   return (
     <div className={`meta-hover group relative ${className}`}>
       {children}
-      <aside className={`meta-hover-box squircle-sm pointer-events-none absolute left-0 top-full z-50 mt-2 w-72 border border-white/70 bg-slate-950/90 p-3 text-xs text-slate-100 opacity-0 shadow-2xl transition duration-150 group-hover:opacity-100 group-focus-within:opacity-100 ${boxClassName}`}>
+      <aside className={`meta-hover-box squircle-sm pointer-events-none absolute left-0 top-full z-40 mt-2 w-72 border border-white/70 bg-slate-950/90 p-3 text-xs text-slate-100 opacity-0 shadow-2xl transition duration-150 group-hover:opacity-100 group-focus-within:opacity-100 ${boxClassName}`}>
         <p className="mb-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-teal-200">{label}</p>
         <ul className="space-y-1 text-slate-200">
           {lines.map((lineItem, lineIndex) => (
@@ -2934,7 +2934,7 @@ export default function App() {
 
   return (
     <main className={`app-shell theme-${themeName} mx-auto min-h-screen w-full max-w-7xl p-4 pb-16 md:p-8`}>
-      <section className="sticky budget-sticky-toolbar mb-4 rounded-2xl border border-white/40 bg-white/85 p-2 shadow-lg backdrop-blur">
+      <section className="sticky z-[110] budget-sticky-toolbar mb-4 rounded-2xl border border-white/40 bg-white/85 p-2 shadow-lg backdrop-blur">
         <div className="mb-2 flex items-center justify-between gap-2">
           <h1 className="truncate text-sm font-bold text-slate-900 md:text-base">Financial Flight Deck</h1>
           <div className="flex items-center gap-1">
