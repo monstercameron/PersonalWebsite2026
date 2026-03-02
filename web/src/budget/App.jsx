@@ -736,6 +736,13 @@ function buildOverviewHoverContextLinesForMetric(metricRow, sourceBreakdown, eme
   ]
 }
 
+function resolveSavingsRateToneClasses(savingsRatePercent) {
+  if (savingsRatePercent >= 20) return { valueClassName: 'text-emerald-700', badgeClassName: 'bg-emerald-100 text-emerald-700' }
+  if (savingsRatePercent >= 10) return { valueClassName: 'text-amber-700', badgeClassName: 'bg-amber-100 text-amber-700' }
+  if (savingsRatePercent >= 0) return { valueClassName: 'text-rose-700', badgeClassName: 'bg-rose-100 text-rose-700' }
+  return { valueClassName: 'text-rose-800', badgeClassName: 'bg-rose-100 text-rose-800' }
+}
+
 function buildRiskDetailTemplateFromFindingAndPersonas(findingItem, personaNames) {
   const safeId = typeof findingItem.id === 'string' ? findingItem.id : ''
   const safeTitle = typeof findingItem.title === 'string' ? findingItem.title : 'Risk Flag'
@@ -2892,7 +2899,15 @@ export default function App() {
             ? sourceBreakdown.netWorth.delta
             : metricRow.value
           const trendLabel = trendSignalValue > 0 ? 'Up' : (trendSignalValue < 0 ? 'Down' : 'Flat')
-          const trendClassName = trendSignalValue > 0 ? 'bg-emerald-100 text-emerald-700' : (trendSignalValue < 0 ? 'bg-rose-100 text-rose-700' : 'bg-slate-100 text-slate-600')
+          const savingsRateToneClasses = label === 'Savings Rate'
+            ? resolveSavingsRateToneClasses(metricRow.value)
+            : null
+          const trendClassName = savingsRateToneClasses
+            ? savingsRateToneClasses.badgeClassName
+            : (trendSignalValue > 0 ? 'bg-emerald-100 text-emerald-700' : (trendSignalValue < 0 ? 'bg-rose-100 text-rose-700' : 'bg-slate-100 text-slate-600'))
+          const valueClassName = savingsRateToneClasses
+            ? savingsRateToneClasses.valueClassName
+            : 'text-slate-900'
           return (
             <React.Fragment key={label}>
               {renderHoverMetadataBoxForElement({
@@ -2901,7 +2916,7 @@ export default function App() {
                 children: (
                   <article className="glass-panel-soft squircle-md metric-card-enter p-5" style={{ animationDelay: `${metricIndex * 70}ms` }}>
                     <h2 className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">{label}</h2>
-                    <p className="mt-3 text-3xl font-bold text-slate-900">{formattedValue}</p>
+                    <p className={`mt-3 text-3xl font-bold ${valueClassName}`}>{formattedValue}</p>
                     <p className={`mt-2 inline-flex rounded-full px-2 py-1 text-xs font-semibold ${trendClassName}`}>{trendLabel} vs recent updates</p>
                   </article>
                 )
@@ -3332,7 +3347,7 @@ export default function App() {
           </div>
           <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
             <article className="squircle-sm border border-slate-200/90 bg-white/90 p-3"><p className="text-xs uppercase tracking-[0.12em] text-slate-500">Monthly Savings</p><p className={`text-2xl font-bold ${monthlySavingsStorageSummary.monthlySavingsAmount >= 0 ? 'text-emerald-700' : 'text-rose-700'}`}>{formatCurrencyValueForDashboard(monthlySavingsStorageSummary.monthlySavingsAmount)}</p></article>
-            <article className="squircle-sm border border-slate-200/90 bg-white/90 p-3"><p className="text-xs uppercase tracking-[0.12em] text-slate-500">Savings Rate</p><p className={`text-2xl font-bold ${monthlySavingsStorageSummary.monthlySavingsRatePercent >= 0 ? 'text-sky-700' : 'text-rose-700'}`}>{monthlySavingsStorageSummary.monthlySavingsRatePercent.toFixed(2)}%</p></article>
+            <article className="squircle-sm border border-slate-200/90 bg-white/90 p-3"><p className="text-xs uppercase tracking-[0.12em] text-slate-500">Savings Rate</p><p className={`text-2xl font-bold ${resolveSavingsRateToneClasses(monthlySavingsStorageSummary.monthlySavingsRatePercent).valueClassName}`}>{monthlySavingsStorageSummary.monthlySavingsRatePercent.toFixed(2)}%</p></article>
           </div>
           <div className="mb-4 rounded-2xl border border-slate-200/90 bg-white/75 p-4 backdrop-blur">
             <h3 className="text-base font-bold text-slate-900">Recommended Savings Target</h3>
