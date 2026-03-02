@@ -174,6 +174,11 @@ const RSS_FEED_TITLE_TRACKED = "Anime Release Radar - Tracked Releases";
 const RSS_FEED_DESC_TRACKED = "Tracked show release updates and status snapshots.";
 const RSS_FEED_TITLE_QUESTION = "Anime Release Radar - Daily Prompts";
 const RSS_FEED_DESC_QUESTION = "Daily anime discussion prompts for engagement.";
+const RSS_FEED_LANGUAGE = "en-us";
+const RSS_FEED_TTL_MINUTES = "60";
+const RSS_FEED_DOCS_URL = "https://www.rssboard.org/rss-specification";
+const RSS_FEED_GENERATOR = "website_2025 Anime Release Radar";
+const RSS_EMPTY_LAST_BUILD_DATE = "Thu, 01 Jan 1970 00:00:00 GMT";
 const RSS_FEED_TITLE_BLOG = "Earl Cameron Blog Feed";
 const RSS_FEED_DESC_BLOG = "Published engineering logs, vlogs, and system notes.";
 const RSS_GUID_PREFIX_BLOG = "blog-post-";
@@ -181,6 +186,8 @@ const RSS_GUID_PREFIX_TRACKED = "slackanime-tracked-";
 const RSS_GUID_PREFIX_QUESTION = "slackanime-question-";
 const RSS_GUID_PREFIX_DEBUG = "slackanime-debug-";
 const RSS_DEBUG_TITLE = "Debug Message";
+const PATH_API_SLACKANIME_FEED_TRACKED = "/api/slackanime/feed/tracked.xml";
+const PATH_API_SLACKANIME_FEED_QUESTIONS = "/api/slackanime/feed/questions.xml";
 const ANILIST_API_URL = "https://graphql.anilist.co";
 const CONTENT_TYPE_JSON = "application/json";
 const ANILIST_GRAPHQL_QUERY = "query ($search: String) { Page(page: 1, perPage: 12) { media(search: $search, type: ANIME, sort: [POPULARITY_DESC, START_DATE_DESC]) { id title { romaji english native } coverImage { large medium } status episodes format seasonYear siteUrl } } }";
@@ -1332,11 +1339,12 @@ export function buildSlackAnimeRssFeedXml(baseUrl, debugMessage = "") {
   if (!normalizedBaseUrl) {
     return { value: null, err: new Error(ERR_SLACKANIME_FEED_BASE_URL_REQUIRED) };
   }
+  const channelLink = `${normalizedBaseUrl}${PATH_SLACKANIME_PAGE}`;
+  const selfLink = `${normalizedBaseUrl}${PATH_API_SLACKANIME_FEED_TRACKED}`;
   const trackedRes = listTrackedAnime();
   if (trackedRes.err) {
     return { value: null, err: trackedRes.err };
   }
-  const nowRfc = new Date().toUTCString();
   const itemsXml = trackedRes.value
     .map((anime) => {
       const title = escapeXml(anime.title);
@@ -1344,18 +1352,28 @@ export function buildSlackAnimeRssFeedXml(baseUrl, debugMessage = "") {
       const format = escapeXml(anime.format || "ANIME");
       const episodes = anime.episodes > 0 ? `${anime.episodes} eps` : "episodes tbd";
       const season = anime.seasonYear > 0 ? String(anime.seasonYear) : RSS_DATE_FALLBACK;
-      const siteUrl = anime.siteUrl ? escapeXml(anime.siteUrl) : `${normalizedBaseUrl}${PATH_SLACKANIME_PAGE}`;
-      const updatedAt = anime.updatedAt ? new Date(anime.updatedAt).toUTCString() : nowRfc;
+      const siteUrl = escapeXml(anime.siteUrl ? anime.siteUrl : channelLink);
+      const updatedAt = toRssDateFromIsoValue(anime.updatedAt || anime.createdAt, "");
       const description = escapeXml(`${format} • ${status} • ${episodes} • ${season}`);
       const guid = `${RSS_GUID_PREFIX_TRACKED}${anime.anilistId}`;
       return `<item><title>${title}</title><link>${siteUrl}</link><description>${description}</description><guid isPermaLink="false">${guid}</guid><pubDate>${updatedAt}</pubDate></item>`;
     })
     .join("");
-  const debugItem = buildDebugRssItemXml(normalizedBaseUrl, debugMessage, nowRfc);
+  const latestTrackedRssDate = trackedRes.value.reduce((latestValue, anime) => {
+    const candidateValue = toRssDateFromIsoValue(anime.updatedAt || anime.createdAt, "");
+    if (!candidateValue) return latestValue;
+    const candidateTime = Date.parse(candidateValue);
+    const latestTime = Date.parse(latestValue);
+    if (!Number.isFinite(candidateTime)) return latestValue;
+    if (!Number.isFinite(latestTime) || candidateTime > latestTime) return candidateValue;
+    return latestValue;
+  }, "");
+  const debugItem = buildDebugRssItemXml(normalizedBaseUrl, debugMessage, latestTrackedRssDate || new Date().toUTCString());
   if (debugItem.err) {
     return { value: null, err: debugItem.err };
   }
-  const xml = `<?xml version="1.0" encoding="UTF-8"?><rss version="2.0"><channel><title>${RSS_FEED_TITLE_TRACKED}</title><link>${normalizedBaseUrl}${PATH_SLACKANIME_PAGE}</link><description>${RSS_FEED_DESC_TRACKED}</description><lastBuildDate>${nowRfc}</lastBuildDate>${debugItem.value}${itemsXml}</channel></rss>`;
+  const lastBuildDate = latestTrackedRssDate || RSS_EMPTY_LAST_BUILD_DATE;
+  const xml = `<?xml version="1.0" encoding="UTF-8"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>${escapeXml(RSS_FEED_TITLE_TRACKED)}</title><link>${escapeXml(channelLink)}</link><description>${escapeXml(RSS_FEED_DESC_TRACKED)}</description><language>${escapeXml(RSS_FEED_LANGUAGE)}</language><ttl>${escapeXml(RSS_FEED_TTL_MINUTES)}</ttl><docs>${escapeXml(RSS_FEED_DOCS_URL)}</docs><generator>${escapeXml(RSS_FEED_GENERATOR)}</generator><atom:link href="${escapeXml(selfLink)}" rel="self" type="application/rss+xml" /><lastBuildDate>${escapeXml(lastBuildDate)}</lastBuildDate>${debugItem.value}${itemsXml}</channel></rss>`;
   return { value: xml, err: null };
 }
 
@@ -1427,22 +1445,26 @@ export async function buildSlackAnimeQuestionRssFeedXml(baseUrl, debugMessage = 
   if (!normalizedBaseUrl) {
     return { value: null, err: new Error(ERR_SLACKANIME_FEED_BASE_URL_REQUIRED) };
   }
+  const channelLink = `${normalizedBaseUrl}${PATH_SLACKANIME_PAGE}`;
+  const selfLink = `${normalizedBaseUrl}${PATH_API_SLACKANIME_FEED_QUESTIONS}`;
   const questionRes = await getDailyAnimeQuestionCached();
   if (questionRes.err) {
     return { value: null, err: questionRes.err };
   }
   const row = questionRes.value;
-  const nowRfc = new Date().toUTCString();
+  const fallbackRfc = new Date().toUTCString();
   const questionText = escapeXml(row?.question || "");
-  const dateKey = escapeXml(row?.dateKey || RSS_DATE_FALLBACK);
+  const rawDateKey = String(row?.dateKey || "");
+  const dateKey = escapeXml(rawDateKey || RSS_DATE_FALLBACK);
   const guid = `${RSS_GUID_PREFIX_QUESTION}${dateKey}`;
-  const link = `${normalizedBaseUrl}${PATH_SLACKANIME_PAGE}`;
-  const item = `<item><title>Daily Anime Question - ${dateKey}</title><link>${link}</link><description>${questionText}</description><guid isPermaLink="false">${guid}</guid><pubDate>${nowRfc}</pubDate></item>`;
-  const debugItem = buildDebugRssItemXml(normalizedBaseUrl, debugMessage, nowRfc);
+  const link = escapeXml(channelLink);
+  const stableQuestionRssDate = toRssDateFromUtcDayKey(rawDateKey, fallbackRfc);
+  const item = `<item><title>Daily Anime Question - ${dateKey}</title><link>${link}</link><description>${questionText}</description><guid isPermaLink="false">${guid}</guid><pubDate>${stableQuestionRssDate}</pubDate></item>`;
+  const debugItem = buildDebugRssItemXml(normalizedBaseUrl, debugMessage, stableQuestionRssDate);
   if (debugItem.err) {
     return { value: null, err: debugItem.err };
   }
-  const xml = `<?xml version="1.0" encoding="UTF-8"?><rss version="2.0"><channel><title>${RSS_FEED_TITLE_QUESTION}</title><link>${link}</link><description>${RSS_FEED_DESC_QUESTION}</description><lastBuildDate>${nowRfc}</lastBuildDate>${debugItem.value}${item}</channel></rss>`;
+  const xml = `<?xml version="1.0" encoding="UTF-8"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>${escapeXml(RSS_FEED_TITLE_QUESTION)}</title><link>${link}</link><description>${escapeXml(RSS_FEED_DESC_QUESTION)}</description><language>${escapeXml(RSS_FEED_LANGUAGE)}</language><ttl>${escapeXml(RSS_FEED_TTL_MINUTES)}</ttl><docs>${escapeXml(RSS_FEED_DOCS_URL)}</docs><generator>${escapeXml(RSS_FEED_GENERATOR)}</generator><atom:link href="${escapeXml(selfLink)}" rel="self" type="application/rss+xml" /><lastBuildDate>${escapeXml(stableQuestionRssDate)}</lastBuildDate>${debugItem.value}${item}</channel></rss>`;
   return { value: xml, err: null };
 }
 
@@ -1462,6 +1484,30 @@ function buildDebugRssItemXml(baseUrl, debugMessage, nowRfc) {
   const link = `${baseUrl}${PATH_SLACKANIME_PAGE}`;
   const item = `<item><title>${RSS_DEBUG_TITLE}</title><link>${link}</link><description>${escapedMessage}</description><guid isPermaLink="false">${guid}</guid><pubDate>${nowRfc}</pubDate></item>`;
   return { value: item, err: null };
+}
+
+/**
+ * @param {string} isoValue
+ * @param {string} fallbackRfc
+ * @returns {string}
+ */
+function toRssDateFromIsoValue(isoValue, fallbackRfc) {
+  const parsed = new Date(String(isoValue || "").trim());
+  return Number.isFinite(parsed.getTime()) ? parsed.toUTCString() : fallbackRfc;
+}
+
+/**
+ * @param {string} dayKey
+ * @param {string} fallbackRfc
+ * @returns {string}
+ */
+function toRssDateFromUtcDayKey(dayKey, fallbackRfc) {
+  const normalizedDayKey = String(dayKey || "").trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(normalizedDayKey)) {
+    return fallbackRfc;
+  }
+  const parsed = new Date(`${normalizedDayKey}T00:00:00.000Z`);
+  return Number.isFinite(parsed.getTime()) ? parsed.toUTCString() : fallbackRfc;
 }
 
 /**
