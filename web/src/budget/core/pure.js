@@ -2271,29 +2271,17 @@ export function calculateDetailedDashboardDatapointRowsFromCurrentCollectionsSta
     ? (emergencyFundsCurrent / emergencyFundGoal) * 100
     : 0
 
-  const goalProgressTotals = currentCollectionsState.goals.reduce((runningTotals, goalItem) => {
-    const targetAmount = typeof goalItem.targetAmount === 'number' ? goalItem.targetAmount : 0
-    const currentAmount = typeof goalItem.currentAmount === 'number' ? goalItem.currentAmount : 0
-
-    if (targetAmount <= 0 || currentAmount <= 0) {
-      return {
-        ...runningTotals,
-        notStarted: runningTotals.notStarted + 1
-      }
-    }
-
-    if (currentAmount >= targetAmount) {
-      return {
-        ...runningTotals,
-        completed: runningTotals.completed + 1
-      }
-    }
-
-    return {
-      ...runningTotals,
-      inProgress: runningTotals.inProgress + 1
-    }
-  }, { completed: 0, inProgress: 0, notStarted: 0 })
+  const [goalStatusSummary, goalStatusSummaryError] = calculatePowerGoalsStatusFormulaSummaryFromGoalCollection(currentCollectionsState.goals)
+  if (goalStatusSummaryError) return [null, goalStatusSummaryError]
+  if (!goalStatusSummary) {
+    const [errorValue, createErrorFailure] = createApplicationErrorWithKindMessageAndRecoverability(
+      'VALIDATION',
+      'goal status summary is unexpectedly empty',
+      true
+    )
+    if (createErrorFailure) return [null, createErrorFailure]
+    return [null, errorValue]
+  }
 
   const travelGoals = currentCollectionsState.goals.filter((goalItem) => {
     const goalText = `${goalItem.title ?? ''} ${goalItem.name ?? ''} ${goalItem.category ?? ''}`.toLowerCase()
@@ -2432,21 +2420,21 @@ export function calculateDetailedDashboardDatapointRowsFromCurrentCollectionsSta
     },
     {
       metric: 'Goals Completed',
-      value: goalProgressTotals.completed,
+      value: goalStatusSummary.completedCount,
       valueFormat: /** @type {'count'} */ ('count'),
-      description: 'Goals where current amount is greater than or equal to target amount.'
+      description: 'Goals where status is marked completed.'
     },
     {
       metric: 'Goals In Progress',
-      value: goalProgressTotals.inProgress,
+      value: goalStatusSummary.inProgressCount,
       valueFormat: /** @type {'count'} */ ('count'),
-      description: 'Goals with positive progress that have not yet reached target.'
+      description: 'Goals where status is marked in progress.'
     },
     {
       metric: 'Goals Not Started',
-      value: goalProgressTotals.notStarted,
+      value: goalStatusSummary.notStartedCount,
       valueFormat: /** @type {'count'} */ ('count'),
-      description: 'Goals with no positive progress recorded yet.'
+      description: 'Goals where status is marked not started.'
     },
     {
       metric: 'Monthly Expenses',

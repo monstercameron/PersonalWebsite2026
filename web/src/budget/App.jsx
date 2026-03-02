@@ -3,6 +3,7 @@ import {
   buildDefaultBudgetCollectionsStateForLocalFirstUsage,
   appendValidatedIncomeOrExpenseRecordIntoCollectionsState,
   appendValidatedGoalRecordIntoCollectionsState,
+  validateRequiredGoalRecordFieldsBeforePersistence,
   calculateTwentyDashboardHealthMetricsFromFinancialCollections,
   calculateCurrentAndPreviousMonthSourceBreakdownFromCollectionsState,
   calculateDetailedDashboardDatapointRowsFromCurrentCollectionsState,
@@ -823,6 +824,7 @@ export default function App() {
   const [collections, setCollections] = React.useState(defaultCollectionsState)
   const [entryFormState, setEntryFormState] = React.useState(buildInitialIncomeExpenseEntryFormState)
   const [goalEntryFormState, setGoalEntryFormState] = React.useState(buildInitialGoalEntryFormState)
+  const [editingGoalId, setEditingGoalId] = React.useState('')
   const [isLoadingState, setIsLoadingState] = React.useState(true)
   const [uiMessage, setUiMessage] = React.useState('')
   const [themeName, setThemeName] = React.useState('dark')
@@ -1624,6 +1626,21 @@ export default function App() {
   function updateGoalEntryFormFieldValue(fieldName, nextFieldValue) {
     setGoalEntryFormState((previousFormState) => ({ ...previousFormState, [fieldName]: nextFieldValue }))
   }
+  function closeGoalModalAndResetForm() {
+    setGoalEntryFormState(buildInitialGoalEntryFormState())
+    setEditingGoalId('')
+    setIsAddGoalModalOpen(false)
+  }
+  function openEditGoalModal(goalItem) {
+    setGoalEntryFormState({
+      title: typeof goalItem.title === 'string' ? goalItem.title : '',
+      status: typeof goalItem.status === 'string' ? goalItem.status : 'not started',
+      timeframeMonths: String(goalItem.timeframeMonths ?? '12'),
+      description: typeof goalItem.description === 'string' ? goalItem.description : ''
+    })
+    setEditingGoalId(typeof goalItem.id === 'string' ? goalItem.id : '')
+    setIsAddGoalModalOpen(true)
+  }
   function updatePersonaEntryFormFieldValue(fieldName, nextFieldValue) {
     setPersonaEntryFormState((previousFormState) => ({ ...previousFormState, [fieldName]: nextFieldValue }))
   }
@@ -1907,28 +1924,76 @@ export default function App() {
     setIsAddAssetModalOpen(false)
   }
 
+  async function deleteGoalRecordById(goalId) {
+    const normalizedGoalId = typeof goalId === 'string' ? goalId.trim() : ''
+    if (!normalizedGoalId) return
+    const shouldDelete = window.confirm('Delete this goal?')
+    if (!shouldDelete) return
+    const nextCollectionsState = {
+      ...collections,
+      goals: (Array.isArray(collections.goals) ? collections.goals : []).filter((goalItem) => String(goalItem?.id ?? '') !== normalizedGoalId)
+    }
+    const [persistSuccess, persistError] = await persistBudgetCollectionsStateIntoLocalStorageCache(nextCollectionsState)
+    if (persistError || !persistSuccess) {
+      console.warn('[goals] Failed to persist goal delete.', persistError)
+      return
+    }
+    setCollections(nextCollectionsState)
+    await syncCollectionsStateToSupabaseWhenConnected(nextCollectionsState, 'delete-goal')
+    if (editingGoalId === normalizedGoalId) closeGoalModalAndResetForm()
+  }
+
   async function submitNewGoalRecord(submitEvent) {
     submitEvent.preventDefault()
     const [isoTimestamp, timestampError] = readCurrentIsoTimestampForBudgetRecordUpdates()
     if (timestampError || !isoTimestamp) return
-    const [nextCollectionsState, appendError] = appendValidatedGoalRecordIntoCollectionsState(
-      collections,
-      { title: goalEntryFormState.title, status: goalEntryFormState.status, timeframeMonths: Number(goalEntryFormState.timeframeMonths), description: goalEntryFormState.description },
-      isoTimestamp
-    )
-    if (appendError || !nextCollectionsState) {
-      console.warn('[goals] Failed to append goal record.', appendError)
+
+    const [validatedGoalRecord, validationError] = validateRequiredGoalRecordFieldsBeforePersistence({
+      title: goalEntryFormState.title,
+      status: goalEntryFormState.status,
+      timeframeMonths: Number(goalEntryFormState.timeframeMonths),
+      description: goalEntryFormState.description
+    })
+    if (validationError || !validatedGoalRecord) {
+      console.warn('[goals] Failed to validate goal record.', validationError)
       return
     }
+
+    let nextCollectionsState = null
+    if (editingGoalId) {
+      nextCollectionsState = {
+        ...collections,
+        goals: (Array.isArray(collections.goals) ? collections.goals : []).map((goalItem) => {
+          if (String(goalItem?.id ?? '') !== editingGoalId) return goalItem
+          return {
+            ...goalItem,
+            ...validatedGoalRecord,
+            id: goalItem.id,
+            updatedAt: isoTimestamp
+          }
+        })
+      }
+    } else {
+      const [appendedCollectionsState, appendError] = appendValidatedGoalRecordIntoCollectionsState(
+        collections,
+        validatedGoalRecord,
+        isoTimestamp
+      )
+      if (appendError || !appendedCollectionsState) {
+        console.warn('[goals] Failed to append goal record.', appendError)
+        return
+      }
+      nextCollectionsState = appendedCollectionsState
+    }
+
     const [persistSuccess, persistError] = await persistBudgetCollectionsStateIntoLocalStorageCache(nextCollectionsState)
     if (persistError || !persistSuccess) {
       console.warn('[goals] Failed to persist goal changes.', persistError)
       return
     }
     setCollections(nextCollectionsState)
-    await syncCollectionsStateToSupabaseWhenConnected(nextCollectionsState, 'add-goal')
-    setGoalEntryFormState(buildInitialGoalEntryFormState())
-    setIsAddGoalModalOpen(false)
+    await syncCollectionsStateToSupabaseWhenConnected(nextCollectionsState, editingGoalId ? 'edit-goal' : 'add-goal')
+    closeGoalModalAndResetForm()
   }
 
   async function submitNewPersonaRecord(submitEvent) {
@@ -3210,13 +3275,13 @@ export default function App() {
 
       <section id="goals" className="section-tight glass-panel-soft squircle-md z-layer-section mb-4 scroll-mt-40 p-4 md:mb-6 md:p-6" style={{ order: 12 }}>
         <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-          <h2 className="text-lg font-bold text-slate-900">Power Goals</h2>
-          <button className="inline-flex items-center gap-2 rounded-2xl bg-sky-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-sky-700" onClick={() => setIsAddGoalModalOpen(true)} type="button"><IconPlus /> Add Goals Here</button>
+          <h2 className="text-lg font-bold text-slate-900">Goals</h2>
+          <button className="inline-flex items-center gap-2 rounded-2xl bg-sky-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-sky-700" onClick={() => { setGoalEntryFormState(buildInitialGoalEntryFormState()); setEditingGoalId(''); setIsAddGoalModalOpen(true) }} type="button"><IconPlus /> Add Goal</button>
         </div>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          <article className="squircle-sm border border-slate-200/90 bg-white/90 p-3"><p className="text-xs uppercase tracking-[0.12em] text-slate-500">Completed</p><p className="text-2xl font-bold text-emerald-700">{powerGoalsFormulaSummary.completedCount}</p><p className="text-xs text-slate-500">Formula: status equals completed</p></article>
-          <article className="squircle-sm border border-slate-200/90 bg-white/90 p-3"><p className="text-xs uppercase tracking-[0.12em] text-slate-500">Not started</p><p className="text-2xl font-bold text-rose-700">{powerGoalsFormulaSummary.notStartedCount}</p><p className="text-xs text-slate-500">Formula: status equals not started</p></article>
-          <article className="squircle-sm border border-slate-200/90 bg-white/90 p-3"><p className="text-xs uppercase tracking-[0.12em] text-slate-500">Completion rate</p><p className="text-2xl font-bold text-sky-700">{powerGoalsFormulaSummary.completionRatePercent.toFixed(2)}%</p><p className="text-xs text-slate-500">Formula: completed divided by total goals</p></article>
+          <article className="squircle-sm border border-slate-200/90 bg-white/90 p-3"><p className="text-xs uppercase tracking-[0.12em] text-slate-500">Completed</p><p className="text-2xl font-bold text-emerald-700">{powerGoalsFormulaSummary.completedCount}</p><p className="text-xs text-slate-500">Status is marked completed.</p></article>
+          <article className="squircle-sm border border-slate-200/90 bg-white/90 p-3"><p className="text-xs uppercase tracking-[0.12em] text-slate-500">In Progress</p><p className="text-2xl font-bold text-amber-700">{powerGoalsFormulaSummary.inProgressCount}</p><p className="text-xs text-slate-500">Status is marked in progress.</p></article>
+          <article className="squircle-sm border border-slate-200/90 bg-white/90 p-3"><p className="text-xs uppercase tracking-[0.12em] text-slate-500">Not Started</p><p className="text-2xl font-bold text-rose-700">{powerGoalsFormulaSummary.notStartedCount}</p><p className="text-xs text-slate-500">Status is marked not started.</p></article>
         </div>
         <div className="table-scroll-region mt-4 rounded-2xl border border-slate-200/90 bg-white/75 backdrop-blur">
           <table className="w-full min-w-[860px] border-collapse text-sm">
@@ -3226,20 +3291,44 @@ export default function App() {
                 {renderSortableHeaderCell('goals', 'status', 'Status')}
                 {renderSortableHeaderCell('goals', 'timeframeMonths', 'Timeframe(months)', true)}
                 {renderSortableHeaderCell('goals', 'description', 'Description')}
+                <th className="px-3 py-2 text-right font-semibold">Actions</th>
               </tr>
             </thead>
             <tbody>
               {goalRowsSortedByTimeframeAndStatus.map((goalItem, goalIndex) => {
                 const title = typeof goalItem.title === 'string' ? goalItem.title : `Goal ${goalIndex + 1}`
+                const stableKey = typeof goalItem.id === 'string' ? goalItem.id : `${title}-${goalIndex}`
                 const status = typeof goalItem.status === 'string' ? goalItem.status : 'not started'
                 const timeframeMonths = typeof goalItem.timeframeMonths === 'number' ? goalItem.timeframeMonths : Number(goalItem.timeframeMonths ?? 0)
                 const description = typeof goalItem.description === 'string' ? goalItem.description : ''
                 return (
-                  <tr key={`${title}-${goalIndex}`} className="border-t border-slate-200 bg-white">
+                  <tr key={stableKey} className="group border-t border-slate-200 bg-white">
                     <td className="px-3 py-2 font-semibold text-slate-800">{title}</td>
                     <td className="px-3 py-2 text-slate-700">{status}</td>
                     <td className="px-3 py-2 text-right font-semibold text-slate-700">{Number.isFinite(timeframeMonths) ? timeframeMonths : 0}</td>
                     <td className="px-3 py-2 text-slate-500">{description}</td>
+                    <td className="px-3 py-2 text-right">
+                      <div className="flex w-full items-center justify-end gap-1 opacity-0 pointer-events-none transition-opacity duration-150 group-hover:opacity-100 group-hover:pointer-events-auto group-focus-within:opacity-100 group-focus-within:pointer-events-auto">
+                        <button
+                          aria-label="Edit goal"
+                          className="rounded-lg border border-slate-300 px-2 py-1 text-xs font-semibold text-slate-700"
+                          onClick={() => openEditGoalModal(goalItem)}
+                          title="Edit"
+                          type="button"
+                        >
+                          <span aria-hidden="true"><IconEdit /></span>
+                        </button>
+                        <button
+                          aria-label="Delete goal"
+                          className="rounded-lg border border-rose-300 bg-rose-50 px-2 py-1 text-xs font-semibold text-rose-700"
+                          onClick={() => { void deleteGoalRecordById(String(goalItem.id ?? '')) }}
+                          title="Delete"
+                          type="button"
+                        >
+                          <span aria-hidden="true"><IconTrash /></span>
+                        </button>
+                      </div>
+                    </td>
                   </tr>
                 )
               })}
@@ -3678,15 +3767,15 @@ export default function App() {
 
       {isAddGoalModalOpen ? (
         <section className="fixed inset-0 z-[5000] flex items-center justify-center p-3 sm:p-4" role="dialog" aria-modal="true" aria-label="Add Goal Modal">
-          <button className="absolute inset-0 bg-slate-950/55 backdrop-blur-sm" onClick={() => setIsAddGoalModalOpen(false)} type="button" aria-label="Close add goal modal backdrop" />
+          <button className="absolute inset-0 bg-slate-950/55 backdrop-blur-sm" onClick={closeGoalModalAndResetForm} type="button" aria-label="Close add goal modal backdrop" />
           <div className="relative z-[5001] w-full max-w-2xl rounded-3xl border border-white/40 bg-white p-4 shadow-2xl sm:p-6">
-            <div className="mb-4 flex items-center justify-between gap-3"><h3 className="text-lg font-bold text-slate-900">Add Goal</h3><button className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700" onClick={() => setIsAddGoalModalOpen(false)} type="button"><IconX /> Close</button></div>
+            <div className="mb-4 flex items-center justify-between gap-3"><h3 className="text-lg font-bold text-slate-900">{editingGoalId ? 'Edit Goal' : 'Add Goal'}</h3><button className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700" onClick={closeGoalModalAndResetForm} type="button"><IconX /> Close</button></div>
             <form className="grid grid-cols-1 gap-4 sm:grid-cols-2" onSubmit={submitNewGoalRecord}>
               <label className="text-sm font-medium text-slate-700 sm:col-span-2">Item<input className="mt-1 h-11 w-full rounded-2xl border border-slate-200/90 bg-slate-50/90 px-3 text-slate-900 outline-none transition focus:border-sky-400 focus:bg-white" type="text" value={goalEntryFormState.title} onChange={(event) => updateGoalEntryFormFieldValue('title', event.target.value)} /></label>
               <label className="text-sm font-medium text-slate-700">Status<select className="mt-1 h-11 w-full rounded-2xl border border-slate-200/90 bg-slate-50/90 px-3 text-slate-900 outline-none transition focus:border-sky-400 focus:bg-white" value={goalEntryFormState.status} onChange={(event) => updateGoalEntryFormFieldValue('status', event.target.value)}><option value="not started">Not started</option><option value="in progress">In progress</option><option value="completed">Completed</option></select></label>
               <label className="text-sm font-medium text-slate-700">Timeframe(months)<input className="mt-1 h-11 w-full rounded-2xl border border-slate-200/90 bg-slate-50/90 px-3 text-slate-900 outline-none transition focus:border-sky-400 focus:bg-white" type="number" min="0" step="1" value={goalEntryFormState.timeframeMonths} onChange={(event) => updateGoalEntryFormFieldValue('timeframeMonths', event.target.value)} /></label>
               <label className="text-sm font-medium text-slate-700 sm:col-span-2">Description<textarea className="mt-1 min-h-[90px] w-full rounded-2xl border border-slate-200/90 bg-slate-50/90 px-3 py-2 text-slate-900 outline-none transition focus:border-sky-400 focus:bg-white" value={goalEntryFormState.description} onChange={(event) => updateGoalEntryFormFieldValue('description', event.target.value)} /></label>
-              <div className="sm:col-span-2 flex flex-wrap justify-end gap-2"><button className="inline-flex items-center gap-1.5 rounded-2xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700" onClick={() => setIsAddGoalModalOpen(false)} type="button"><IconX /> Cancel</button><button className="rounded-2xl bg-sky-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-sky-700 inline-flex items-center gap-1.5" type="submit"><IconCheck /> Save Goal</button></div>
+              <div className="sm:col-span-2 flex flex-wrap justify-end gap-2"><button className="inline-flex items-center gap-1.5 rounded-2xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700" onClick={closeGoalModalAndResetForm} type="button"><IconX /> Cancel</button>{editingGoalId ? <button className="inline-flex items-center gap-1.5 rounded-2xl border border-rose-300 bg-rose-50 px-4 py-2 text-sm font-semibold text-rose-700" onClick={() => { void deleteGoalRecordById(editingGoalId) }} type="button"><IconTrash /> Delete Goal</button> : null}<button className="rounded-2xl bg-sky-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-sky-700 inline-flex items-center gap-1.5" type="submit"><IconCheck /> {editingGoalId ? 'Save Changes' : 'Save Goal'}</button></div>
             </form>
           </div>
         </section>
