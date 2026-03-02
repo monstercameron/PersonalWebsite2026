@@ -628,8 +628,10 @@ function buildOverviewHoverContextLinesForMetric(metricRow, sourceBreakdown, eme
     const liquidAmount = typeof emergencyFundSummary?.liquidAmount === 'number' ? emergencyFundSummary.liquidAmount : 0
     const investedAmount = typeof emergencyFundSummary?.investedAmount === 'number' ? emergencyFundSummary.investedAmount : 0
     const totalCoverageMonths = typeof emergencyFundSummary?.totalCoverageMonths === 'number' ? emergencyFundSummary.totalCoverageMonths : 0
+    const recurringEssentialExpenses = typeof emergencyFundSummary?.monthlyExpenses === 'number' ? emergencyFundSummary.monthlyExpenses : 0
+    const nonCreditCardDebtMinimums = typeof emergencyFundSummary?.monthlyDebtMinimums === 'number' ? emergencyFundSummary.monthlyDebtMinimums : 0
     const status = totalCoverageMonths >= 3 ? 'Good: at least 3-month baseline coverage likely.' : 'Watch: emergency reserve may be thin.'
-    return [status, 'Target: 6 months of expenses plus debt minimums.', `Liquid emergency funds: ${formatCurrencyValueForDashboard(liquidAmount)}.`, `Invested emergency funds: ${formatCurrencyValueForDashboard(investedAmount)}.`]
+    return [status, 'Target: 6 months of recurring essential expenses plus non-credit-card debt minimums.', `Recurring essentials used: ${formatCurrencyValueForDashboard(recurringEssentialExpenses)}. Debt minimums used: ${formatCurrencyValueForDashboard(nonCreditCardDebtMinimums)}.`, `Liquid emergency funds: ${formatCurrencyValueForDashboard(liquidAmount)}. Invested emergency funds: ${formatCurrencyValueForDashboard(investedAmount)}.`]
   }
   if (metricLabel === 'Months Until Debt-Free') {
     const status = metricValue <= 24 ? 'Good: short payoff horizon.' : (metricValue <= 60 ? 'Watch: medium payoff horizon.' : 'Risk: long payoff horizon.')
@@ -673,12 +675,22 @@ function buildOverviewHoverContextLinesForMetric(metricRow, sourceBreakdown, eme
     return [status, `Current annualized income: ${formatCurrencyValueForDashboard(metricValue)}.`, 'Compare liabilities and goals against annual income scale.', 'Higher annual income improves refinancing and savings options.']
   }
   if (metricLabel === 'Emergency Funds Goal') {
+    const recurringEssentialExpenses = typeof emergencyFundSummary?.monthlyExpenses === 'number' ? emergencyFundSummary.monthlyExpenses : 0
+    const totalRecordedExpenses = typeof emergencyFundSummary?.totalRecordedExpenses === 'number' ? emergencyFundSummary.totalRecordedExpenses : 0
+    const nonCreditCardDebtMinimums = typeof emergencyFundSummary?.monthlyDebtMinimums === 'number' ? emergencyFundSummary.monthlyDebtMinimums : 0
+    const monthlyObligations = typeof emergencyFundSummary?.monthlyObligations === 'number' ? emergencyFundSummary.monthlyObligations : 0
     const status = metricValue > 0 ? 'Target: this is your 6-month reserve benchmark.' : 'Risk: emergency goal is not defined.'
-    return [status, `Target amount: ${formatCurrencyValueForDashboard(metricValue)}.`, 'Typical range: 3-6 months of obligations (expenses + debt minimums).', 'Track progress monthly against this goal.']
+    return [
+      status,
+      `Formula: 6 x ${formatCurrencyValueForDashboard(monthlyObligations)} = ${formatCurrencyValueForDashboard(metricValue)}.`,
+      `Recurring essentials: ${formatCurrencyValueForDashboard(recurringEssentialExpenses)}. Non-credit-card debt minimums: ${formatCurrencyValueForDashboard(nonCreditCardDebtMinimums)}.`,
+      `All recorded expenses were ${formatCurrencyValueForDashboard(totalRecordedExpenses)}; discretionary and credit-card minimums are not used in this goal.`
+    ]
   }
   if (metricLabel === 'Emergency Fund Gap') {
+    const monthlyObligations = typeof emergencyFundSummary?.monthlyObligations === 'number' ? emergencyFundSummary.monthlyObligations : 0
     const status = metricValue > 0 ? 'Gap: this is the amount still needed to fully fund 6 months.' : 'Good: emergency fund target is currently met.'
-    return [status, `Current shortfall: ${formatCurrencyValueForDashboard(metricValue)}.`, 'Target benchmark: 6 months of obligations.', 'Reduce this gap with recurring monthly emergency contributions.']
+    return [status, `Current shortfall: ${formatCurrencyValueForDashboard(metricValue)}.`, `Goal is based on ${formatCurrencyValueForDashboard(monthlyObligations)} per month of recurring essential obligations.`, 'Reduce this gap with recurring monthly emergency contributions.']
   }
   if (metricLabel === 'Goals Completed') {
     const status = metricValue >= 10 ? 'Good: strong execution pace.' : (metricValue >= 3 ? 'Watch: moderate completion pace.' : 'Risk: low completion pace.')
@@ -714,11 +726,11 @@ function buildOverviewHoverContextLinesForMetric(metricRow, sourceBreakdown, eme
   }
   if (metricLabel === 'Cash Runway After Debt Service') {
     const status = metricValue >= 6 ? 'Good: strong post-debt runway.' : (metricValue >= 3 ? 'Watch: moderate post-debt runway.' : 'Risk: low post-debt runway.')
-    return [status, `Current runway after debt: ${metricValue.toFixed(1)} months.`, 'Target: maintain at least 3 months; prefer 6+', 'Runway includes debt minimum obligations.']
+    return [status, `Current runway after debt: ${metricValue.toFixed(1)} months.`, 'Target: maintain at least 3 months; prefer 6+', 'Runway includes recurring essential expenses and non-credit-card debt minimums.']
   }
   if (metricLabel === 'Emergency Fund Coverage (Months)') {
     const status = metricValue >= 6 ? 'Good: fully funded emergency coverage.' : (metricValue >= 3 ? 'Watch: baseline emergency coverage.' : 'Risk: emergency coverage is low.')
-    return [status, `Current coverage: ${metricValue.toFixed(1)} months.`, 'Coverage is against expenses plus debt minimums.', 'Target bands: 3 months minimum, 6 months preferred.']
+    return [status, `Current coverage: ${metricValue.toFixed(1)} months.`, 'Coverage is against recurring essential expenses plus non-credit-card debt minimums.', 'Target bands: 3 months minimum, 6 months preferred.']
   }
   if (metricLabel === 'Discretionary After Expenses + Debt') {
     const status = metricValue >= 1000 ? 'Good: healthy discretionary capacity.' : (metricValue >= 0 ? 'Watch: thin discretionary capacity.' : 'Risk: negative discretionary cash flow.')
@@ -1047,7 +1059,7 @@ export default function App() {
           stretchRecommendedSavings: 0,
           gapToRecommendedSavings: 0
         },
-        emergencyFundSummary: { emergencyFundGoal: 0, liquidAmount: 0, investedAmount: 0, missingLiquidAmount: 0, investedTarget: 0, totalCoverageMonths: 0 },
+        emergencyFundSummary: { emergencyFundGoal: 0, monthlyExpenses: 0, totalRecordedExpenses: 0, monthlyDebtMinimums: 0, monthlyObligations: 0, liquidAmount: 0, investedAmount: 0, missingLiquidAmount: 0, investedTarget: 0, totalCoverageMonths: 0, recurringExpenseRows: [], debtMinimumRows: [] },
         creditCardInformationCollection: [],
         creditCardSummary: { totalCurrent: 0, totalMonthly: 0, totalUtilizationPercent: 0, remainingCapacity: 0, maxCapacity: 0 },
         creditCardRecommendations: { weightedPayoffMonthsCurrent: 0, weightedPayoffMonthsRecommended: 0, rows: [] },
@@ -1502,34 +1514,24 @@ export default function App() {
     [assetHoldingRows]
   )
   const emergencyGoalExpenseLines = React.useMemo(() => {
-    const monthlyExpenseRows = safeCollections.expenses
-      .map((expenseRow, expenseIndex) => {
-        const itemName = typeof expenseRow.item === 'string' ? expenseRow.item : `Expense ${expenseIndex + 1}`
-        const monthlyAmount = typeof expenseRow.amount === 'number' ? expenseRow.amount : 0
-        return { itemName, monthlyAmount }
-      })
-      .filter((rowItem) => rowItem.monthlyAmount > 0)
-    const monthlyDebtRows = [...safeCollections.debts, ...safeCollections.loans, ...safeCollections.credit]
-      .map((debtRow, debtIndex) => {
-        const itemName = typeof debtRow.item === 'string' ? debtRow.item : `Debt ${debtIndex + 1}`
-        const monthlyAmount = typeof debtRow.minimumPayment === 'number' ? debtRow.minimumPayment : 0
-        return { itemName, monthlyAmount }
-      })
-      .filter((rowItem) => rowItem.monthlyAmount > 0)
-    const monthlyExpenseTotal = monthlyExpenseRows.reduce((runningTotal, rowItem) => runningTotal + rowItem.monthlyAmount, 0)
-    const monthlyDebtTotal = monthlyDebtRows.reduce((runningTotal, rowItem) => runningTotal + rowItem.monthlyAmount, 0)
-    const monthlyObligationTotal = monthlyExpenseTotal + monthlyDebtTotal
-    const sixMonthTotal = monthlyObligationTotal * 6
+    const monthlyExpenseRows = Array.isArray(emergencyFundSummary.recurringExpenseRows) ? emergencyFundSummary.recurringExpenseRows : []
+    const monthlyDebtRows = Array.isArray(emergencyFundSummary.debtMinimumRows) ? emergencyFundSummary.debtMinimumRows : []
+    const monthlyExpenseTotal = typeof emergencyFundSummary.monthlyExpenses === 'number' ? emergencyFundSummary.monthlyExpenses : 0
+    const totalRecordedExpenses = typeof emergencyFundSummary.totalRecordedExpenses === 'number' ? emergencyFundSummary.totalRecordedExpenses : 0
+    const monthlyDebtTotal = typeof emergencyFundSummary.monthlyDebtMinimums === 'number' ? emergencyFundSummary.monthlyDebtMinimums : 0
+    const monthlyObligationTotal = typeof emergencyFundSummary.monthlyObligations === 'number' ? emergencyFundSummary.monthlyObligations : 0
+    const sixMonthTotal = typeof emergencyFundSummary.emergencyFundGoal === 'number' ? emergencyFundSummary.emergencyFundGoal : 0
     return [
       'Emergency Goal Formula',
-      `Monthly Expenses: ${formatCurrencyValueForDashboard(monthlyExpenseTotal)}`,
-      `Monthly Debt Minimums: ${formatCurrencyValueForDashboard(monthlyDebtTotal)}`,
+      `Recurring Essential Expenses: ${formatCurrencyValueForDashboard(monthlyExpenseTotal)}`,
+      `All Recorded Expenses: ${formatCurrencyValueForDashboard(totalRecordedExpenses)}`,
+      `Non-Credit-Card Debt Minimums: ${formatCurrencyValueForDashboard(monthlyDebtTotal)}`,
       `Monthly Obligations Total: ${formatCurrencyValueForDashboard(monthlyObligationTotal)}`,
       `6-Month Goal: ${formatCurrencyValueForDashboard(sixMonthTotal)}`,
-      ...monthlyExpenseRows.map((rowItem) => `- Expense ${rowItem.itemName}: ${formatCurrencyValueForDashboard(rowItem.monthlyAmount)} / mo | ${formatCurrencyValueForDashboard(rowItem.monthlyAmount * 6)} in 6 months`),
-      ...monthlyDebtRows.map((rowItem) => `- Debt ${rowItem.itemName}: ${formatCurrencyValueForDashboard(rowItem.monthlyAmount)} / mo | ${formatCurrencyValueForDashboard(rowItem.monthlyAmount * 6)} in 6 months`)
+      ...monthlyExpenseRows.map((rowItem) => `- Recurring Expense ${rowItem.label}: ${formatCurrencyValueForDashboard(rowItem.amount)} / mo | ${formatCurrencyValueForDashboard(rowItem.amount * 6)} in 6 months`),
+      ...monthlyDebtRows.map((rowItem) => `- Debt ${rowItem.label}: ${formatCurrencyValueForDashboard(rowItem.amount)} / mo | ${formatCurrencyValueForDashboard(rowItem.amount * 6)} in 6 months`)
     ]
-  }, [safeCollections.credit, safeCollections.debts, safeCollections.expenses, safeCollections.loans])
+  }, [emergencyFundSummary])
   const totalMonthlyDebtPayment = React.useMemo(
     () => debtRows.reduce((runningTotal, debtItem) => runningTotal + (typeof debtItem.minimumPayment === 'number' ? debtItem.minimumPayment : 0), 0),
     [debtRows]
@@ -3200,9 +3202,9 @@ export default function App() {
       <section id="emergency-fund" className="section-tight section-allows-popovers glass-panel-soft squircle-md z-layer-section mb-4 scroll-mt-40 p-4 md:mb-6 md:p-6" style={{ order: 14 }}>
         <div className="mb-4">
           <h2 className="text-lg font-bold text-slate-900">Emergency Fund Tracker (6 Months)</h2>
-          <p className="text-xs text-slate-500">Goal is based on expenses + debt minimums. Funds are grouped from liquid cash-style assets and longer-term invested assets.</p>
+          <p className="text-xs text-slate-500">Goal is based on recurring essential expenses plus non-credit-card debt minimums. Funds are grouped from liquid cash-style assets and longer-term invested assets.</p>
         </div>
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
           {renderHoverMetadataBoxForElement({
             label: 'Emergency Goal Expense Breakdown',
             lines: emergencyGoalExpenseLines,
@@ -3223,9 +3225,16 @@ export default function App() {
             <p className="text-xs text-slate-500">Invested assets: {emergencyFundSourceLabels.investedText}</p>
           </article>
           <article className="squircle-sm border border-rose-200/90 bg-rose-50/85 p-3">
-            <p className="text-xs uppercase tracking-[0.12em] text-rose-600">Gap</p>
-            <p className={`text-xl font-bold ${emergencyFundSummary.missingTotalAmount > 0 ? 'text-rose-700' : 'text-emerald-700'}`}>{formatCurrencyValueForDashboard(emergencyFundSummary.missingTotalAmount)}</p>
-            <p className="text-xs text-rose-600">Need to fully fund 6 months: {formatCurrencyValueForDashboard(emergencyFundSummary.missingTotalAmount)}</p>
+            <p className="text-xs uppercase tracking-[0.12em] text-rose-600">Liquid Gap</p>
+            <p className={`text-xl font-bold ${emergencyFundSummary.missingLiquidAmount > 0 ? 'text-rose-700' : 'text-emerald-700'}`}>{formatCurrencyValueForDashboard(emergencyFundSummary.missingLiquidAmount)}</p>
+            <p className="text-xs text-rose-600">Needed to hit liquid target: {formatCurrencyValueForDashboard(emergencyFundSummary.missingLiquidAmount)}</p>
+            <p className="mt-1 text-xs text-rose-600">Target: {formatCurrencyValueForDashboard(emergencyFundSummary.liquidTarget)}</p>
+          </article>
+          <article className="squircle-sm border border-rose-200/90 bg-rose-50/85 p-3">
+            <p className="text-xs uppercase tracking-[0.12em] text-rose-600">Invested Gap</p>
+            <p className={`text-xl font-bold ${Math.max(0, emergencyFundSummary.investedTarget - emergencyFundSummary.investedAmount) > 0 ? 'text-rose-700' : 'text-emerald-700'}`}>{formatCurrencyValueForDashboard(Math.max(0, emergencyFundSummary.investedTarget - emergencyFundSummary.investedAmount))}</p>
+            <p className="text-xs text-rose-600">Needed to hit invested target: {formatCurrencyValueForDashboard(Math.max(0, emergencyFundSummary.investedTarget - emergencyFundSummary.investedAmount))}</p>
+            <p className="mt-1 text-xs text-rose-600">Target: {formatCurrencyValueForDashboard(emergencyFundSummary.investedTarget)}</p>
           </article>
         </div>
       </section>

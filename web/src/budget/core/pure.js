@@ -1736,7 +1736,7 @@ export function calculateMonthlySavingsStorageSummaryFromCollectionsState(curren
  * Calculates emergency-fund tracking summary with liquid and invested buckets.
  * Returns an error when required collections are malformed.
  * @param {{expenses: Array<Record<string, unknown>>, assets: Array<Record<string, unknown>>, assetHoldings?: Array<Record<string, unknown>>, debts?: Array<Record<string, unknown>>, credit?: Array<Record<string, unknown>>, loans?: Array<Record<string, unknown>>}} currentCollectionsState
- * @returns {Result<{monthlyExpenses: number, monthlyDebtMinimums: number, monthlyObligations: number, emergencyFundGoal: number, liquidTarget: number, investedTarget: number, liquidAmount: number, investedAmount: number, totalEmergencyFundAmount: number, missingTotalAmount: number, missingLiquidAmount: number, liquidCoverageMonths: number, totalCoverageMonths: number, liquidSources: Array<{id: string, label: string, amount: number}>, investedSources: Array<{id: string, label: string, amount: number}>}>}
+ * @returns {Result<{monthlyExpenses: number, totalRecordedExpenses: number, monthlyDebtMinimums: number, monthlyObligations: number, emergencyFundGoal: number, liquidTarget: number, investedTarget: number, liquidAmount: number, investedAmount: number, totalEmergencyFundAmount: number, missingTotalAmount: number, missingLiquidAmount: number, liquidCoverageMonths: number, totalCoverageMonths: number, recurringExpenseRows: Array<{id: string, label: string, amount: number}>, debtMinimumRows: Array<{id: string, label: string, amount: number}>, liquidSources: Array<{id: string, label: string, amount: number}>, investedSources: Array<{id: string, label: string, amount: number}>}>}
  */
 export function calculateEmergencyFundTrackingSummaryFromCollectionsState(currentCollectionsState) {
   if (!currentCollectionsState || typeof currentCollectionsState !== 'object') {
@@ -1759,23 +1759,59 @@ export function calculateEmergencyFundTrackingSummaryFromCollectionsState(curren
   }
 
   const assetHoldings = Array.isArray(currentCollectionsState.assetHoldings) ? currentCollectionsState.assetHoldings : []
-  const monthlyExpenses = currentCollectionsState.expenses.reduce((runningTotal, expenseRow) => {
+  const totalRecordedExpenses = currentCollectionsState.expenses.reduce((runningTotal, expenseRow) => {
     const amount = typeof expenseRow.amount === 'number' ? expenseRow.amount : 0
     return runningTotal + amount
   }, 0)
-  const monthlyDebtMinimums =
-    (Array.isArray(currentCollectionsState.debts) ? currentCollectionsState.debts : []).reduce((runningTotal, debtRow) => {
-      const minimumPayment = typeof debtRow.minimumPayment === 'number' ? debtRow.minimumPayment : 0
-      return runningTotal + minimumPayment
-    }, 0) +
-    (Array.isArray(currentCollectionsState.credit) ? currentCollectionsState.credit : []).reduce((runningTotal, creditRow) => {
-      const minimumPayment = typeof creditRow.minimumPayment === 'number' ? creditRow.minimumPayment : 0
-      return runningTotal + minimumPayment
-    }, 0) +
-    (Array.isArray(currentCollectionsState.loans) ? currentCollectionsState.loans : []).reduce((runningTotal, loanRow) => {
-      const minimumPayment = typeof loanRow.minimumPayment === 'number' ? loanRow.minimumPayment : 0
-      return runningTotal + minimumPayment
-    }, 0)
+
+  const essentialCategoryNames = new Set(['housing', 'groceries', 'utilities', 'insurance', 'healthcare', 'services', 'personal care', 'transportation', 'fuel', 'childcare', 'pets', 'education'])
+  const discretionaryCategoryNames = new Set(['entertainment', 'travel', 'gifts', 'dining', 'miscellaneous'])
+  const recurringEssentialKeywordList = ['hoa', 'rent', 'mortgage', 'grocer', 'utility', 'electric', 'water', 'internet', 'phone', 'insurance', 'medication', 'health', 'doctor', 'therapy', 'housekeeping', 'cleaning', 'stipend', 'hosting', 'storage', 'childcare', 'pet', 'gas', 'fuel']
+  const discretionaryKeywordList = ['ticket', 'tickets', 'lifestyle', 'vacation', 'trip', 'concert', 'shopping', 'bar', 'restaurant', 'fun money', 'untracked']
+  const debtKeywordList = ['debt payment', 'credit card', 'loan payment', 'minimum payment']
+
+  const recurringExpenseRows = currentCollectionsState.expenses.flatMap((expenseRow, expenseIndex) => {
+    const amount = typeof expenseRow.amount === 'number' ? expenseRow.amount : 0
+    if (!Number.isFinite(amount) || amount <= 0) return []
+
+    const category = typeof expenseRow.category === 'string' ? expenseRow.category.trim().toLowerCase() : ''
+    const item = typeof expenseRow.item === 'string' ? expenseRow.item.trim().toLowerCase() : ''
+    const description = typeof expenseRow.description === 'string' ? expenseRow.description.trim().toLowerCase() : ''
+    const combinedText = `${category} ${item} ${description}`.trim()
+
+    if (debtKeywordList.some((keyword) => combinedText.includes(keyword))) return []
+    if (discretionaryCategoryNames.has(category)) return []
+    if (discretionaryKeywordList.some((keyword) => combinedText.includes(keyword))) return []
+
+    const shouldInclude = essentialCategoryNames.has(category) ||
+      recurringEssentialKeywordList.some((keyword) => combinedText.includes(keyword))
+
+    if (!shouldInclude) return []
+
+    const label = typeof expenseRow.description === 'string' && expenseRow.description.trim().length > 0
+      ? expenseRow.description.trim()
+      : (typeof expenseRow.item === 'string' && expenseRow.item.trim().length > 0
+        ? expenseRow.item.trim()
+        : (typeof expenseRow.category === 'string' && expenseRow.category.trim().length > 0
+          ? expenseRow.category.trim()
+          : `Expense ${expenseIndex + 1}`))
+
+    return [{ id: `expense-${expenseIndex + 1}`, label, amount }]
+  })
+  const monthlyExpenses = recurringExpenseRows.reduce((runningTotal, rowItem) => runningTotal + rowItem.amount, 0)
+
+  const debtCollections = [
+    { prefix: 'debt', rows: Array.isArray(currentCollectionsState.debts) ? currentCollectionsState.debts : [] },
+    { prefix: 'credit', rows: Array.isArray(currentCollectionsState.credit) ? currentCollectionsState.credit : [] },
+    { prefix: 'loan', rows: Array.isArray(currentCollectionsState.loans) ? currentCollectionsState.loans : [] }
+  ]
+  const debtMinimumRows = debtCollections.flatMap((collectionItem) => collectionItem.rows.flatMap((debtRow, debtIndex) => {
+    const minimumPayment = typeof debtRow.minimumPayment === 'number' ? debtRow.minimumPayment : 0
+    if (!Number.isFinite(minimumPayment) || minimumPayment <= 0) return []
+    const label = typeof debtRow.item === 'string' && debtRow.item.trim().length > 0 ? debtRow.item.trim() : `Debt ${debtIndex + 1}`
+    return [{ id: `${collectionItem.prefix}-${debtIndex + 1}`, label, amount: minimumPayment }]
+  }))
+  const monthlyDebtMinimums = debtMinimumRows.reduce((runningTotal, rowItem) => runningTotal + rowItem.amount, 0)
   const monthlyObligations = monthlyExpenses + monthlyDebtMinimums
   const emergencyFundGoal = monthlyObligations * 6
   const liquidTarget = monthlyObligations * 2
@@ -1824,6 +1860,7 @@ export function calculateEmergencyFundTrackingSummaryFromCollectionsState(curren
   return [
     {
       monthlyExpenses,
+      totalRecordedExpenses,
       monthlyDebtMinimums,
       monthlyObligations,
       emergencyFundGoal,
@@ -1836,6 +1873,8 @@ export function calculateEmergencyFundTrackingSummaryFromCollectionsState(curren
       missingLiquidAmount,
       liquidCoverageMonths,
       totalCoverageMonths,
+      recurringExpenseRows,
+      debtMinimumRows,
       liquidSources,
       investedSources
     },
@@ -2416,7 +2455,7 @@ export function calculateDetailedDashboardDatapointRowsFromCurrentCollectionsSta
       metric: 'Emergency Funds Goal',
       value: emergencyFundGoal,
       valueFormat: /** @type {'currency'} */ ('currency'),
-      description: 'Six times monthly obligations (expenses plus debt minimums).'
+      description: 'Six times recurring essential expenses plus non-credit-card debt minimums.'
     },
     {
       metric: 'Goals Completed',
@@ -2542,7 +2581,7 @@ export function calculateDetailedDashboardDatapointRowsFromCurrentCollectionsSta
       metric: 'Emergency Fund Coverage (Months)',
       value: emergencyFundMonthsCovered,
       valueFormat: /** @type {'duration'} */ ('duration'),
-      description: 'How many months of expenses plus debt minimums current emergency funds can cover.'
+      description: 'How many months of recurring essential expenses plus non-credit-card debt minimums current emergency funds can cover.'
     },
     {
       metric: 'Debt Coverage By Assets',
@@ -2590,7 +2629,7 @@ export function calculateDetailedDashboardDatapointRowsFromCurrentCollectionsSta
       metric: 'Cash Runway After Debt Service',
       value: cashRunwayAfterDebtMonths,
       valueFormat: /** @type {'duration'} */ ('duration'),
-      description: 'Months current emergency funds can cover expenses plus debt minimums.'
+      description: 'Months current emergency funds can cover recurring essential expenses plus non-credit-card debt minimums.'
     },
     {
       metric: 'Income Change vs Last Month',
