@@ -1332,8 +1332,8 @@ export default function App() {
       'Credit Card Utilization',
       'Credit Card Debt',
       'Credit Card Capacity',
-      'Emergency Funds',
       'Emergency Funds Goal',
+      'Emergency Funds',
       'Emergency Fund Gap',
       'Income After Debt Minimums',
       'Discretionary After Expenses + Debt',
@@ -1538,6 +1538,18 @@ export default function App() {
     ), 0),
     [safeCollections.debts]
   )
+  const emergencyFundSourceLabels = React.useMemo(() => {
+    const liquidLabels = Array.isArray(emergencyFundSummary.liquidSources)
+      ? emergencyFundSummary.liquidSources.map((rowItem) => rowItem.label).filter((labelValue) => typeof labelValue === 'string' && labelValue.trim().length > 0)
+      : []
+    const investedLabels = Array.isArray(emergencyFundSummary.investedSources)
+      ? emergencyFundSummary.investedSources.map((rowItem) => rowItem.label).filter((labelValue) => typeof labelValue === 'string' && labelValue.trim().length > 0)
+      : []
+    return {
+      liquidText: liquidLabels.length > 0 ? liquidLabels.join(', ') : 'None classified',
+      investedText: investedLabels.length > 0 ? investedLabels.join(', ') : 'None classified'
+    }
+  }, [emergencyFundSummary.investedSources, emergencyFundSummary.liquidSources])
   const personaOptions = React.useMemo(() => {
     if (shouldSkipHeavyComputations) return []
     const discoveredNames = [
@@ -2902,11 +2914,19 @@ export default function App() {
           const savingsRateToneClasses = label === 'Savings Rate'
             ? resolveSavingsRateToneClasses(metricRow.value)
             : null
-          const trendClassName = savingsRateToneClasses
-            ? savingsRateToneClasses.badgeClassName
+          const emergencyFundGapToneClasses = label === 'Emergency Fund Gap'
+            ? (
+                metricRow.value > 0
+                  ? { valueClassName: 'text-rose-700', badgeClassName: 'bg-rose-100 text-rose-700' }
+                  : { valueClassName: 'text-emerald-700', badgeClassName: 'bg-emerald-100 text-emerald-700' }
+              )
+            : null
+          const toneClasses = savingsRateToneClasses ?? emergencyFundGapToneClasses
+          const trendClassName = toneClasses
+            ? toneClasses.badgeClassName
             : (trendSignalValue > 0 ? 'bg-emerald-100 text-emerald-700' : (trendSignalValue < 0 ? 'bg-rose-100 text-rose-700' : 'bg-slate-100 text-slate-600'))
-          const valueClassName = savingsRateToneClasses
-            ? savingsRateToneClasses.valueClassName
+          const valueClassName = toneClasses
+            ? toneClasses.valueClassName
             : 'text-slate-900'
           return (
             <React.Fragment key={label}>
@@ -3115,7 +3135,7 @@ export default function App() {
       <section id="emergency-fund" className="section-tight section-allows-popovers glass-panel-soft squircle-md z-layer-section mb-4 scroll-mt-40 p-4 md:mb-6 md:p-6" style={{ order: 14 }}>
         <div className="mb-4">
           <h2 className="text-lg font-bold text-slate-900">Emergency Fund Tracker (6 Months)</h2>
-          <p className="text-xs text-slate-500">Bifurcated strategy: 1-2 months liquid cash, remaining reserve invested. Goal is based on expenses + debt minimums.</p>
+          <p className="text-xs text-slate-500">Goal is based on expenses + debt minimums. Funds are grouped from liquid cash-style assets and longer-term invested assets.</p>
         </div>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {renderHoverMetadataBoxForElement({
@@ -3126,11 +3146,22 @@ export default function App() {
               <article className="squircle-sm border border-slate-200/90 bg-white/90 p-3">
                 <p className="text-xs uppercase tracking-[0.12em] text-slate-500">Goal (6 months)</p>
                 <p className="text-xl font-bold text-slate-800">{formatCurrencyValueForDashboard(emergencyFundSummary.emergencyFundGoal)}</p>
+                <p className="text-xs text-slate-500">Liquid target: {formatCurrencyValueForDashboard(emergencyFundSummary.liquidTarget)}</p>
               </article>
             )
           })}
-          <article className="squircle-sm border border-slate-200/90 bg-white/90 p-3"><p className="text-xs uppercase tracking-[0.12em] text-slate-500">Short-Term (1-2 month tier)</p><p className="text-xl font-bold text-teal-700">{formatCurrencyValueForDashboard(emergencyFundSummary.liquidAmount)}</p><p className="text-xs text-slate-500">Shortfall: {formatCurrencyValueForDashboard(emergencyFundSummary.missingLiquidAmount)}</p></article>
-          <article className="squircle-sm border border-slate-200/90 bg-white/90 p-3"><p className="text-xs uppercase tracking-[0.12em] text-slate-500">Long-Term (brokerage tier)</p><p className="text-xl font-bold text-sky-700">{formatCurrencyValueForDashboard(emergencyFundSummary.investedAmount)}</p><p className="text-xs text-slate-500">Shortfall: {formatCurrencyValueForDashboard(Math.max(0, emergencyFundSummary.investedTarget - emergencyFundSummary.investedAmount))}</p></article>
+          <article className="squircle-sm border border-slate-200/90 bg-white/90 p-3">
+            <p className="text-xs uppercase tracking-[0.12em] text-slate-500">Funds Available</p>
+            <p className="text-xl font-bold text-teal-700">{formatCurrencyValueForDashboard(emergencyFundSummary.totalEmergencyFundAmount)}</p>
+            <p className="text-xs text-slate-500">Liquid: {formatCurrencyValueForDashboard(emergencyFundSummary.liquidAmount)} | Invested: {formatCurrencyValueForDashboard(emergencyFundSummary.investedAmount)}</p>
+            <p className="mt-1 text-xs text-slate-500">Cash assets: {emergencyFundSourceLabels.liquidText}</p>
+            <p className="text-xs text-slate-500">Invested assets: {emergencyFundSourceLabels.investedText}</p>
+          </article>
+          <article className="squircle-sm border border-rose-200/90 bg-rose-50/85 p-3">
+            <p className="text-xs uppercase tracking-[0.12em] text-rose-600">Gap</p>
+            <p className={`text-xl font-bold ${emergencyFundSummary.missingTotalAmount > 0 ? 'text-rose-700' : 'text-emerald-700'}`}>{formatCurrencyValueForDashboard(emergencyFundSummary.missingTotalAmount)}</p>
+            <p className="text-xs text-rose-600">Need to fully fund 6 months: {formatCurrencyValueForDashboard(emergencyFundSummary.missingTotalAmount)}</p>
+          </article>
         </div>
       </section>
 
