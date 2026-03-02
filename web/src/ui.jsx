@@ -1,4 +1,4 @@
-import React, { Suspense, lazy, useEffect, useRef, useState } from "react";
+import React, { Fragment, Suspense, lazy, useEffect, useRef, useState } from "react";
 import { getYearLabel, buildNavItems, getDailyHomeContent } from "./core.pure.js";
 import { createBlog, createBlogCategory, deleteBlog, downloadResumePdf, fetchHomeContent, fetchMessageOfDay, fetchSlackAnimeQuestionOfDay, fromPromise, getBlog, getBlogAdminToken, getBlogsDashboard, getCurrentYear, getPublicBlog, getSlackAnimeFeedUrls, listBlogCategories, listBlogs, listBlogTags, listTrackedSlackAnime, loginBlogAdmin, logoutBlogAdmin, searchSlackAnime, setBlogPublished, trackSlackAnime, untrackSlackAnime, updateBlog, uploadBlogImage } from "./core.impure.js";
 import "./ui.css";
@@ -1180,6 +1180,7 @@ function BlogPage() {
 function BlogDetailView({ detailRow, detailNav, goToAnimated, activeVariant = BLOG_VARIANT_ALL }) {
   const vlogId = detailRow.variant === "vlog" ? parseYouTubeVideoId(detailRow.content) : "";
   const vlogEmbedUrl = vlogId ? buildYouTubeEmbedUrl(vlogId) : "";
+  const readEstimate = detailRow.variant === "vlog" ? "Video" : `${estimateReadMinutes(detailRow.content)} min read`;
   return (
     <article className="blog-post-detail">
       <div className="blog-post-topbar">
@@ -1192,6 +1193,7 @@ function BlogDetailView({ detailRow, detailNav, goToAnimated, activeVariant = BL
         {detailRow.summary ? <p className="blog-post-summary">{detailRow.summary}</p> : null}
         <div className="blog-post-meta">
           <span className="meta-pill">{detailRow.variant === "vlog" ? "VLOG" : "BLOG"}</span>
+          <span className="meta-pill">{readEstimate}</span>
           {detailRow.category ? <a className="meta-pill meta-link" href={buildBlogFilterHref({ category: detailRow.category.name, variant: activeVariant })}>{detailRow.category.name}</a> : null}
           {Array.isArray(detailRow.tags) ? detailRow.tags.map((tag) => <a className="meta-pill meta-link" key={tag.id} href={buildBlogFilterHref({ tag: tag.name, variant: activeVariant })}>{tag.name}</a>) : null}
         </div>
@@ -1703,12 +1705,45 @@ function renderRichContent(content) {
             const widthPct = Number(imageMatch[2] || 60);
             return <img key={`img-${partIndex}`} src={imageMatch[1]} className="rich-image" style={{ width: `${Math.max(10, Math.min(100, widthPct))}%` }} alt="System Log Artifact" loading="lazy" decoding="async" />;
           }
-          const tokens = part.split(/(\*\*[^*]+\*\*|__[^_]+__|\[tc\][\s\S]*?\[\/tc\])/g).filter(Boolean);
-          return <p key={`line-${partIndex}`} className="rich-p">{tokens.map((token, tokenIndex) => token.startsWith("**") && token.endsWith("**") ? <strong key={tokenIndex} className="rich-strong">{token.slice(2, -2)}</strong> : token.startsWith("__") && token.endsWith("__") ? <u key={tokenIndex} className="rich-u">{token.slice(2, -2)}</u> : token.startsWith("[tc]") && token.endsWith("[/tc]") ? <span key={tokenIndex} className="text-center-block rich-tc">{token.slice(4, -5)}</span> : <span key={tokenIndex}>{token}</span>)}</p>;
+          const normalizedPart = part.replace(/\r\n/g, "\n");
+          const paragraphs = normalizedPart.split(/\n\s*\n/g).map((value) => value.trim()).filter(Boolean);
+          return paragraphs.map((paragraph, paragraphIndex) => {
+            const lines = paragraph.split("\n");
+            return (
+              <p key={`line-${partIndex}-${paragraphIndex}`} className="rich-p">
+                {lines.map((line, lineIndex) => {
+                  const tokens = line.split(/(\*\*[^*]+\*\*|__[^_]+__|\[tc\][\s\S]*?\[\/tc\])/g).filter(Boolean);
+                  return (
+                    <Fragment key={`line-fragment-${lineIndex}`}>
+                      {tokens.map((token, tokenIndex) => token.startsWith("**") && token.endsWith("**") ? <strong key={tokenIndex} className="rich-strong">{token.slice(2, -2)}</strong> : token.startsWith("__") && token.endsWith("__") ? <u key={tokenIndex} className="rich-u">{token.slice(2, -2)}</u> : token.startsWith("[tc]") && token.endsWith("[/tc]") ? <span key={tokenIndex} className="text-center-block rich-tc">{token.slice(4, -5)}</span> : <span key={tokenIndex}>{token}</span>)}
+                      {lineIndex < lines.length - 1 ? <br /> : null}
+                    </Fragment>
+                  );
+                })}
+              </p>
+            );
+          });
         })}
       </div>
     );
   });
+}
+
+/**
+ * @param {string} content
+ * @returns {number}
+ */
+function estimateReadMinutes(content) {
+  const plainText = String(content || "")
+    .replace(/```[\s\S]*?```/g, " ")
+    .replace(/!\[img\]\([^)]*\)/g, " ")
+    .replace(/\[tc\]([\s\S]*?)\[\/tc\]/g, " $1 ")
+    .replace(/\*\*([^*]+)\*\*/g, " $1 ")
+    .replace(/__([^_]+)__/g, " $1 ")
+    .replace(/\s+/g, " ")
+    .trim();
+  const wordCount = plainText ? plainText.split(" ").filter(Boolean).length : 0;
+  return Math.max(1, Math.ceil(wordCount / 220));
 }
 
 /**
