@@ -1691,19 +1691,7 @@ export function calculateMonthlySavingsStorageSummaryFromCollectionsState(curren
     return [null, errorValue]
   }
 
-  const referenceYear = referenceDate.getFullYear()
-  const referenceMonth = referenceDate.getMonth()
-  const monthlyTrackedSavingsContributions = currentCollectionsState.assets.reduce((runningTotal, assetItem) => {
-    const recordType = typeof assetItem.recordType === 'string' ? assetItem.recordType : ''
-    if (recordType !== 'savings') return runningTotal
-    const amount = typeof assetItem.amount === 'number' ? assetItem.amount : 0
-    const dateText = typeof assetItem.date === 'string' ? assetItem.date : ''
-    if (dateText.length === 0) return runningTotal
-    const parsedDate = new Date(dateText)
-    if (Number.isNaN(parsedDate.getTime())) return runningTotal
-    if (parsedDate.getFullYear() !== referenceYear || parsedDate.getMonth() !== referenceMonth) return runningTotal
-    return runningTotal + amount
-  }, 0)
+  void referenceDate
 
   const totalStoredSavings = currentCollectionsState.assets.reduce((runningTotal, assetItem) => {
     const amount = typeof assetItem.amount === 'number' ? assetItem.amount : 0
@@ -1717,6 +1705,7 @@ export function calculateMonthlySavingsStorageSummaryFromCollectionsState(curren
       ? assetItem.item
       : (typeof assetItem.category === 'string' ? assetItem.category : `Savings ${assetIndex + 1}`)
     return {
+      ...assetItem,
       id: typeof assetItem.id === 'string' ? assetItem.id : `savings-storage-${assetIndex + 1}`,
       person: typeof assetItem.person === 'string' ? assetItem.person : 'User',
       location,
@@ -1726,8 +1715,8 @@ export function calculateMonthlySavingsStorageSummaryFromCollectionsState(curren
     }
   })
 
-  // Critical path: this section should reflect explicitly tracked savings transfers only.
-  const monthlySavingsAmount = monthlyTrackedSavingsContributions
+  // Critical path: the savings section is driven by current savings storage rows, not inferred contribution history.
+  const monthlySavingsAmount = totalStoredSavings
   const monthlySavingsRatePercent = monthlySummary.totalIncome > 0
     ? (monthlySavingsAmount / monthlySummary.totalIncome) * 100
     : 0
@@ -1857,7 +1846,7 @@ export function calculateEmergencyFundTrackingSummaryFromCollectionsState(curren
 /**
  * Calculates a recommended monthly savings target using industry guidance and current cash flow.
  * Returns an error when required collections are malformed.
- * @param {{income: Array<Record<string, unknown>>, expenses: Array<Record<string, unknown>>, debts: Array<Record<string, unknown>>, credit: Array<Record<string, unknown>>, loans: Array<Record<string, unknown>>}} currentCollectionsState
+ * @param {{income: Array<Record<string, unknown>>, expenses: Array<Record<string, unknown>>, assets: Array<Record<string, unknown>>, debts: Array<Record<string, unknown>>, credit: Array<Record<string, unknown>>, loans: Array<Record<string, unknown>>}} currentCollectionsState
  * @returns {Result<{totalIncomeForReference: number, recommendedMonthlySavings: number, recommendedSavingsRatePercent: number, minimumRecommendedSavings: number, stretchRecommendedSavings: number, currentMonthlySavings: number, gapToRecommendedSavings: number, recommendationReason: string}>}
  */
 export function calculateRecommendedMonthlySavingsTargetFromCollectionsState(currentCollectionsState) {
@@ -1870,8 +1859,8 @@ export function calculateRecommendedMonthlySavingsTargetFromCollectionsState(cur
     if (createErrorFailure) return [null, createErrorFailure]
     return [null, errorValue]
   }
-  const requiredCollectionNames = /** @type {Array<'income'|'expenses'|'debts'|'credit'|'loans'>} */ (
-    ['income', 'expenses', 'debts', 'credit', 'loans']
+  const requiredCollectionNames = /** @type {Array<'income'|'expenses'|'assets'|'debts'|'credit'|'loans'>} */ (
+    ['income', 'expenses', 'assets', 'debts', 'credit', 'loans']
   )
   for (const requiredCollectionName of requiredCollectionNames) {
     if (!Array.isArray(currentCollectionsState[requiredCollectionName])) {
@@ -1897,6 +1886,17 @@ export function calculateRecommendedMonthlySavingsTargetFromCollectionsState(cur
     if (createErrorFailure) return [null, createErrorFailure]
     return [null, errorValue]
   }
+  const [monthlySavingsStorageSummary, monthlySavingsStorageSummaryError] = calculateMonthlySavingsStorageSummaryFromCollectionsState(currentCollectionsState)
+  if (monthlySavingsStorageSummaryError) return [null, monthlySavingsStorageSummaryError]
+  if (!monthlySavingsStorageSummary) {
+    const [errorValue, createErrorFailure] = createApplicationErrorWithKindMessageAndRecoverability(
+      'VALIDATION',
+      'monthly savings storage summary is unexpectedly empty',
+      true
+    )
+    if (createErrorFailure) return [null, createErrorFailure]
+    return [null, errorValue]
+  }
 
   const totalMonthlyDebtMinimums = currentCollectionsState.debts.reduce((runningTotal, debtItem) => {
     const minimumPayment = typeof debtItem.minimumPayment === 'number' ? debtItem.minimumPayment : 0
@@ -1910,7 +1910,7 @@ export function calculateRecommendedMonthlySavingsTargetFromCollectionsState(cur
   }, 0)
 
   const totalIncome = monthlySummary.totalIncome
-  const currentMonthlySavings = monthlySummary.monthlySurplusDeficit
+  const currentMonthlySavings = monthlySavingsStorageSummary.monthlySavingsAmount
   const baselineIndustryRatePercent = 20
   const stretchIndustryRatePercent = 30
   const debtPressurePercent = totalIncome > 0 ? (totalMonthlyDebtMinimums / totalIncome) * 100 : 0
@@ -2728,9 +2728,8 @@ export function extractFinancialRiskFindingsFromCurrentCollectionsState(currentC
   const safeIncomeDivisor = monthlySummary.totalIncome > 0 ? monthlySummary.totalIncome : 1
   const safeLiabilitiesDivisor = liabilitiesTotal > 0 ? liabilitiesTotal : 1
   const totalLiquidSavings = currentCollectionsState.assets.reduce((runningTotal, assetItem) => {
-    const isSavings = typeof assetItem.recordType === 'string' ? assetItem.recordType === 'savings' : false
     const amount = typeof assetItem.amount === 'number' ? assetItem.amount : 0
-    return isSavings ? runningTotal + amount : runningTotal
+    return runningTotal + amount
   }, 0)
   const totalCashEquivalentHoldings = (Array.isArray(currentCollectionsState.assetHoldings) ? currentCollectionsState.assetHoldings : []).reduce((runningTotal, assetItem) => {
     const itemName = typeof assetItem.item === 'string' ? assetItem.item.toLowerCase() : ''
@@ -3176,9 +3175,8 @@ export function calculatePlanningCockpitInsightsFromCollectionsState(currentColl
 
   const sixMonthExpensesTarget = totalExpenses * 6
   const totalCurrentSavings = currentCollectionsState.assets.reduce((runningTotal, rowItem) => {
-    const isSavings = typeof rowItem.recordType === 'string' ? rowItem.recordType === 'savings' : false
     const amount = typeof rowItem.amount === 'number' ? rowItem.amount : 0
-    return isSavings ? runningTotal + amount : runningTotal
+    return runningTotal + amount
   }, 0)
   const goalTemplateRows = [
     { id: 'template-emergency-fund', title: 'Emergency Fund', targetAmount: sixMonthExpensesTarget, targetMonths: 18 },
@@ -3298,9 +3296,7 @@ export function calculateUnifiedFinancialRecordsSourceOfTruthFromCollectionsStat
       recordType: 'expense',
       signedAmount: typeof recordItem.amount === 'number' ? -recordItem.amount : 0
     })),
-    ...currentCollectionsState.assets
-      .filter((recordItem) => (typeof recordItem.recordType === 'string' ? recordItem.recordType === 'savings' : false))
-      .map((recordItem) => ({
+    ...currentCollectionsState.assets.map((recordItem) => ({
         ...recordItem,
         sourceCollectionName: 'assets',
         recordType: 'savings',

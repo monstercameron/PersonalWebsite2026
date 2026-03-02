@@ -1454,26 +1454,6 @@ export default function App() {
     () => buildRowsSortedByKeyAndDirection(monthlySavingsStorageSummary.storageRows, tableSortState.savings.key, tableSortState.savings.direction),
     [monthlySavingsStorageSummary.storageRows, tableSortState.savings]
   )
-  const savingsProjectionRows = React.useMemo(() => {
-    const startingSavings = typeof monthlySavingsStorageSummary.totalStoredSavings === 'number'
-      ? monthlySavingsStorageSummary.totalStoredSavings
-      : 0
-    const monthlySavingsPace = typeof monthlySavingsStorageSummary.monthlySavingsAmount === 'number'
-      ? monthlySavingsStorageSummary.monthlySavingsAmount
-      : 0
-    const projectionWindows = [
-      { label: '6 Months', months: 6 },
-      { label: '1 Year', months: 12 },
-      { label: '2 Years', months: 24 },
-      { label: '5 Years', months: 60 },
-      { label: '10 Years', months: 120 }
-    ]
-    return projectionWindows.map((windowItem) => ({
-      id: windowItem.label.toLowerCase().replace(/\s+/g, '-'),
-      label: windowItem.label,
-      projectedSavings: startingSavings + (monthlySavingsPace * windowItem.months)
-    }))
-  }, [monthlySavingsStorageSummary.totalStoredSavings, monthlySavingsStorageSummary.monthlySavingsAmount])
   const netWorthProjectionProfiles = React.useMemo(() => {
     if (shouldSkipHeavyComputations) return null
     const [projectionRows, projectionRowsError] = calculateNetWorthProjectionProfilesUsingThreeAggressionLayers(safeCollections)
@@ -1512,11 +1492,6 @@ export default function App() {
     () => assetHoldingRows.reduce((runningTotal, rowItem) => runningTotal + (typeof rowItem.value === 'number' ? rowItem.value : 0), 0),
     [assetHoldingRows]
   )
-  const maxProjectedSavingsValue = React.useMemo(() => (
-    savingsProjectionRows.reduce((runningMax, projectionRow) => (
-      Math.max(runningMax, Math.max(0, projectionRow.projectedSavings))
-    ), 0)
-  ), [savingsProjectionRows])
   const emergencyGoalExpenseLines = React.useMemo(() => {
     const monthlyExpenseRows = safeCollections.expenses
       .map((expenseRow, expenseIndex) => {
@@ -3355,10 +3330,9 @@ export default function App() {
               <button className="inline-flex items-center gap-1.5 rounded-xl border border-white/30 bg-emerald-600 px-3 py-2 text-xs font-semibold text-white" onClick={() => openAddRecordModalWithPresetTypeAndCategory('savings', 'Savings')} type="button"><IconPlus /> Quick Add</button>
             </div>
           </div>
-          <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
             <article className="squircle-sm border border-slate-200/90 bg-white/90 p-3"><p className="text-xs uppercase tracking-[0.12em] text-slate-500">Monthly Savings</p><p className={`text-2xl font-bold ${monthlySavingsStorageSummary.monthlySavingsAmount >= 0 ? 'text-emerald-700' : 'text-rose-700'}`}>{formatCurrencyValueForDashboard(monthlySavingsStorageSummary.monthlySavingsAmount)}</p></article>
             <article className="squircle-sm border border-slate-200/90 bg-white/90 p-3"><p className="text-xs uppercase tracking-[0.12em] text-slate-500">Savings Rate</p><p className={`text-2xl font-bold ${monthlySavingsStorageSummary.monthlySavingsRatePercent >= 0 ? 'text-sky-700' : 'text-rose-700'}`}>{monthlySavingsStorageSummary.monthlySavingsRatePercent.toFixed(2)}%</p></article>
-            <article className="squircle-sm border border-slate-200/90 bg-white/90 p-3"><p className="text-xs uppercase tracking-[0.12em] text-slate-500">Total Stored</p><p className="text-2xl font-bold text-teal-700">{formatCurrencyValueForDashboard(monthlySavingsStorageSummary.totalStoredSavings)}</p></article>
           </div>
           <div className="mb-4 rounded-2xl border border-slate-200/90 bg-white/75 p-4 backdrop-blur">
             <h3 className="text-base font-bold text-slate-900">Recommended Savings Target</h3>
@@ -3371,55 +3345,10 @@ export default function App() {
               <article className="squircle-sm border border-slate-200/90 bg-white/90 p-3"><p className="text-xs uppercase tracking-[0.12em] text-slate-500">Gap</p><p className={`text-xl font-bold ${savingsRecommendation.gapToRecommendedSavings <= 0 ? 'text-emerald-700' : 'text-rose-700'}`}>{formatCurrencyValueForDashboard(savingsRecommendation.gapToRecommendedSavings)}</p></article>
             </div>
           </div>
-          <div className="mb-4 rounded-2xl border border-slate-200/90 bg-white/75 p-4 backdrop-blur">
-            <h3 className="text-base font-bold text-slate-900">Predicted Savings</h3>
-            <p className="mt-1 text-xs text-slate-500">This chart estimates total savings at each horizon using your current monthly savings pace (no scenario multiplier applied).</p>
-            <div className="predicted-savings-chart mt-3 rounded-2xl border border-slate-200/90 bg-white/90 p-2">
-              <div className="mb-2 flex items-center justify-between rounded-lg border border-slate-200/80 bg-slate-50/90 px-3 py-2 text-[11px] text-slate-600">
-                <span><span className="mr-2 inline-block h-2 w-2 rounded-sm bg-sky-500 align-middle" />Bars = projected total savings</span>
-                <span>Y-axis: USD | X-axis: horizon</span>
-              </div>
-              <div className="grid grid-cols-[56px_minmax(0,1fr)] gap-2">
-                <div className="flex flex-col items-end justify-between pr-2 text-[10px] font-semibold text-slate-500">
-                  <span>{formatCurrencyValueForDashboard(maxProjectedSavingsValue)}</span>
-                  <span>{formatCurrencyValueForDashboard(maxProjectedSavingsValue * 0.5)}</span>
-                  <span>{formatCurrencyValueForDashboard(0)}</span>
-                </div>
-                <div>
-                  <div className="predicted-savings-plot relative h-44 rounded-xl border border-slate-200/90 bg-gradient-to-b from-slate-50 to-slate-100/70 p-1.5">
-                    <div className="pointer-events-none absolute inset-1.5 flex flex-col justify-between">
-                      <div className="h-px w-full bg-slate-300/80" />
-                      <div className="h-px w-full bg-slate-300/60" />
-                      <div className="h-px w-full bg-slate-300/80" />
-                    </div>
-                    <div className="relative z-10 flex h-full items-end justify-around gap-2">
-                      {savingsProjectionRows.map((projectionRow, projectionIndex) => {
-                        const safeAmount = Math.max(0, projectionRow.projectedSavings)
-                        const ratio = maxProjectedSavingsValue > 0 ? safeAmount / maxProjectedSavingsValue : 0
-                        return (
-                          <div key={projectionRow.id} className="flex min-w-0 flex-1 flex-col items-center justify-end">
-                            <p className="mb-1 text-[10px] font-bold text-slate-700">{formatCurrencyValueForDashboard(projectionRow.projectedSavings)}</p>
-                            <div
-                              className="w-full max-w-[52px] rounded-t-lg border border-sky-300/70 bg-sky-500/75 transition-all duration-500"
-                              style={{
-                                height: `${Math.max(4, ratio * 136)}px`
-                              }}
-                            />
-                            <p className="mt-2 text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-600">{projectionRow.label}</p>
-                          </div>
-                        )
-                      })}
-                    </div>
-                  </div>
-                  <p className="mt-2 text-center text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500">Time Horizon</p>
-                </div>
-              </div>
-            </div>
-          </div>
           <div className="table-scroll-region rounded-2xl border border-slate-200/90 bg-white/75 backdrop-blur">
-            <table className="w-full min-w-[840px] border-collapse text-sm">
-              <thead className="bg-slate-100 text-slate-600"><tr>{renderSortableHeaderCell('savings', 'person', 'Person')}{renderSortableHeaderCell('savings', 'location', 'Storage')}{renderSortableHeaderCell('savings', 'balance', 'Balance', true)}{renderSortableHeaderCell('savings', 'allocationPercent', 'Allocation', true)}{renderSortableHeaderCell('savings', 'description', 'Description')}</tr></thead>
-              <tbody>{savingsStorageRowsSorted.map((rowItem) => <tr key={rowItem.id} className="border-t border-slate-200 bg-white"><td className="px-3 py-2 text-slate-700">{formatPersonaLabelWithEmoji(rowItem.person, personaEmojiByName)}</td><td className="px-3 py-2 text-slate-700">{rowItem.location}</td><td className="px-3 py-2 text-right font-semibold text-slate-700">{formatCurrencyValueForDashboard(rowItem.balance)}</td><td className="px-3 py-2 text-right font-semibold text-slate-700">{rowItem.allocationPercent.toFixed(2)}%</td><td className="px-3 py-2 text-slate-500">{rowItem.description}</td></tr>)}</tbody>
+            <table className="w-full min-w-[920px] border-collapse text-sm">
+              <thead className="bg-slate-100 text-slate-600"><tr>{renderSortableHeaderCell('savings', 'person', 'Person')}{renderSortableHeaderCell('savings', 'location', 'Storage')}{renderSortableHeaderCell('savings', 'balance', 'Balance', true)}{renderSortableHeaderCell('savings', 'allocationPercent', 'Allocation', true)}{renderSortableHeaderCell('savings', 'description', 'Description')}<th className="px-3 py-2 text-right font-semibold">Actions</th></tr></thead>
+              <tbody>{savingsStorageRowsSorted.map((rowItem) => <tr key={rowItem.id} className="group border-t border-slate-200 bg-white"><td className="px-3 py-2 text-slate-700">{formatPersonaLabelWithEmoji(rowItem.person, personaEmojiByName)}</td><td className="px-3 py-2 text-slate-700">{rowItem.location}</td><td className="px-3 py-2 text-right font-semibold text-slate-700">{formatCurrencyValueForDashboard(rowItem.balance)}</td><td className="px-3 py-2 text-right font-semibold text-slate-700">{rowItem.allocationPercent.toFixed(2)}%</td><td className="px-3 py-2 text-slate-500">{rowItem.description}</td><td className="px-3 py-2 text-right">{renderRecordActionsWithIconButtons('assets', rowItem)}</td></tr>)}</tbody>
             </table>
           </div>
       </section>
