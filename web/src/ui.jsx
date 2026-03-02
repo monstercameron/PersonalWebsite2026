@@ -59,6 +59,7 @@ const IconBot = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none
 const IconSearch = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>;
 const IconLogIn = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>;
 const IconLogOut = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>;
+const IconWave = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 10v4"/><path d="M7 7v10"/><path d="M11 4v16"/><path d="M15 7v10"/><path d="M19 10v4"/></svg>;
 const IconBrandMark = () => (
   <svg className="brand-mark-svg" viewBox="0 0 48 48" fill="none" aria-hidden="true">
     <defs>
@@ -1181,12 +1182,100 @@ function BlogDetailView({ detailRow, detailNav, goToAnimated, activeVariant = BL
   const vlogId = detailRow.variant === "vlog" ? parseYouTubeVideoId(detailRow.content) : "";
   const vlogEmbedUrl = vlogId ? buildYouTubeEmbedUrl(vlogId) : "";
   const readEstimate = detailRow.variant === "vlog" ? "Video" : `${estimateReadMinutes(detailRow.content)} min read`;
+  const speechSupported = typeof window !== "undefined" && typeof window.speechSynthesis !== "undefined" && typeof window.SpeechSynthesisUtterance !== "undefined";
+  const [speechState, setSpeechState] = useState("idle");
+  const utteranceRef = useRef(null);
+  const readableText = detailRow.variant === "vlog" ? "" : toReadableArticleText(detailRow.title, detailRow.summary, detailRow.content);
+
+  useEffect(() => {
+    if (!speechSupported) {
+      return undefined;
+    }
+
+    const synth = window.speechSynthesis;
+    return () => {
+      synth.cancel();
+      utteranceRef.current = null;
+      setSpeechState("idle");
+    };
+  }, [speechSupported, detailRow.id]);
+
+  const startSpeech = () => {
+    if (!speechSupported || !readableText) {
+      return;
+    }
+    const synth = window.speechSynthesis;
+    synth.cancel();
+    const utterance = new window.SpeechSynthesisUtterance(readableText);
+    utterance.rate = 1;
+    utterance.pitch = 1;
+    utterance.onend = () => {
+      utteranceRef.current = null;
+      setSpeechState("idle");
+    };
+    utterance.onerror = () => {
+      utteranceRef.current = null;
+      setSpeechState("idle");
+    };
+    utteranceRef.current = utterance;
+    setSpeechState("playing");
+    synth.speak(utterance);
+  };
+
+  const pauseSpeech = () => {
+    if (!speechSupported) {
+      return;
+    }
+    const synth = window.speechSynthesis;
+    if (synth.speaking && !synth.paused) {
+      synth.pause();
+      setSpeechState("paused");
+      return;
+    }
+    if (synth.paused) {
+      synth.resume();
+      setSpeechState("playing");
+    }
+  };
+
+  const stopSpeech = () => {
+    if (!speechSupported) {
+      return;
+    }
+    window.speechSynthesis.cancel();
+    utteranceRef.current = null;
+    setSpeechState("idle");
+  };
+  const onPrimarySpeechAction = () => {
+    if (speechState === "idle") {
+      startSpeech();
+      return;
+    }
+    pauseSpeech();
+  };
+  const primarySpeechLabel = speechState === "playing" ? "Pause Feed" : speechState === "paused" ? "Resume Feed" : "Play Log";
+  const primarySpeechIcon = speechState === "playing" ? <IconTerminal /> : <IconBot />;
+
   return (
     <article className="blog-post-detail">
       <div className="blog-post-topbar">
         <button className="cta-link cta-button" type="button" onClick={(event) => goToAnimated(PATH_BLOG, event)}><IconArrowLeft /> Back to System Logs</button>
       </div>
       <div className="blog-detail-inner">
+        {detailRow.variant !== "vlog" ? (
+          <div className="blog-detail-utility-row">
+            <div className="blog-audio-console" aria-label="Article narration controls">
+              <div className="blog-audio-head">
+                <span className="meta-pill blog-audio-pill"><IconWave /> Voice Relay</span>
+                <span className={`meta-pill blog-audio-state blog-audio-state-${speechState}`}>{speechState === "playing" ? "Playing" : speechState === "paused" ? "Paused" : speechSupported ? "Standby" : "Unavailable"}</span>
+              </div>
+              <div className="blog-audio-actions">
+                <button className="cta-link cta-button blog-audio-btn blog-audio-primary" type="button" onClick={onPrimarySpeechAction} disabled={!speechSupported || !readableText}>{primarySpeechIcon} {primarySpeechLabel}</button>
+                {speechState !== "idle" ? <button className="cta-link cta-button blog-audio-btn blog-audio-stop" type="button" onClick={stopSpeech}><IconTrash /> Cut Feed</button> : null}
+              </div>
+            </div>
+          </div>
+        ) : null}
         <div className="blog-detail-stage">
         <p className="eyebrow">SYSTEM LOG</p>
         <h2>{detailRow.title}</h2>
@@ -1734,16 +1823,29 @@ function renderRichContent(content) {
  * @returns {number}
  */
 function estimateReadMinutes(content) {
-  const plainText = String(content || "")
+  const plainText = toReadableArticleText("", "", content);
+  const wordCount = plainText ? plainText.split(" ").filter(Boolean).length : 0;
+  return Math.max(1, Math.ceil(wordCount / 220));
+}
+
+/**
+ * @param {string} title
+ * @param {string} summary
+ * @param {string} content
+ * @returns {string}
+ */
+function toReadableArticleText(title, summary, content) {
+  return [title, summary, content].filter(Boolean).join("\n\n")
     .replace(/```[\s\S]*?```/g, " ")
+    .replace(/(^|\n)(?: {4}|\t).*(?=\n|$)/g, "$1")
     .replace(/!\[img\]\([^)]*\)/g, " ")
     .replace(/\[tc\]([\s\S]*?)\[\/tc\]/g, " $1 ")
     .replace(/\*\*([^*]+)\*\*/g, " $1 ")
     .replace(/__([^_]+)__/g, " $1 ")
-    .replace(/\s+/g, " ")
+    .replace(/\s*\n\s*/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .replace(/[ \t]+/g, " ")
     .trim();
-  const wordCount = plainText ? plainText.split(" ").filter(Boolean).length : 0;
-  return Math.max(1, Math.ceil(wordCount / 220));
 }
 
 /**
