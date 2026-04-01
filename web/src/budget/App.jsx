@@ -1115,24 +1115,33 @@ export default function App() {
   }, [textScaleMultiplier])
 
   React.useEffect(() => {
-    const sectionIds = ['overview', 'records', 'debts', 'credit', 'savings', 'assets', 'details', 'loan-calculator', 'risks', 'goals', 'net-worth-trajectory', 'emergency-fund']
-    const visibleSet = new Set()
-    const observer = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((entry) => {
-          if (entry.isIntersecting) visibleSet.add(entry.target.id)
-          else visibleSet.delete(entry.target.id)
-        })
-        const firstVisible = sectionIds.find((id) => visibleSet.has(id))
-        if (firstVisible) setActiveSectionId(firstVisible)
-      },
-      { threshold: 0, rootMargin: '-10% 0px -70% 0px' }
-    )
-    sectionIds.forEach((id) => {
-      const el = document.getElementById(id)
-      if (el) observer.observe(el)
-    })
-    return () => observer.disconnect()
+    const sectionIds = ['overview', 'net-worth-trajectory', 'emergency-fund', 'risks', 'goals', 'debts', 'credit', 'savings', 'assets', 'loan-calculator', 'details', 'records']
+    function resolveActiveSectionFromScrollPosition() {
+      const navEl = document.querySelector('.budget-sticky-toolbar')
+      const navHeight = navEl ? navEl.getBoundingClientRect().height : 80
+      const siteHeaderOffset = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--site-header-offset') || '0', 10)
+      const threshold = navHeight + siteHeaderOffset + 24
+      const isNearBottom = window.scrollY + window.innerHeight >= document.documentElement.scrollHeight - 60
+      if (isNearBottom) {
+        const lastPresent = [...sectionIds].reverse().find((id) => document.getElementById(id))
+        if (lastPresent) { setActiveSectionId(lastPresent); return }
+      }
+      let bestId = sectionIds[0]
+      let bestTop = -Infinity
+      for (const id of sectionIds) {
+        const el = document.getElementById(id)
+        if (!el) continue
+        const top = el.getBoundingClientRect().top
+        if (top <= threshold && top > bestTop) {
+          bestTop = top
+          bestId = id
+        }
+      }
+      setActiveSectionId(bestId)
+    }
+    resolveActiveSectionFromScrollPosition()
+    window.addEventListener('scroll', resolveActiveSectionFromScrollPosition, { passive: true })
+    return () => { window.removeEventListener('scroll', resolveActiveSectionFromScrollPosition) }
   }, [])
 
   React.useEffect(() => {
@@ -3210,55 +3219,66 @@ export default function App() {
 
   return (
     <main className={`app-shell theme-${themeName} mx-auto min-h-screen w-full max-w-7xl p-4 pb-16 md:p-8`}>
-      <section className="budget-sticky-toolbar sticky z-[110] mb-4 overflow-hidden rounded-2xl border border-white/[0.025] bg-[rgba(10,10,10,0.88)] shadow-none">
+      <section className="budget-sticky-toolbar sticky z-[110] mb-4 overflow-hidden" style={{ borderRadius: '18px', border: '1px solid rgba(255,255,255,0.06)', background: 'rgba(14,14,14,0.94)', boxShadow: '0 8px 32px rgba(0,0,0,0.45), inset 0 2px 0 #f59e0b' }}>
         {/* Row 1: title + utility controls + action buttons */}
-        <div className="flex min-w-0 items-center gap-2 px-3 py-2">
-          <h1 className="shrink-0 text-sm font-bold text-[#ededed] md:text-base">Financial Flight Deck</h1>
-          <div className="ml-1 flex shrink-0 items-center rounded-lg border border-white/[0.025] bg-[rgba(15,15,15,0.5)] p-0.5">
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 14px', minWidth: 0 }}>
+          <div style={{ flexShrink: 0 }}>
+            <p style={{ margin: 0, fontSize: '9px', fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#71717a' }}>Budget</p>
+            <h1 style={{ margin: 0, fontSize: '13px', fontWeight: 700, letterSpacing: '-0.01em', color: '#ededed', lineHeight: 1.2 }}>Financial Flight Deck</h1>
+          </div>
+          <div style={{ marginLeft: '4px', display: 'flex', alignItems: 'center', flexShrink: 0, borderRadius: '8px', border: '1px solid rgba(255,255,255,0.06)', background: 'rgba(255,255,255,0.03)', padding: '3px' }}>
             <button title={themeName === 'dark' ? 'Switch to light' : 'Switch to dark'} className="budget-nav-util-btn" onClick={toggleThemeNameBetweenLightAndDark} type="button">{themeName === 'dark' ? <IconMoon /> : <IconSun />}</button>
             <button title="Larger text" className="budget-nav-util-btn" onClick={() => void updateGlobalTextScaleByDelta(0.05)} type="button"><IconZoomIn /></button>
             <button title="Smaller text" className="budget-nav-util-btn" onClick={() => void updateGlobalTextScaleByDelta(-0.05)} type="button"><IconZoomOut /></button>
             <button title="Reset text size" className="budget-nav-util-btn" onClick={resetGlobalTextScaleToDefault} type="button"><IconRefresh /></button>
           </div>
-          <div className="flex-1" />
-          <div className="no-scrollbar flex flex-nowrap items-center gap-1 overflow-x-auto">
-            <button className="budget-nav-action-btn bg-amber-500 text-black hover:bg-amber-400" onClick={() => setIsAddRecordModalOpen(true)} type="button"><IconPlus /> Record</button>
-            <button className="budget-nav-action-btn bg-[#1a1a1a] border border-white/[0.06] text-[#ededed] hover:bg-[#252525]" onClick={() => setIsAddGoalModalOpen(true)} type="button"><IconPlus /> Goal</button>
-            <span className="mx-0.5 h-4 w-px shrink-0 bg-[#141414]/[0.08]" aria-hidden="true" />
-            <button className="budget-nav-action-btn border border-white/[0.06] text-[#a1a1aa] hover:bg-[#1a1a1a]/[0.08]" onClick={openManagePersonasModal} type="button"><IconUsers /> Personas</button>
-            <button className="budget-nav-action-btn border border-white/[0.06] text-[#a1a1aa] hover:bg-[#1a1a1a]/[0.08]" onClick={() => void openProfileTransferModalForMode('import')} type="button"><IconDownload /> Import</button>
-            <button className="budget-nav-action-btn border border-white/[0.06] text-[#a1a1aa] hover:bg-[#1a1a1a]/[0.08]" onClick={() => void openProfileTransferModalForMode('export')} type="button"><IconUpload /> Export</button>
-            <span className="mx-0.5 h-4 w-px shrink-0 bg-[#141414]/[0.08]" aria-hidden="true" />
+          <div style={{ flex: 1 }} />
+          <div className="no-scrollbar" style={{ display: 'flex', alignItems: 'center', gap: '5px', overflowX: 'auto', flexWrap: 'nowrap' }}>
+            <button className="budget-nav-action-btn" style={{ background: '#f59e0b', color: '#000', border: 'none' }} onClick={() => setIsAddRecordModalOpen(true)} type="button"><IconPlus /> Record</button>
+            <button className="budget-nav-action-btn" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)', color: '#d4d4d4' }} onClick={() => setIsAddGoalModalOpen(true)} type="button"><IconPlus /> Goal</button>
+            <span style={{ width: '1px', height: '16px', background: 'rgba(255,255,255,0.07)', flexShrink: 0 }} aria-hidden="true" />
+            <button className="budget-nav-action-btn" style={{ border: '1px solid rgba(255,255,255,0.07)', color: '#a1a1aa', background: 'none' }} onClick={openManagePersonasModal} type="button"><IconUsers /> Personas</button>
+            <button className="budget-nav-action-btn" style={{ border: '1px solid rgba(255,255,255,0.07)', color: '#a1a1aa', background: 'none' }} onClick={() => void openProfileTransferModalForMode('import')} type="button"><IconDownload /> Import</button>
+            <button className="budget-nav-action-btn" style={{ border: '1px solid rgba(255,255,255,0.07)', color: '#a1a1aa', background: 'none' }} onClick={() => void openProfileTransferModalForMode('export')} type="button"><IconUpload /> Export</button>
+            <span style={{ width: '1px', height: '16px', background: 'rgba(255,255,255,0.07)', flexShrink: 0 }} aria-hidden="true" />
             {supabaseAuthUserSummary ? (
-              <button className="budget-nav-action-btn bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30" onClick={openLoginModal} type="button"><IconLogOut /> Admin</button>
+              <button className="budget-nav-action-btn" style={{ background: 'rgba(52,211,153,0.12)', border: '1px solid rgba(52,211,153,0.2)', color: '#34d399' }} onClick={openLoginModal} type="button"><IconLogOut /> Admin</button>
             ) : (
-              <button className="budget-nav-action-btn bg-[#1a1a1a] border border-white/[0.06] text-[#ededed] hover:bg-[#252525]" onClick={openLoginModal} type="button"><IconLogIn /> Login</button>
+              <button className="budget-nav-action-btn" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)', color: '#d4d4d4' }} onClick={openLoginModal} type="button"><IconLogIn /> Login</button>
             )}
           </div>
         </div>
         {/* Row 2: section jump links with active scrollspy */}
-        <div className="no-scrollbar flex flex-nowrap items-center gap-0.5 overflow-x-auto border-t border-white/[0.025] px-2 py-1.5">
-          {primaryJumpLinks.map((linkItem) => (
-            <a
-              key={linkItem.href}
-              className={`budget-nav-jump-link shrink-0 rounded-md px-2.5 py-1 text-[11px] font-medium transition-colors ${activeSectionId === linkItem.href.slice(1) ? 'bg-amber-500 text-black' : 'text-[#a1a1aa] hover:bg-[#1a1a1a]/[0.08] hover:text-[#ededed]'}`}
-              href={linkItem.href}
-              onClick={scrollToSectionAnchorWithFastEasing}
-            >
-              {linkItem.label}
-            </a>
-          ))}
-          <span className="mx-1.5 h-3 w-px shrink-0 bg-[#141414]/[0.1]" aria-hidden="true" />
-          {secondaryJumpLinks.map((linkItem) => (
-            <a
-              key={linkItem.href}
-              className={`budget-nav-jump-link shrink-0 rounded-md px-2.5 py-1 text-[11px] font-medium transition-colors ${activeSectionId === linkItem.href.slice(1) ? 'bg-amber-500 text-black' : 'text-[#71717a] hover:bg-[#1a1a1a]/[0.08] hover:text-[#d4d4d4]'}`}
-              href={linkItem.href}
-              onClick={scrollToSectionAnchorWithFastEasing}
-            >
-              {linkItem.label}
-            </a>
-          ))}
+        <div className="no-scrollbar" style={{ display: 'flex', alignItems: 'center', gap: '2px', overflowX: 'auto', flexWrap: 'nowrap', borderTop: '1px solid rgba(255,255,255,0.05)', padding: '6px 10px 8px' }}>
+          {primaryJumpLinks.map((linkItem) => {
+            const isActive = activeSectionId === linkItem.href.slice(1)
+            return (
+              <a
+                key={linkItem.href}
+                className="budget-nav-jump-link"
+                style={{ flexShrink: 0, borderRadius: '7px', padding: '4px 10px', fontSize: '11px', fontWeight: isActive ? 700 : 500, background: isActive ? '#f59e0b' : 'transparent', color: isActive ? '#000' : '#a1a1aa', transition: 'background 120ms, color 120ms' }}
+                href={linkItem.href}
+                onClick={scrollToSectionAnchorWithFastEasing}
+              >
+                {linkItem.label}
+              </a>
+            )
+          })}
+          <span style={{ width: '1px', height: '12px', background: 'rgba(255,255,255,0.08)', flexShrink: 0, margin: '0 6px' }} aria-hidden="true" />
+          {secondaryJumpLinks.map((linkItem) => {
+            const isActive = activeSectionId === linkItem.href.slice(1)
+            return (
+              <a
+                key={linkItem.href}
+                className="budget-nav-jump-link"
+                style={{ flexShrink: 0, borderRadius: '7px', padding: '4px 10px', fontSize: '11px', fontWeight: isActive ? 700 : 500, background: isActive ? '#f59e0b' : 'transparent', color: isActive ? '#000' : '#71717a', transition: 'background 120ms, color 120ms' }}
+                href={linkItem.href}
+                onClick={scrollToSectionAnchorWithFastEasing}
+              >
+                {linkItem.label}
+              </a>
+            )
+          })}
         </div>
       </section>
 
