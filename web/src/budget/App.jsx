@@ -1,4 +1,5 @@
 import React from 'react'
+import ReactDOM from 'react-dom'
 import {
   buildDefaultBudgetCollectionsStateForLocalFirstUsage,
   migrateCollectionsStateFromV2ToV3,
@@ -109,8 +110,8 @@ const COMMON_BUDGET_CATEGORIES = [
 
 const DEFAULT_PERSONA_NAMES = ['User']
 const DEFAULT_PERSONA_NAME = 'User'
-const DEFAULT_PERSONA_EMOJI = '🧑‍💻'
-const PERSONA_EMOJI_OPTIONS = ['🧑‍💻', '👩', '👨', '👧', '👦', '👵', '👴', '🧑', '👩‍💼', '👨‍💼', '👩‍🔧', '👨‍🔧', '👩‍🏫', '👨‍🏫', '👩‍⚕️', '👨‍⚕️', '🧑‍🎓', '🧑‍🍳', '🧑‍🌾', '🧑‍🎨']
+const DEFAULT_PERSONA_EMOJI = '=���G��=��+'
+const PERSONA_EMOJI_OPTIONS = ['=���G��=��+', '=��', '=��', '=��', '=��', '=��', '=��', '=���', '=��G��=��+', '=��G��=��+', '=��G��=���', '=��G��=���', '=��G��=�Ž', '=��G��=�Ž', '=��G��G��n+�', '=��G��G��n+�', '=���G��=���', '=���G��=��', '=���G��=��+', '=���G��=�Ŀ']
 
 const ENABLE_FIREBASE_SYNC_UI = false
 const SYNC_STATUS_TONE_NEUTRAL = 'neutral'
@@ -469,7 +470,7 @@ function renderIconGlyphForAction(actionName) {
   if (actionName === 'edit') return <IconEdit />
   if (actionName === 'notes') return <IconFileText />
   if (actionName === 'delete') return <IconTrash />
-  return '•'
+  return 'G��'
 }
 
 const NUMERIC_SORT_KEYS = new Set([
@@ -515,7 +516,7 @@ function readIsRecordOlderThanThreeMonths(recordItem) {
 function renderStaleUpdateIconIfNeeded(recordItem) {
   if (!readIsRecordOlderThanThreeMonths(recordItem)) return null
   return (
-    <span className="ml-2 inline-flex items-center rounded-full border border-amber-300 bg-amber-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.08em] text-amber-700" title="Record has not been updated in at least 3 months.">
+    <span className="ml-2 inline-flex items-center rounded-full border border-amber-500/40 bg-amber-500/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.08em] text-amber-400" title="Record has not been updated in at least 3 months.">
       <svg className="mr-1 h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
         <path d="M12 8v5l3 2" />
         <circle cx="12" cy="12" r="9" />
@@ -792,10 +793,10 @@ function buildOverviewHoverContextLinesForMetric(metricRow, sourceBreakdown, eme
 }
 
 function resolveSavingsRateToneClasses(savingsRatePercent) {
-  if (savingsRatePercent >= 20) return { valueClassName: 'text-emerald-700', badgeClassName: 'bg-emerald-100 text-emerald-700' }
-  if (savingsRatePercent >= 10) return { valueClassName: 'text-amber-700', badgeClassName: 'bg-amber-100 text-amber-700' }
-  if (savingsRatePercent >= 0) return { valueClassName: 'text-rose-700', badgeClassName: 'bg-rose-100 text-rose-700' }
-  return { valueClassName: 'text-rose-800', badgeClassName: 'bg-rose-100 text-rose-800' }
+  if (savingsRatePercent >= 20) return { valueClassName: 'text-emerald-400', badgeClassName: 'bg-emerald-500/15 text-emerald-400' }
+  if (savingsRatePercent >= 10) return { valueClassName: 'text-amber-400', badgeClassName: 'bg-amber-500/15 text-amber-400' }
+  if (savingsRatePercent >= 0) return { valueClassName: 'text-rose-400', badgeClassName: 'bg-rose-500/15 text-rose-400' }
+  return { valueClassName: 'text-rose-400', badgeClassName: 'bg-rose-500/15 text-rose-400' }
 }
 
 function buildRiskDetailTemplateFromFindingAndPersonas(findingItem, personaNames) {
@@ -870,6 +871,56 @@ function buildRiskDetailTemplateFromFindingAndPersonas(findingItem, personaNames
   }
 }
 
+function RecordNoteHoverTooltip({ noteText, hasNote, onEditNote }) {
+  const [tooltipVisible, setTooltipVisible] = React.useState(false)
+  const [tooltipCoords, setTooltipCoords] = React.useState(null)
+  const btnRef = React.useRef(null)
+  const noteIconSvg = (
+    <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+      <polyline points="14 2 14 8 20 8"/>
+      <line x1="16" y1="13" x2="8" y2="13"/>
+      <line x1="16" y1="17" x2="8" y2="17"/>
+      <polyline points="10 9 9 9 8 9"/>
+    </svg>
+  )
+  function handleMouseEnter() {
+    if (btnRef.current) {
+      const rect = btnRef.current.getBoundingClientRect()
+      setTooltipCoords({ bottom: window.innerHeight - rect.top + 8, right: window.innerWidth - rect.right })
+    }
+    setTooltipVisible(true)
+  }
+  const btnStyle = hasNote
+    ? { borderColor: tooltipVisible ? 'rgba(251,191,36,0.5)' : 'rgba(251,191,36,0.3)', background: tooltipVisible ? 'rgba(251,191,36,0.2)' : 'rgba(251,191,36,0.1)', color: '#fbbf24' }
+    : { borderColor: tooltipVisible ? 'rgba(255,255,255,0.1)' : 'rgba(255,255,255,0.06)', background: 'transparent', color: tooltipVisible ? '#71717a' : '#3f3f46' }
+  const tooltip = tooltipVisible && hasNote && noteText && tooltipCoords
+    ? ReactDOM.createPortal(
+        <div style={{ position: 'fixed', bottom: `${tooltipCoords.bottom}px`, right: `${tooltipCoords.right}px`, width: '220px', background: '#1a1a1a', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '12px', padding: '10px 12px', boxShadow: '0 16px 40px rgba(0,0,0,0.7)', zIndex: 9999, pointerEvents: 'none' }} role="tooltip">
+          <p style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#52525b', margin: '0 0 4px' }}>Note</p>
+          <p style={{ fontSize: '12px', lineHeight: '1.5', color: '#d4d4d4', whiteSpace: 'pre-wrap', margin: 0 }}>{noteText}</p>
+        </div>,
+        document.body
+      )
+    : null
+  return (
+    <>
+      <button
+        ref={btnRef}
+        aria-label={hasNote ? 'View/edit note' : 'Add note'}
+        onMouseEnter={handleMouseEnter}
+        onMouseLeave={() => setTooltipVisible(false)}
+        onClick={onEditNote}
+        style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '24px', height: '24px', borderRadius: '6px', border: `1px solid ${btnStyle.borderColor}`, background: btnStyle.background, color: btnStyle.color, cursor: 'pointer', transition: 'color 0.15s, border-color 0.15s, background 0.15s' }}
+        type="button"
+      >
+        {noteIconSvg}
+      </button>
+      {tooltip}
+    </>
+  )
+}
+
 export default function App() {
   const [defaultCollectionsState, defaultCollectionsStateError] = React.useMemo(
     () => buildDefaultBudgetCollectionsStateForLocalFirstUsage(),
@@ -904,6 +955,7 @@ export default function App() {
   const [isFirebaseOperationInFlight, setIsFirebaseOperationInFlight] = React.useState(false)
   const [isEditRecordModalOpen, setIsEditRecordModalOpen] = React.useState(false)
   const [isRecordNotesModalOpen, setIsRecordNotesModalOpen] = React.useState(false)
+  const [pendingDeleteRecordTarget, setPendingDeleteRecordTarget] = React.useState(null)
   const [selectedRiskFinding, setSelectedRiskFinding] = React.useState(null)
   const [editRecordFormState, setEditRecordFormState] = React.useState(buildInitialEditRecordFormState)
   const [recordNotesFormState, setRecordNotesFormState] = React.useState(buildInitialRecordNotesFormState)
@@ -926,6 +978,7 @@ export default function App() {
   const [isLoginOperationInFlight, setIsLoginOperationInFlight] = React.useState(false)
   const [isLoginPasswordVisible, setIsLoginPasswordVisible] = React.useState(false)
   const [activeSectionId, setActiveSectionId] = React.useState('overview')
+  const [isScrolledPastThreshold, setIsScrolledPastThreshold] = React.useState(false)
 
   function showSyncNotice(tone, message) {
     if (syncNoticeTimeoutRef.current) {
@@ -937,6 +990,14 @@ export default function App() {
       syncNoticeTimeoutRef.current = null
     }, SYNC_NOTICE_HIDE_DELAY_MS)
   }
+
+  React.useEffect(() => {
+    function handleScrollVisibilityUpdate() {
+      setIsScrolledPastThreshold(window.scrollY > 320)
+    }
+    window.addEventListener('scroll', handleScrollVisibilityUpdate, { passive: true })
+    return () => window.removeEventListener('scroll', handleScrollVisibilityUpdate)
+  }, [])
 
   React.useEffect(() => {
     let isMounted = true
@@ -1002,7 +1063,7 @@ export default function App() {
         return
       }
       if (cachedStateValue) {
-        // Critical path: run v2→v3 schema migration on every load to keep state canonical.
+        // Critical path: run v2G��v3 schema migration on every load to keep state canonical.
         const [migratedCachedState, migrationError] = migrateCollectionsStateFromV2ToV3(cachedStateValue)
         if (migrationError || !migratedCachedState) {
           console.warn('[state] Failed to migrate cached state to v3.', migrationError)
@@ -1075,7 +1136,7 @@ export default function App() {
   }, [])
 
   React.useEffect(() => {
-    if (!isAddRecordModalOpen && !isAddGoalModalOpen && !isAddPersonaModalOpen && !isAddAssetModalOpen && !isProfileTransferModalOpen && !isEditRecordModalOpen && !isRecordNotesModalOpen && !selectedRiskFinding && !isLoginModalOpen) return
+    if (!isAddRecordModalOpen && !isAddGoalModalOpen && !isAddPersonaModalOpen && !isAddAssetModalOpen && !isProfileTransferModalOpen && !isEditRecordModalOpen && !isRecordNotesModalOpen && !selectedRiskFinding && !isLoginModalOpen && !pendingDeleteRecordTarget) return
     function closeOnEscape(keyboardEvent) {
       if (keyboardEvent.key === 'Escape') {
         setIsAddRecordModalOpen(false)
@@ -1087,11 +1148,12 @@ export default function App() {
         setIsRecordNotesModalOpen(false)
         setSelectedRiskFinding(null)
         setIsLoginModalOpen(false)
+        setPendingDeleteRecordTarget(null)
       }
     }
     globalThis.window.addEventListener('keydown', closeOnEscape)
     return () => globalThis.window.removeEventListener('keydown', closeOnEscape)
-  }, [isAddRecordModalOpen, isAddGoalModalOpen, isAddPersonaModalOpen, isAddAssetModalOpen, isProfileTransferModalOpen, isEditRecordModalOpen, isRecordNotesModalOpen, selectedRiskFinding, isLoginModalOpen])
+  }, [isAddRecordModalOpen, isAddGoalModalOpen, isAddPersonaModalOpen, isAddAssetModalOpen, isProfileTransferModalOpen, isEditRecordModalOpen, isRecordNotesModalOpen, selectedRiskFinding, isLoginModalOpen, pendingDeleteRecordTarget])
 
   // Critical path: derive named collection views from v3 (records/instruments) state so all
   // downstream calc functions continue to receive the named collection shape they expect.
@@ -1165,17 +1227,29 @@ export default function App() {
     const [sourceBreakdown, sourceBreakdownError] = calculateCurrentAndPreviousMonthSourceBreakdownFromCollectionsState(safeCollections)
     if (sourceBreakdownError || !sourceBreakdown) return { error: true }
 
-    const [detailedDashboardRows, detailedDashboardRowsError] = calculateDetailedDashboardDatapointRowsFromCurrentCollectionsState(safeCollections)
-    if (detailedDashboardRowsError || !detailedDashboardRows) return { error: true }
+    const [monthlySummary, monthlySummaryError] = calculateMonthlyIncomeExpenseSummaryFromCollectionsState(safeCollections)
+    if (monthlySummaryError || !monthlySummary) return { error: true }
 
     const [powerGoalsFormulaSummary, powerGoalsFormulaSummaryError] = calculatePowerGoalsStatusFormulaSummaryFromGoalCollection(safeCollections.goals)
     if (powerGoalsFormulaSummaryError || !powerGoalsFormulaSummary) return { error: true }
     const [monthlySavingsStorageSummary, monthlySavingsStorageSummaryError] = calculateMonthlySavingsStorageSummaryFromCollectionsState(safeCollections)
     if (monthlySavingsStorageSummaryError || !monthlySavingsStorageSummary) return { error: true }
-    const [savingsRecommendation, savingsRecommendationError] = calculateRecommendedMonthlySavingsTargetFromCollectionsState(safeCollections)
+    const [savingsRecommendation, savingsRecommendationError] = calculateRecommendedMonthlySavingsTargetFromCollectionsState(safeCollections, {
+      monthlySummary,
+      monthlySavingsStorageSummary
+    })
     if (savingsRecommendationError || !savingsRecommendation) return { error: true }
     const [emergencyFundSummary, emergencyFundSummaryError] = calculateEmergencyFundTrackingSummaryFromCollectionsState(safeCollections)
     if (emergencyFundSummaryError || !emergencyFundSummary) return { error: true }
+    const [detailedDashboardRows, detailedDashboardRowsError] = calculateDetailedDashboardDatapointRowsFromCurrentCollectionsState(safeCollections, {
+      healthMetrics: metrics,
+      monthlySummary,
+      sourceBreakdown,
+      monthlySavingsStorageSummary,
+      emergencyFundSummary,
+      goalStatusSummary: powerGoalsFormulaSummary
+    })
+    if (detailedDashboardRowsError || !detailedDashboardRows) return { error: true }
 
     const creditCardInformationCollection = Array.isArray(safeCollections.creditCards) ? safeCollections.creditCards : []
     const [creditCardSummary, creditCardSummaryError] = calculateCreditCardSummaryFormulasFromInformationCollection(creditCardInformationCollection)
@@ -1205,7 +1279,7 @@ export default function App() {
   }, [safeCollections])
 
   if (dashboardComputation.error) {
-    return <main className="mx-auto min-h-screen w-full max-w-7xl p-4 md:p-8"><section className="rounded-3xl border border-red-300 bg-white p-8 text-red-700 shadow-2xl">Unable to calculate dashboard values.</section></main>
+    return <main className="mx-auto min-h-screen w-full max-w-7xl p-4 md:p-8"><section className="rounded-3xl border border-red-300 bg-[#141414] p-8 text-red-700 shadow-2xl">Unable to calculate dashboard values.</section></main>
   }
   const {
     metrics,
@@ -1324,11 +1398,6 @@ export default function App() {
       console.warn('[profile] Post-import compute failed at source breakdown.', sourceBreakdownError)
       return
     }
-    const [detailedRows, detailedRowsError] = calculateDetailedDashboardDatapointRowsFromCurrentCollectionsState(nextCollectionsState)
-    if (detailedRowsError || !detailedRows) {
-      console.warn('[profile] Post-import compute failed at detailed rows.', detailedRowsError)
-      return
-    }
     const [monthlySummary, monthlySummaryError] = calculateMonthlyIncomeExpenseSummaryFromCollectionsState(nextCollectionsState)
     if (monthlySummaryError || !monthlySummary) {
       console.warn('[profile] Post-import compute failed at monthly summary.', monthlySummaryError)
@@ -1339,9 +1408,34 @@ export default function App() {
       console.warn('[profile] Post-import compute failed at monthly savings summary.', monthlySavingsSummaryError)
       return
     }
-    const [savingsRecommendationSummary, savingsRecommendationSummaryError] = calculateRecommendedMonthlySavingsTargetFromCollectionsState(nextCollectionsState)
+    const [savingsRecommendationSummary, savingsRecommendationSummaryError] = calculateRecommendedMonthlySavingsTargetFromCollectionsState(nextCollectionsState, {
+      monthlySummary,
+      monthlySavingsStorageSummary: monthlySavingsSummary
+    })
     if (savingsRecommendationSummaryError || !savingsRecommendationSummary) {
       console.warn('[profile] Post-import compute failed at savings recommendation.', savingsRecommendationSummaryError)
+      return
+    }
+    const [emergencyFundSummary, emergencyFundSummaryError] = calculateEmergencyFundTrackingSummaryFromCollectionsState(nextCollectionsState)
+    if (emergencyFundSummaryError || !emergencyFundSummary) {
+      console.warn('[profile] Post-import compute failed at emergency fund summary.', emergencyFundSummaryError)
+      return
+    }
+    const [goalStatusSummary, goalStatusSummaryError] = calculatePowerGoalsStatusFormulaSummaryFromGoalCollection(nextCollectionsState.goals)
+    if (goalStatusSummaryError || !goalStatusSummary) {
+      console.warn('[profile] Post-import compute failed at goal status summary.', goalStatusSummaryError)
+      return
+    }
+    const [detailedRows, detailedRowsError] = calculateDetailedDashboardDatapointRowsFromCurrentCollectionsState(nextCollectionsState, {
+      healthMetrics: metrics,
+      monthlySummary,
+      sourceBreakdown,
+      monthlySavingsStorageSummary: monthlySavingsSummary,
+      emergencyFundSummary,
+      goalStatusSummary
+    })
+    if (detailedRowsError || !detailedRows) {
+      console.warn('[profile] Post-import compute failed at detailed rows.', detailedRowsError)
       return
     }
     const creditCardRows = Array.isArray(nextCollectionsState.creditCards) ? nextCollectionsState.creditCards : []
@@ -1487,9 +1581,12 @@ export default function App() {
   }, [creditCardInformationCollection, detailedDashboardRows, safeCollections.assetHoldings, safeCollections.debts, safeCollections.loans, shouldSkipHeavyComputations])
   const incomeAndExpenseRows = React.useMemo(() => {
     if (shouldSkipHeavyComputations) return []
-    const [recordRows, recordRowsError] = calculateUnifiedFinancialRecordsSourceOfTruthFromCollectionsState(safeCollections)
+    const [recordRows, recordRowsError] = calculateUnifiedFinancialRecordsSourceOfTruthFromCollectionsState(
+      safeCollections,
+      ['income', 'expenses', 'debts', 'loans', 'credit', 'creditCards']
+    )
     if (recordRowsError || !recordRows) return []
-    return recordRows.filter((rowItem) => String(rowItem.recordType).toLowerCase() !== 'asset')
+    return recordRows
   }, [safeCollections, shouldSkipHeavyComputations])
 
   const goalRowsSortedByTimeframeAndStatus = React.useMemo(
@@ -1700,10 +1797,10 @@ export default function App() {
   }, [selectedRiskFinding, personaSelectOptions])
 
   if (isLoadingState) {
-    return <main className="mx-auto min-h-screen w-full max-w-7xl p-4 md:p-8"><section className="rounded-3xl border border-white/20 bg-white/90 p-8 text-slate-700 shadow-2xl backdrop-blur">Loading local budgeting data...</section></main>
+    return <main className="mx-auto min-h-screen w-full max-w-7xl p-4 md:p-8"><section className="rounded-3xl border border-white/20 bg-[rgba(20,20,20,0.9)] p-8 text-[#d4d4d4] shadow-2xl backdrop-blur">Loading local budgeting data...</section></main>
   }
   if (!collections) {
-    return <main className="mx-auto min-h-screen w-full max-w-7xl p-4 md:p-8"><section className="rounded-3xl border border-red-300 bg-white p-8 text-red-700 shadow-2xl">Unable to initialize collections state.</section></main>
+    return <main className="mx-auto min-h-screen w-full max-w-7xl p-4 md:p-8"><section className="rounded-3xl border border-red-300 bg-[#141414] p-8 text-red-700 shadow-2xl">Unable to initialize collections state.</section></main>
   }
 
   function updateEntryFormFieldValue(fieldName, nextFieldValue) {
@@ -2929,45 +3026,50 @@ export default function App() {
       rowItem.notes.trim().length > 0
     ))
   }
-  function renderRecordMoreNotesHoverAction(collectionName, recordItem) {
-    const hasDetailedNotes = doesRecordHaveDetailedNotes(collectionName, recordItem)
-    const buttonClassName = hasDetailedNotes
-      ? 'record-action-notes-button record-action-notes-button-has-value rounded-lg border px-2 py-1 text-xs font-semibold'
-      : 'record-action-notes-button rounded-lg border px-2 py-1 text-xs font-semibold'
-    return (
-      <div className="flex w-full items-center justify-end opacity-0 pointer-events-none transition-opacity duration-150 group-hover:opacity-100 group-hover:pointer-events-auto group-focus-within:opacity-100 group-focus-within:pointer-events-auto">
-        <button
-          aria-label="Open detailed notes"
-          className={buttonClassName}
-          onClick={() => openRecordNotesModalForCollectionAndRow(collectionName, recordItem)}
-          title="Detailed notes"
-          type="button"
-        >
-          <span aria-hidden="true">{renderIconGlyphForAction('notes')}</span>
-        </button>
-      </div>
-    )
+  function readDetailedNoteTextForRecord(collectionName, recordItem) {
+    const currentNotesCollection = Array.isArray(collections.notes) ? collections.notes : []
+    const matchedNoteRow = currentNotesCollection.find((rowItem) => (
+      rowItem &&
+      typeof rowItem === 'object' &&
+      String(rowItem.collectionName ?? '') === String(collectionName) &&
+      String(rowItem.recordId ?? '') === String(recordItem.id ?? '') &&
+      typeof rowItem.notes === 'string' &&
+      rowItem.notes.trim().length > 0
+    ))
+    return typeof matchedNoteRow?.notes === 'string' ? matchedNoteRow.notes.trim() : null
   }
   function renderRecordActionsWithIconButtons(collectionName, recordItem, options = {}) {
+    const hasDetailedNotes = doesRecordHaveDetailedNotes(collectionName, recordItem)
+    const noteText = hasDetailedNotes ? readDetailedNoteTextForRecord(collectionName, recordItem) : null
+    const displayLabel = typeof recordItem.category === 'string' ? recordItem.category : (typeof recordItem.item === 'string' ? recordItem.item : 'this record')
     return (
       <div className="flex w-full items-center justify-end gap-1 opacity-0 pointer-events-none transition-opacity duration-150 group-hover:opacity-100 group-hover:pointer-events-auto group-focus-within:opacity-100 group-focus-within:pointer-events-auto">
+        <RecordNoteHoverTooltip
+          hasNote={hasDetailedNotes}
+          noteText={noteText}
+          onEditNote={() => openRecordNotesModalForCollectionAndRow(collectionName, recordItem)}
+        />
         <button
           aria-label="Edit record"
-          className="rounded-lg border border-slate-300 px-2 py-1 text-xs font-semibold text-slate-700"
           onClick={() => openEditModalForRecord(collectionName, recordItem)}
-          title="Edit"
+          title="Edit record"
           type="button"
+          style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '24px', height: '24px', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.06)', background: 'transparent', color: '#52525b', cursor: 'pointer', transition: 'color 0.15s, border-color 0.15s' }}
+          onMouseEnter={(e) => { e.currentTarget.style.color = '#a1a1aa'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.1)' }}
+          onMouseLeave={(e) => { e.currentTarget.style.color = '#52525b'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.06)' }}
         >
-          <span aria-hidden="true">{renderIconGlyphForAction('edit')}</span>
+          <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
         </button>
         <button
           aria-label="Delete record"
-          className="rounded-lg border border-rose-300 bg-rose-50 px-2 py-1 text-xs font-semibold text-rose-700"
-          onClick={() => { void deleteRecordFromCollectionByCollectionNameAndId(collectionName, String(recordItem.id ?? '')) }}
-          title="Delete"
+          onClick={() => setPendingDeleteRecordTarget({ collectionName, recordItem, displayLabel })}
+          title="Delete record"
           type="button"
+          style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '24px', height: '24px', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.06)', background: 'transparent', color: '#52525b', cursor: 'pointer', transition: 'color 0.15s, border-color 0.15s' }}
+          onMouseEnter={(e) => { e.currentTarget.style.color = '#fb7185'; e.currentTarget.style.borderColor = 'rgba(251,113,133,0.4)' }}
+          onMouseLeave={(e) => { e.currentTarget.style.color = '#52525b'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.06)' }}
         >
-          <span aria-hidden="true">{renderIconGlyphForAction('delete')}</span>
+          <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
         </button>
       </div>
     )
@@ -3070,18 +3172,21 @@ export default function App() {
     const isActiveSortColumn = Boolean(currentSort && currentSort.key === keyName)
     const isAscendingSort = currentSort?.direction === 'asc'
     const indicator = isActiveSortColumn
-      ? (isAscendingSort ? '↑' : '↓')
-      : '↕'
+      ? (isAscendingSort ? '\u2191' : '\u2193')
+      : '\u2195'
     return (
       <th
-        className={`px-3 py-2 font-semibold ${isRightAligned ? 'text-right' : 'text-left'}`}
+        className={`px-4 py-3.5 text-[12px] font-semibold uppercase tracking-[0.06em] ${isRightAligned ? 'text-right' : 'text-left'} text-[#71717a]`}
         aria-sort={isActiveSortColumn ? (isAscendingSort ? 'ascending' : 'descending') : 'none'}
       >
-        <button onClick={() => updateTableSortingForTableName(tableName, keyName)} type="button">
+        <button className={`inline-flex items-center gap-1 transition hover:text-[#a1a1aa] ${isRightAligned ? 'w-full justify-end' : ''}`} onClick={() => updateTableSortingForTableName(tableName, keyName)} type="button">
+          {isRightAligned && (
+            <span style={{ color: isActiveSortColumn ? '#fbbf24' : undefined, opacity: isActiveSortColumn ? 1 : 0.35 }}>{indicator}</span>
+          )}
           {label}
-          <span className={`ml-1 inline-block w-3 text-center text-[11px] ${isActiveSortColumn ? 'text-teal-700 opacity-100' : 'text-slate-400 opacity-55'}`}>
-            {indicator}
-          </span>
+          {!isRightAligned && (
+            <span style={{ color: isActiveSortColumn ? '#fbbf24' : undefined, opacity: isActiveSortColumn ? 1 : 0.35 }}>{indicator}</span>
+          )}
         </button>
       </th>
     )
@@ -3105,11 +3210,11 @@ export default function App() {
 
   return (
     <main className={`app-shell theme-${themeName} mx-auto min-h-screen w-full max-w-7xl p-4 pb-16 md:p-8`}>
-      <section className="budget-sticky-toolbar sticky z-[110] mb-4 overflow-hidden rounded-2xl border border-slate-200/70 bg-white/75 shadow-md">
+      <section className="budget-sticky-toolbar sticky z-[110] mb-4 overflow-hidden rounded-2xl border border-white/[0.025] bg-[rgba(10,10,10,0.88)] shadow-none">
         {/* Row 1: title + utility controls + action buttons */}
         <div className="flex min-w-0 items-center gap-2 px-3 py-2">
-          <h1 className="shrink-0 text-sm font-bold text-slate-900 md:text-base">Financial Flight Deck</h1>
-          <div className="ml-1 flex shrink-0 items-center rounded-lg border border-slate-200/80 bg-slate-50/80 p-0.5">
+          <h1 className="shrink-0 text-sm font-bold text-[#ededed] md:text-base">Financial Flight Deck</h1>
+          <div className="ml-1 flex shrink-0 items-center rounded-lg border border-white/[0.025] bg-[rgba(15,15,15,0.5)] p-0.5">
             <button title={themeName === 'dark' ? 'Switch to light' : 'Switch to dark'} className="budget-nav-util-btn" onClick={toggleThemeNameBetweenLightAndDark} type="button">{themeName === 'dark' ? <IconMoon /> : <IconSun />}</button>
             <button title="Larger text" className="budget-nav-util-btn" onClick={() => void updateGlobalTextScaleByDelta(0.05)} type="button"><IconZoomIn /></button>
             <button title="Smaller text" className="budget-nav-util-btn" onClick={() => void updateGlobalTextScaleByDelta(-0.05)} type="button"><IconZoomOut /></button>
@@ -3117,37 +3222,37 @@ export default function App() {
           </div>
           <div className="flex-1" />
           <div className="no-scrollbar flex flex-nowrap items-center gap-1 overflow-x-auto">
-            <button className="budget-nav-action-btn bg-teal-600 text-white hover:bg-teal-700" onClick={() => setIsAddRecordModalOpen(true)} type="button"><IconPlus /> Record</button>
-            <button className="budget-nav-action-btn bg-sky-600 text-white hover:bg-sky-700" onClick={() => setIsAddGoalModalOpen(true)} type="button"><IconPlus /> Goal</button>
-            <span className="mx-0.5 h-4 w-px shrink-0 bg-slate-200" aria-hidden="true" />
-            <button className="budget-nav-action-btn border border-slate-200 text-slate-700 hover:bg-slate-100" onClick={openManagePersonasModal} type="button"><IconUsers /> Personas</button>
-            <button className="budget-nav-action-btn border border-slate-200 text-slate-700 hover:bg-slate-100" onClick={() => void openProfileTransferModalForMode('import')} type="button"><IconDownload /> Import</button>
-            <button className="budget-nav-action-btn border border-slate-200 text-slate-700 hover:bg-slate-100" onClick={() => void openProfileTransferModalForMode('export')} type="button"><IconUpload /> Export</button>
-            <span className="mx-0.5 h-4 w-px shrink-0 bg-slate-200" aria-hidden="true" />
+            <button className="budget-nav-action-btn bg-amber-500 text-black hover:bg-amber-400" onClick={() => setIsAddRecordModalOpen(true)} type="button"><IconPlus /> Record</button>
+            <button className="budget-nav-action-btn bg-[#1a1a1a] border border-white/[0.06] text-[#ededed] hover:bg-[#252525]" onClick={() => setIsAddGoalModalOpen(true)} type="button"><IconPlus /> Goal</button>
+            <span className="mx-0.5 h-4 w-px shrink-0 bg-[#141414]/[0.08]" aria-hidden="true" />
+            <button className="budget-nav-action-btn border border-white/[0.06] text-[#a1a1aa] hover:bg-[#1a1a1a]/[0.08]" onClick={openManagePersonasModal} type="button"><IconUsers /> Personas</button>
+            <button className="budget-nav-action-btn border border-white/[0.06] text-[#a1a1aa] hover:bg-[#1a1a1a]/[0.08]" onClick={() => void openProfileTransferModalForMode('import')} type="button"><IconDownload /> Import</button>
+            <button className="budget-nav-action-btn border border-white/[0.06] text-[#a1a1aa] hover:bg-[#1a1a1a]/[0.08]" onClick={() => void openProfileTransferModalForMode('export')} type="button"><IconUpload /> Export</button>
+            <span className="mx-0.5 h-4 w-px shrink-0 bg-[#141414]/[0.08]" aria-hidden="true" />
             {supabaseAuthUserSummary ? (
-              <button className="budget-nav-action-btn bg-emerald-600 text-white hover:bg-emerald-700" onClick={openLoginModal} type="button"><IconLogOut /> Admin</button>
+              <button className="budget-nav-action-btn bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30" onClick={openLoginModal} type="button"><IconLogOut /> Admin</button>
             ) : (
-              <button className="budget-nav-action-btn bg-slate-800 text-white hover:bg-slate-900" onClick={openLoginModal} type="button"><IconLogIn /> Login</button>
+              <button className="budget-nav-action-btn bg-[#1a1a1a] border border-white/[0.06] text-[#ededed] hover:bg-[#252525]" onClick={openLoginModal} type="button"><IconLogIn /> Login</button>
             )}
           </div>
         </div>
         {/* Row 2: section jump links with active scrollspy */}
-        <div className="no-scrollbar flex flex-nowrap items-center gap-0.5 overflow-x-auto border-t border-slate-200/60 px-2 py-1.5">
+        <div className="no-scrollbar flex flex-nowrap items-center gap-0.5 overflow-x-auto border-t border-white/[0.025] px-2 py-1.5">
           {primaryJumpLinks.map((linkItem) => (
             <a
               key={linkItem.href}
-              className={`budget-nav-jump-link shrink-0 rounded-md px-2.5 py-1 text-[11px] font-medium transition-colors ${activeSectionId === linkItem.href.slice(1) ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-800'}`}
+              className={`budget-nav-jump-link shrink-0 rounded-md px-2.5 py-1 text-[11px] font-medium transition-colors ${activeSectionId === linkItem.href.slice(1) ? 'bg-amber-500 text-black' : 'text-[#a1a1aa] hover:bg-[#1a1a1a]/[0.08] hover:text-[#ededed]'}`}
               href={linkItem.href}
               onClick={scrollToSectionAnchorWithFastEasing}
             >
               {linkItem.label}
             </a>
           ))}
-          <span className="mx-1.5 h-3 w-px shrink-0 bg-slate-300" aria-hidden="true" />
+          <span className="mx-1.5 h-3 w-px shrink-0 bg-[#141414]/[0.1]" aria-hidden="true" />
           {secondaryJumpLinks.map((linkItem) => (
             <a
               key={linkItem.href}
-              className={`budget-nav-jump-link shrink-0 rounded-md px-2.5 py-1 text-[11px] font-medium transition-colors ${activeSectionId === linkItem.href.slice(1) ? 'bg-slate-900 text-white' : 'text-slate-500 hover:bg-slate-100 hover:text-slate-700'}`}
+              className={`budget-nav-jump-link shrink-0 rounded-md px-2.5 py-1 text-[11px] font-medium transition-colors ${activeSectionId === linkItem.href.slice(1) ? 'bg-amber-500 text-black' : 'text-[#71717a] hover:bg-[#1a1a1a]/[0.08] hover:text-[#d4d4d4]'}`}
               href={linkItem.href}
               onClick={scrollToSectionAnchorWithFastEasing}
             >
@@ -3174,21 +3279,21 @@ export default function App() {
           const emergencyFundGapToneClasses = label === 'Emergency Fund Gap'
             ? (
                 metricRow.value > 0
-                  ? { valueClassName: 'text-rose-700', badgeClassName: 'bg-rose-100 text-rose-700' }
-                  : { valueClassName: 'text-emerald-700', badgeClassName: 'bg-emerald-100 text-emerald-700' }
+                  ? { valueClassName: 'text-rose-400', badgeClassName: 'bg-rose-500/15 text-rose-400' }
+                  : { valueClassName: 'text-emerald-400', badgeClassName: 'bg-emerald-500/15 text-emerald-400' }
               )
             : null
           const toneClasses = savingsRateToneClasses ?? emergencyFundGapToneClasses
           const trendBadgeClassName = toneClasses
             ? toneClasses.badgeClassName
-            : (trendDir === 'up' ? 'bg-emerald-100 text-emerald-700' : (trendDir === 'down' ? 'bg-rose-100 text-rose-700' : 'bg-slate-100 text-slate-500'))
+            : (trendDir === 'up' ? 'bg-emerald-500/15 text-emerald-400' : (trendDir === 'down' ? 'bg-rose-500/15 text-rose-400' : 'bg-[#1a1a1a] text-[#71717a]'))
           const valueClassName = toneClasses
             ? toneClasses.valueClassName
-            : 'text-slate-900'
+            : 'text-[#ededed]'
           const accentBorderColor = toneClasses
             ? (toneClasses.valueClassName.includes('emerald') ? '#10b981' : (toneClasses.valueClassName.includes('amber') ? '#f59e0b' : '#f43f5e'))
             : (trendDir === 'up' ? '#10b981' : (trendDir === 'down' ? '#f43f5e' : '#94a3b8'))
-          const trendIcon = trendDir === 'up' ? '↑' : (trendDir === 'down' ? '↓' : '–')
+          const trendIcon = trendDir === 'up' ? 'G��' : (trendDir === 'down' ? 'G��' : 'G��')
           const trendLabel = trendDir === 'up' ? 'Up' : (trendDir === 'down' ? 'Down' : 'Flat')
           return (
             <React.Fragment key={label}>
@@ -3202,10 +3307,10 @@ export default function App() {
                     style={{ animationDelay: `${metricIndex * 70}ms`, borderTopWidth: '3px', borderTopColor: accentBorderColor, borderTopStyle: 'solid' }}
                   >
                     <div>
-                      <h2 className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400">{label}</h2>
+                      <h2 className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#52525b]">{label}</h2>
                       <p className={`mt-2 ${isNetWorth ? 'text-3xl' : 'text-2xl'} font-bold leading-none ${valueClassName}`}>{formattedValue}</p>
                       {isNetWorth && sourceBreakdown.netWorth.delta !== 0 && (
-                        <p className="mt-1.5 text-xs font-medium text-slate-400">
+                        <p className="mt-1.5 text-xs font-medium text-[#52525b]">
                           {sourceBreakdown.netWorth.delta > 0 ? '+' : ''}{formatCurrencyValueForDashboard(sourceBreakdown.netWorth.delta)} vs last month
                         </p>
                       )}
@@ -3215,7 +3320,7 @@ export default function App() {
                         {trendIcon} {trendLabel}
                       </span>
                       {statusBlurb ? (
-                        <p className="text-[11px] leading-snug text-slate-400">{statusBlurb}</p>
+                        <p className="text-[11px] leading-snug text-[#52525b]">{statusBlurb}</p>
                       ) : null}
                     </div>
                   </article>
@@ -3230,13 +3335,13 @@ export default function App() {
       <section id="net-worth-trajectory" className="section-tight section-allows-popovers glass-panel-soft squircle-md z-layer-section mb-4 scroll-mt-40 p-4 md:mb-6 md:p-6" style={{ order: 13 }}>
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h2 className="text-lg font-bold text-slate-900">Net Worth Trajectory</h2>
+            <h2 className="text-lg font-bold text-[#ededed]">Net Worth Trajectory</h2>
           </div>
           <div className="flex items-center gap-2">
             {['conservative', 'base', 'accelerated'].map((profileId) => (
               <button
                 key={profileId}
-                className={`rounded-xl border px-3 py-1.5 text-xs font-semibold ${netWorthProjectionProfileId === profileId ? 'border-sky-500 bg-sky-600 text-white' : 'border-slate-300 bg-white/85 text-slate-700'}`}
+                className={`rounded-xl border px-3 py-1.5 text-xs font-semibold ${netWorthProjectionProfileId === profileId ? 'border-amber-500 bg-amber-500 text-black' : 'border-white/[0.025] bg-[rgba(20,20,20,0.5)] text-[#a1a1aa]'}`}
                 onClick={() => setNetWorthProjectionProfileId(profileId)}
                 type="button"
               >
@@ -3249,27 +3354,27 @@ export default function App() {
           <React.Fragment>
             <div className="mb-4 grid grid-cols-1 gap-3 lg:grid-cols-3">
               <article className="networth-clarity-card squircle-sm p-3">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">Baseline Inputs From Dataset</p>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#71717a]">Baseline Inputs From Dataset</p>
                 <dl className="mt-2 space-y-1 text-xs">
                   <div className="flex items-center justify-between gap-2">
-                    <dt className="text-slate-500">Savings / Month</dt>
-                    <dd className="font-semibold text-slate-800">{formatCurrencyValueForDashboard(netWorthProjectionBaselineVariables.monthlySavingsPaceBaselineFromDataset)}</dd>
+                    <dt className="text-[#71717a]">Savings / Month</dt>
+                    <dd className="font-semibold text-[#e0e0e0]">{formatCurrencyValueForDashboard(netWorthProjectionBaselineVariables.monthlySavingsPaceBaselineFromDataset)}</dd>
                   </div>
                   <div className="flex items-center justify-between gap-2">
-                    <dt className="text-slate-500">Income / Month</dt>
-                    <dd className="font-semibold text-slate-800">{formatCurrencyValueForDashboard(netWorthProjectionBaselineVariables.totalMonthlyIncomeFromDataset)}</dd>
+                    <dt className="text-[#71717a]">Income / Month</dt>
+                    <dd className="font-semibold text-[#e0e0e0]">{formatCurrencyValueForDashboard(netWorthProjectionBaselineVariables.totalMonthlyIncomeFromDataset)}</dd>
                   </div>
                   <div className="flex items-center justify-between gap-2">
-                    <dt className="text-slate-500">Expenses / Month</dt>
-                    <dd className="font-semibold text-slate-800">{formatCurrencyValueForDashboard(netWorthProjectionBaselineVariables.totalMonthlyExpensesFromDataset)}</dd>
+                    <dt className="text-[#71717a]">Expenses / Month</dt>
+                    <dd className="font-semibold text-[#e0e0e0]">{formatCurrencyValueForDashboard(netWorthProjectionBaselineVariables.totalMonthlyExpensesFromDataset)}</dd>
                   </div>
                   <div className="flex items-center justify-between gap-2">
-                    <dt className="text-slate-500">Debt Pmts / Month</dt>
-                    <dd className="font-semibold text-slate-800">{formatCurrencyValueForDashboard(netWorthProjectionBaselineVariables.totalMonthlyDebtPaymentsFromDataset)}</dd>
+                    <dt className="text-[#71717a]">Debt Pmts / Month</dt>
+                    <dd className="font-semibold text-[#e0e0e0]">{formatCurrencyValueForDashboard(netWorthProjectionBaselineVariables.totalMonthlyDebtPaymentsFromDataset)}</dd>
                   </div>
                   <div className="flex items-center justify-between gap-2">
-                    <dt className="text-slate-500">Weighted APR</dt>
-                    <dd className="font-semibold text-slate-800">{netWorthProjectionBaselineVariables.weightedAprPercentFromDataset.toFixed(2)}%</dd>
+                    <dt className="text-[#71717a]">Weighted APR</dt>
+                    <dd className="font-semibold text-[#e0e0e0]">{netWorthProjectionBaselineVariables.weightedAprPercentFromDataset.toFixed(2)}%</dd>
                   </div>
                 </dl>
               </article>
@@ -3286,31 +3391,31 @@ export default function App() {
                 ],
                 children: (
                   <article className="networth-clarity-card squircle-sm p-3">
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">Selected Pace Modifiers</p>
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#71717a]">Selected Pace Modifiers</p>
                     <dl className="mt-2 space-y-2 text-xs">
                       <div className="flex items-center justify-between gap-2">
-                        <dt className="text-slate-500">Savings Multiplier</dt>
-                        <dd className="rounded-md bg-slate-100 px-2 py-1 font-semibold text-slate-800">x{selectedNetWorthProjectionProfile.assumptions.savingsPaceMultiplier.toFixed(2)}</dd>
+                        <dt className="text-[#71717a]">Savings Multiplier</dt>
+                        <dd className="rounded-md bg-[#1a1a1a] px-2 py-1 font-semibold text-[#e0e0e0]">x{selectedNetWorthProjectionProfile.assumptions.savingsPaceMultiplier.toFixed(2)}</dd>
                       </div>
                       <div className="flex items-center justify-between gap-2">
-                        <dt className="text-slate-500">Asset Growth (Annual)</dt>
-                        <dd className="rounded-md bg-slate-100 px-2 py-1 font-semibold text-slate-800">{selectedNetWorthProjectionProfile.assumptions.annualAssetGrowthPercent.toFixed(1)}%</dd>
+                        <dt className="text-[#71717a]">Asset Growth (Annual)</dt>
+                        <dd className="rounded-md bg-[#1a1a1a] px-2 py-1 font-semibold text-[#e0e0e0]">{selectedNetWorthProjectionProfile.assumptions.annualAssetGrowthPercent.toFixed(1)}%</dd>
                       </div>
                       <div className="flex items-center justify-between gap-2">
-                        <dt className="text-slate-500">Debt Payment Lift</dt>
-                        <dd className="rounded-md bg-slate-100 px-2 py-1 font-semibold text-slate-800">{(selectedNetWorthProjectionProfile.assumptions.debtPaymentExtraPercent * 100).toFixed(1)}%</dd>
+                        <dt className="text-[#71717a]">Debt Payment Lift</dt>
+                        <dd className="rounded-md bg-[#1a1a1a] px-2 py-1 font-semibold text-[#e0e0e0]">{(selectedNetWorthProjectionProfile.assumptions.debtPaymentExtraPercent * 100).toFixed(1)}%</dd>
                       </div>
                       <div className="flex items-center justify-between gap-2">
-                        <dt className="text-slate-500">APR Shift</dt>
-                        <dd className="rounded-md bg-slate-100 px-2 py-1 font-semibold text-slate-800">{selectedNetWorthProjectionProfile.assumptions.aprStressAdjustmentPercent.toFixed(1)} pts</dd>
+                        <dt className="text-[#71717a]">APR Shift</dt>
+                        <dd className="rounded-md bg-[#1a1a1a] px-2 py-1 font-semibold text-[#e0e0e0]">{selectedNetWorthProjectionProfile.assumptions.aprStressAdjustmentPercent.toFixed(1)} pts</dd>
                       </div>
                     </dl>
                   </article>
                 )
               })}
               <article className="networth-clarity-card squircle-sm p-3">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">How To Tune</p>
-                <ul className="mt-2 space-y-1 text-xs text-slate-600">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#71717a]">How To Tune</p>
+                <ul className="mt-2 space-y-1 text-xs text-[#a1a1aa]">
                   <li>Higher savings multiplier increases monthly contribution.</li>
                   <li>Higher growth percent compounds asset side faster.</li>
                   <li>Higher debt payment lift lowers liability principal sooner.</li>
@@ -3325,8 +3430,8 @@ export default function App() {
                 const currentDebt = typeof currentPoint?.projectedDebt === 'number' ? currentPoint.projectedDebt : 0
                 const deltaValue = pointItem.projectedNetWorth - currentNetWorth
                 const debtDeltaValue = pointItem.projectedDebt - currentDebt
-                const deltaClassName = deltaValue > 0 ? 'text-emerald-700' : (deltaValue < 0 ? 'text-rose-700' : 'text-slate-600')
-                const debtDeltaClassName = debtDeltaValue < 0 ? 'text-emerald-700' : (debtDeltaValue > 0 ? 'text-rose-700' : 'text-slate-600')
+                const deltaClassName = deltaValue > 0 ? 'text-emerald-400' : (deltaValue < 0 ? 'text-rose-400' : 'text-[#a1a1aa]')
+                const debtDeltaClassName = debtDeltaValue < 0 ? 'text-emerald-400' : (debtDeltaValue > 0 ? 'text-rose-400' : 'text-[#a1a1aa]')
                 const horizonLabel = netWorthProjectionProfiles?.horizons.find((rowItem) => rowItem.id === pointItem.horizonId)?.label ?? pointItem.horizonId
                 const horizonMonths = typeof pointItem.months === 'number' ? pointItem.months : 0
                 const debtPaymentMultiplier = 1 + (selectedNetWorthProjectionProfile.assumptions.debtPaymentExtraPercent || 0)
@@ -3386,16 +3491,16 @@ export default function App() {
                       boxClassName: 'meta-hover-box-wide',
                       children: (
                         <article className="networth-outcome-card squircle-sm p-3">
-                          <p className="text-xs uppercase tracking-[0.12em] text-slate-500">{horizonLabel}</p>
+                          <p className="text-xs uppercase tracking-[0.12em] text-[#71717a]">{horizonLabel}</p>
                           <div className="mt-2 grid grid-cols-2 gap-3">
                             <div>
-                              <p className="text-[11px] text-slate-500">Projected Net Worth</p>
-                              <p className="text-lg font-bold text-slate-800">{formatCurrencyValueForDashboard(pointItem.projectedNetWorth)}</p>
+                              <p className="text-[11px] text-[#71717a]">Projected Net Worth</p>
+                              <p className="text-lg font-bold text-[#e0e0e0]">{formatCurrencyValueForDashboard(pointItem.projectedNetWorth)}</p>
                               <p className={`text-xs font-semibold ${deltaClassName}`}>{deltaValue >= 0 ? '+' : ''}{formatCurrencyValueForDashboard(deltaValue)} vs current</p>
                             </div>
                             <div>
-                              <p className="text-[11px] text-slate-500">Projected Debt Balance</p>
-                              <p className="text-lg font-bold text-slate-800">{formatCurrencyValueForDashboard(pointItem.projectedDebt)}</p>
+                              <p className="text-[11px] text-[#71717a]">Projected Debt Balance</p>
+                              <p className="text-lg font-bold text-[#e0e0e0]">{formatCurrencyValueForDashboard(pointItem.projectedDebt)}</p>
                               <p className={`text-xs font-semibold ${debtDeltaClassName}`}>{debtDeltaValue <= 0 ? '' : '+'}{formatCurrencyValueForDashboard(debtDeltaValue)} vs current</p>
                             </div>
                           </div>
@@ -3408,7 +3513,7 @@ export default function App() {
             </div>
           </React.Fragment>
         ) : (
-          <p className="text-sm text-slate-500">Unable to build trajectory from current data.</p>
+          <p className="text-sm text-[#71717a]">Unable to build trajectory from current data.</p>
         )}
       </section>
 
@@ -3430,7 +3535,7 @@ export default function App() {
           const liquidGap = Math.max(0, liquidTarget - liquidAmount)
           const investedGap = Math.max(0, investedTarget - investedAmount)
           const coverageStatus = coverageMonths >= 6 ? 'good' : coverageMonths >= 3 ? 'watch' : 'risk'
-          const coverageBadgeClass = coverageStatus === 'good' ? 'border-emerald-300 bg-emerald-50 text-emerald-700' : coverageStatus === 'watch' ? 'border-amber-300/80 bg-amber-50 text-amber-800' : 'border-rose-300 bg-rose-50 text-rose-700'
+          const coverageBadgeClass = coverageStatus === 'good' ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-400' : coverageStatus === 'watch' ? 'border-amber-500/30 bg-amber-500/10 text-amber-400' : 'border-rose-500/40 bg-rose-500/10 text-rose-400'
           const barFillColor = coverageStatus === 'good' ? '#10b981' : coverageStatus === 'watch' ? '#f59e0b' : '#f43f5e'
           const liquidFillColor = liquidGap > 0 ? '#0ea5e9' : '#10b981'
           const investedFillColor = investedGap > 0 ? '#8b5cf6' : '#10b981'
@@ -3440,54 +3545,54 @@ export default function App() {
             <React.Fragment>
               <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
                 <div className="flex flex-wrap items-center gap-2">
-                  <h2 className="text-lg font-bold text-slate-900">Emergency Fund</h2>
+                  <h2 className="text-lg font-bold text-[#ededed]">Emergency Fund</h2>
                   <span className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold ${coverageBadgeClass}`}>{coverageMonths.toFixed(1)} mo. covered</span>
-                  <span className="rounded-full border border-slate-200 bg-white/80 px-2.5 py-0.5 text-xs font-semibold text-slate-500">Goal: 6 months</span>
+                  <span className="rounded-full border border-white/[0.025] bg-[rgba(20,20,20,0.8)] px-2.5 py-0.5 text-xs font-semibold text-[#71717a]">Goal: 6 months</span>
                 </div>
-                <span className="text-sm font-bold text-slate-700">{formatCurrencyValueForDashboard(totalFunds)} <span className="font-normal text-slate-400">of</span> {formatCurrencyValueForDashboard(goal)}</span>
+                <span className="text-sm font-bold text-[#d4d4d4]">{formatCurrencyValueForDashboard(totalFunds)} <span className="font-normal text-[#52525b]">of</span> {formatCurrencyValueForDashboard(goal)}</span>
               </div>
 
               <div className="mb-5">
-                <div className="relative h-3 overflow-hidden rounded-full bg-slate-200/80">
+                <div className="relative h-3 overflow-hidden rounded-full bg-white/[0.08]">
                   <div className="h-full rounded-full transition-all duration-700" style={{ width: `${overallFillPct}%`, backgroundColor: barFillColor }} />
-                  <div className="absolute inset-y-0 border-l border-slate-400/60" style={{ left: `${milestone1Pct}%` }} />
-                  <div className="absolute inset-y-0 border-l border-slate-400/60" style={{ left: `${milestone3Pct}%` }} />
+                  <div className="absolute inset-y-0 border-l border-white/[0.15]/60" style={{ left: `${milestone1Pct}%` }} />
+                  <div className="absolute inset-y-0 border-l border-white/[0.15]/60" style={{ left: `${milestone3Pct}%` }} />
                 </div>
                 <div className="relative mt-1 h-4">
-                  <span className="absolute -translate-x-1/2 text-[10px] text-slate-400" style={{ left: `${milestone1Pct}%` }}>1 mo</span>
-                  <span className="absolute -translate-x-1/2 text-[10px] text-slate-400" style={{ left: `${milestone3Pct}%` }}>3 mo</span>
-                  <span className="absolute right-0 text-[10px] text-slate-400">6 mo</span>
+                  <span className="absolute -translate-x-1/2 text-[10px] text-[#52525b]" style={{ left: `${milestone1Pct}%` }}>1 mo</span>
+                  <span className="absolute -translate-x-1/2 text-[10px] text-[#52525b]" style={{ left: `${milestone3Pct}%` }}>3 mo</span>
+                  <span className="absolute right-0 text-[10px] text-[#52525b]">6 mo</span>
                 </div>
               </div>
 
               <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <article className={`rounded-2xl border p-3 ${liquidGap > 0 ? 'border-sky-300/70 bg-sky-50/90' : 'border-emerald-200/90 bg-emerald-50/90'}`}>
+                <article className={`rounded-2xl border p-3 ${liquidGap > 0 ? 'border-white/[0.025] bg-[rgba(15,15,15,0.8)]' : 'border-emerald-500/30 bg-emerald-500/10'}`}>
                   <div className="mb-2 flex items-center justify-between gap-2">
-                    <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Liquid Cash</p>
-                    {liquidGap > 0 ? <span className="text-xs font-semibold text-rose-600">−{formatCurrencyValueForDashboard(liquidGap)} gap</span> : <span className="text-xs font-semibold text-emerald-600">✓ Funded</span>}
+                    <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[#71717a]">Liquid Cash</p>
+                    {liquidGap > 0 ? <span className="text-xs font-semibold text-rose-600">G��{formatCurrencyValueForDashboard(liquidGap)} gap</span> : <span className="text-xs font-semibold text-emerald-600">G�� Funded</span>}
                   </div>
                   <div className="flex items-end justify-between gap-2">
-                    <p className="text-xl font-bold text-slate-800">{formatCurrencyValueForDashboard(liquidAmount)}</p>
-                    <p className="text-xs text-slate-500">target {formatCurrencyValueForDashboard(liquidTarget)}</p>
+                    <p className="text-xl font-bold text-[#e0e0e0]">{formatCurrencyValueForDashboard(liquidAmount)}</p>
+                    <p className="text-xs text-[#71717a]">target {formatCurrencyValueForDashboard(liquidTarget)}</p>
                   </div>
-                  <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-200/80">
+                  <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/[0.08]">
                     <div className="h-full rounded-full" style={{ width: `${liquidFillPct}%`, backgroundColor: liquidFillColor }} />
                   </div>
-                  {emergencyFundSourceLabels.liquidText !== 'None classified' && <p className="mt-2 text-[10px] text-slate-400 truncate">Sources: {emergencyFundSourceLabels.liquidText}</p>}
+                  {emergencyFundSourceLabels.liquidText !== 'None classified' && <p className="mt-2 text-[10px] text-[#52525b] truncate">Sources: {emergencyFundSourceLabels.liquidText}</p>}
                 </article>
-                <article className={`rounded-2xl border p-3 ${investedGap > 0 ? 'border-violet-300 bg-violet-50/90' : 'border-emerald-200/90 bg-emerald-50/90'}`}>
+                <article className={`rounded-2xl border p-3 ${investedGap > 0 ? 'border-violet-500/30 bg-violet-500/10' : 'border-emerald-500/30 bg-emerald-500/10'}`}>
                   <div className="mb-2 flex items-center justify-between gap-2">
-                    <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Invested Assets</p>
-                    {investedGap > 0 ? <span className="text-xs font-semibold text-rose-600">−{formatCurrencyValueForDashboard(investedGap)} gap</span> : <span className="text-xs font-semibold text-emerald-600">✓ Funded</span>}
+                    <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[#71717a]">Invested Assets</p>
+                    {investedGap > 0 ? <span className="text-xs font-semibold text-rose-600">G��{formatCurrencyValueForDashboard(investedGap)} gap</span> : <span className="text-xs font-semibold text-emerald-600">G�� Funded</span>}
                   </div>
                   <div className="flex items-end justify-between gap-2">
-                    <p className="text-xl font-bold text-slate-800">{formatCurrencyValueForDashboard(investedAmount)}</p>
-                    <p className="text-xs text-slate-500">target {formatCurrencyValueForDashboard(investedTarget)}</p>
+                    <p className="text-xl font-bold text-[#e0e0e0]">{formatCurrencyValueForDashboard(investedAmount)}</p>
+                    <p className="text-xs text-[#71717a]">target {formatCurrencyValueForDashboard(investedTarget)}</p>
                   </div>
-                  <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-200/80">
+                  <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/[0.08]">
                     <div className="h-full rounded-full" style={{ width: `${investedFillPct}%`, backgroundColor: investedFillColor }} />
                   </div>
-                  {emergencyFundSourceLabels.investedText !== 'None classified' && <p className="mt-2 text-[10px] text-slate-400 truncate">Sources: {emergencyFundSourceLabels.investedText}</p>}
+                  {emergencyFundSourceLabels.investedText !== 'None classified' && <p className="mt-2 text-[10px] text-[#52525b] truncate">Sources: {emergencyFundSourceLabels.investedText}</p>}
                 </article>
               </div>
 
@@ -3496,15 +3601,15 @@ export default function App() {
                 lines: emergencyGoalExpenseLines,
                 boxClassName: 'meta-hover-box-wide',
                 children: (
-                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1 rounded-2xl border border-slate-200/80 bg-white/70 px-3 py-2">
-                    <p className="text-xs text-slate-500">Monthly obligation: <span className="font-semibold text-slate-700">{formatCurrencyValueForDashboard(monthlyObligation)}</span></p>
-                    <span className="hidden text-slate-300 sm:inline">|</span>
-                    <p className="text-xs text-slate-500">Expenses: <span className="font-semibold text-slate-700">{formatCurrencyValueForDashboard(monthlyExpenses)}</span></p>
-                    <span className="hidden text-slate-300 sm:inline">+</span>
-                    <p className="text-xs text-slate-500">Debt minimums: <span className="font-semibold text-slate-700">{formatCurrencyValueForDashboard(monthlyDebtMins)}</span></p>
-                    <span className="hidden text-slate-300 sm:inline">→</span>
-                    <p className="text-xs text-slate-500">6× goal: <span className="font-semibold text-slate-700">{formatCurrencyValueForDashboard(goal)}</span></p>
-                    <span className="ml-auto text-[10px] text-slate-400">hover for breakdown</span>
+                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1 rounded-2xl border border-white/[0.06] bg-[rgba(20,20,20,0.6)] px-3 py-2">
+                    <p className="text-xs text-[#71717a]">Monthly obligation: <span className="font-semibold text-[#d4d4d4]">{formatCurrencyValueForDashboard(monthlyObligation)}</span></p>
+                    <span className="hidden text-white/[0.2] sm:inline">|</span>
+                    <p className="text-xs text-[#71717a]">Expenses: <span className="font-semibold text-[#d4d4d4]">{formatCurrencyValueForDashboard(monthlyExpenses)}</span></p>
+                    <span className="hidden text-white/[0.2] sm:inline">+</span>
+                    <p className="text-xs text-[#71717a]">Debt minimums: <span className="font-semibold text-[#d4d4d4]">{formatCurrencyValueForDashboard(monthlyDebtMins)}</span></p>
+                    <span className="hidden text-white/[0.2] sm:inline">G��</span>
+                    <p className="text-xs text-[#71717a]">6+� goal: <span className="font-semibold text-[#d4d4d4]">{formatCurrencyValueForDashboard(goal)}</span></p>
+                    <span className="ml-auto text-[10px] text-[#52525b]">hover for breakdown</span>
                   </div>
                 )
               })}
@@ -3516,18 +3621,18 @@ export default function App() {
       <section id="risks" className="section-tight glass-panel-soft squircle-md z-layer-section mb-4 scroll-mt-40 p-4 md:mb-6 md:p-6" style={{ order: 11 }}>
         <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
           <div className="flex flex-wrap items-center gap-3">
-            <h2 className="text-lg font-bold text-slate-900">Financial Risk Flags</h2>
+            <h2 className="text-lg font-bold text-[#ededed]">Financial Risk Flags</h2>
             {!isRiskLoading && riskFindings.length > 0 && (
               <span className="flex items-center gap-1.5 text-xs font-semibold">
-                {riskFindings.filter((f) => f.severity === 'high').length > 0 && <span className="rounded-full bg-rose-100 px-2 py-0.5 text-rose-700">{riskFindings.filter((f) => f.severity === 'high').length} high</span>}
-                {riskFindings.filter((f) => f.severity === 'medium').length > 0 && <span className="rounded-full bg-amber-100 px-2 py-0.5 text-amber-700">{riskFindings.filter((f) => f.severity === 'medium').length} medium</span>}
-                {riskFindings.filter((f) => f.severity === 'low').length > 0 && <span className="rounded-full bg-sky-100 px-2 py-0.5 text-sky-700">{riskFindings.filter((f) => f.severity === 'low').length} low</span>}
+                {riskFindings.filter((f) => f.severity === 'high').length > 0 && <span className="rounded-full bg-rose-500/15 px-2 py-0.5 text-rose-400">{riskFindings.filter((f) => f.severity === 'high').length} high</span>}
+                {riskFindings.filter((f) => f.severity === 'medium').length > 0 && <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-amber-400">{riskFindings.filter((f) => f.severity === 'medium').length} medium</span>}
+                {riskFindings.filter((f) => f.severity === 'low').length > 0 && <span className="rounded-full bg-[#1a1a1a] px-2 py-0.5 text-[#a1a1aa]">{riskFindings.filter((f) => f.severity === 'low').length} low</span>}
               </span>
             )}
           </div>
           <div className="flex items-center gap-2">
             <button
-              className="rounded-xl border border-slate-300 bg-white/85 p-2 text-slate-700 transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-40"
+              className="rounded-xl border border-white/[0.06] bg-[rgba(20,20,20,0.85)] p-2 text-[#d4d4d4] transition hover:bg-[#1a1a1a] disabled:cursor-not-allowed disabled:opacity-40"
               type="button"
               onClick={() => { void recomputeRiskFindingsFromCollectionsState(safeCollections) }}
               disabled={isRiskLoading}
@@ -3536,7 +3641,7 @@ export default function App() {
             >
               <IconRefresh className={isRiskLoading ? 'animate-spin' : ''} />
             </button>
-            <span className="text-xs text-slate-500">{isRiskLoading ? 'running checks...' : `${riskFindings.length} active`}</span>
+            <span className="text-xs text-[#71717a]">{isRiskLoading ? 'running checks...' : `${riskFindings.length} active`}</span>
           </div>
         </div>
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
@@ -3557,10 +3662,10 @@ export default function App() {
               type="button"
             >
               <div className="flex items-start justify-between gap-2">
-                <p className="font-semibold leading-snug text-slate-900">{findingItem.title}</p>
+                <p className="font-semibold leading-snug text-[#ededed]">{findingItem.title}</p>
                 <p className={`risk-flag-severity shrink-0 text-xs font-semibold uppercase tracking-[0.14em] ${severityBadgeClassName}`}>{findingItem.severity}</p>
               </div>
-              <p className="mt-1 text-sm text-slate-600">{findingItem.detail}</p>
+              <p className="mt-1 text-sm text-[#a1a1aa]">{findingItem.detail}</p>
             </button>
             )
           })}
@@ -3570,36 +3675,36 @@ export default function App() {
       <section id="goals" className="section-tight glass-panel-soft squircle-md z-layer-section mb-4 scroll-mt-40 p-4 md:mb-6 md:p-6" style={{ order: 12 }}>
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
           <div className="flex flex-wrap items-center gap-2">
-            <h2 className="text-lg font-bold text-slate-900">Goals</h2>
+            <h2 className="text-lg font-bold text-[#ededed]">Goals</h2>
             {powerGoalsFormulaSummary.completionRatePercent > 0 && (
-              <span className="rounded-full border border-emerald-300 bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold text-emerald-700">{powerGoalsFormulaSummary.completionRatePercent.toFixed(0)}% complete</span>
+              <span className="rounded-full border border-emerald-500/40 bg-emerald-500/10 px-2.5 py-0.5 text-xs font-semibold text-emerald-400">{powerGoalsFormulaSummary.completionRatePercent.toFixed(0)}% complete</span>
             )}
           </div>
-          <button className="inline-flex items-center gap-2 rounded-2xl bg-sky-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-sky-700" onClick={() => { setGoalEntryFormState(buildInitialGoalEntryFormState()); setEditingGoalId(''); setIsAddGoalModalOpen(true) }} type="button"><IconPlus /> Add Goal</button>
+          <button className="inline-flex items-center gap-2 rounded-2xl bg-[#1a1a1a] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#1a1a1a]" onClick={() => { setGoalEntryFormState(buildInitialGoalEntryFormState()); setEditingGoalId(''); setIsAddGoalModalOpen(true) }} type="button"><IconPlus /> Add Goal</button>
         </div>
         <div className="mb-4 flex flex-wrap items-center gap-2">
-          <span className="inline-flex items-center gap-1 rounded-full border border-emerald-300 bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold text-emerald-700">✓ {powerGoalsFormulaSummary.completedCount} Completed</span>
-          <span className="inline-flex items-center gap-1 rounded-full border border-amber-300/80 bg-amber-50 px-2.5 py-0.5 text-xs font-semibold text-amber-800">● {powerGoalsFormulaSummary.inProgressCount} In Progress</span>
-          <span className="inline-flex items-center gap-1 rounded-full border border-slate-300 bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-slate-600">○ {powerGoalsFormulaSummary.notStartedCount} Not Started</span>
+          <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/40 bg-emerald-500/10 px-2.5 py-0.5 text-xs font-semibold text-emerald-400">G�� {powerGoalsFormulaSummary.completedCount} Completed</span>
+          <span className="inline-flex items-center gap-1 rounded-full border border-amber-500/40/80 bg-amber-500/10 px-2.5 py-0.5 text-xs font-semibold text-amber-300">G�� {powerGoalsFormulaSummary.inProgressCount} In Progress</span>
+          <span className="inline-flex items-center gap-1 rounded-full border border-white/[0.06] bg-[#1a1a1a] px-2.5 py-0.5 text-xs font-semibold text-[#a1a1aa]">G�� {powerGoalsFormulaSummary.notStartedCount} Not Started</span>
           {powerGoalsFormulaSummary.averageTimeframeMonths > 0 && (
-            <span className="inline-flex items-center gap-1 rounded-full border border-sky-300/70 bg-sky-50 px-2.5 py-0.5 text-xs font-semibold text-sky-700">⏱ {powerGoalsFormulaSummary.averageTimeframeMonths.toFixed(0)} mo. avg</span>
+            <span className="inline-flex items-center gap-1 rounded-full border border-white/[0.025]/70 bg-[#0f0f0f] px-2.5 py-0.5 text-xs font-semibold text-[#a1a1aa]">GŦ {powerGoalsFormulaSummary.averageTimeframeMonths.toFixed(0)} mo. avg</span>
           )}
         </div>
         <div className="mb-3 flex flex-wrap items-center gap-1.5">
-          <span className="mr-1 text-[11px] font-semibold uppercase tracking-[0.1em] text-slate-400">Sort</span>
+          <span className="mr-1 text-[11px] font-semibold uppercase tracking-[0.1em] text-[#52525b]">Sort</span>
           {[{ key: 'timeframeMonths', label: 'Timeframe' }, { key: 'status', label: 'Status' }, { key: 'title', label: 'Title' }].map(({ key, label }) => {
             const isActive = tableSortState.goals.key === key
             return (
-              <button key={key} type="button" onClick={() => updateTableSortingForTableName('goals', key)} className={`rounded-full border px-2.5 py-0.5 text-xs font-semibold transition ${isActive ? 'border-sky-500 bg-sky-600 text-white' : 'border-slate-200 bg-white/80 text-slate-600 hover:border-slate-300'}`}>
-                {label}{isActive ? (tableSortState.goals.direction === 'asc' ? ' ↑' : ' ↓') : ''}
+              <button key={key} type="button" onClick={() => updateTableSortingForTableName('goals', key)} className={`rounded-full border px-2.5 py-0.5 text-xs font-semibold transition ${isActive ? 'border-amber-500 bg-amber-500 text-black' : 'border-white/[0.025] bg-[rgba(20,20,20,0.8)] text-[#a1a1aa] hover:border-white/[0.06]'}`}>
+                {label}{isActive ? (tableSortState.goals.direction === 'asc' ? ' G��' : ' G��') : ''}
               </button>
             )
           })}
         </div>
         {goalRowsSortedByTimeframeAndStatus.length === 0 ? (
-          <div className="rounded-2xl border border-slate-200/90 bg-white/75 py-10 text-center">
-            <p className="text-slate-400">No goals recorded yet</p>
-            <button className="mt-3 inline-flex items-center gap-1.5 rounded-2xl bg-sky-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-sky-700" onClick={() => { setGoalEntryFormState(buildInitialGoalEntryFormState()); setEditingGoalId(''); setIsAddGoalModalOpen(true) }} type="button"><IconPlus /> Add your first goal</button>
+          <div className="rounded-2xl border border-white/[0.06] bg-[rgba(20,20,20,0.6)] py-10 text-center">
+            <p className="text-[#52525b]">No goals recorded yet</p>
+            <button className="mt-3 inline-flex items-center gap-1.5 rounded-2xl bg-[#1a1a1a] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#1a1a1a]" onClick={() => { setGoalEntryFormState(buildInitialGoalEntryFormState()); setEditingGoalId(''); setIsAddGoalModalOpen(true) }} type="button"><IconPlus /> Add your first goal</button>
           </div>
         ) : (
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -3613,29 +3718,29 @@ export default function App() {
               const isInProgress = status === 'in progress'
               const isUrgent = isInProgress && Number.isFinite(timeframeMonths) && timeframeMonths > 0 && timeframeMonths <= 3
               const cardBg = isCompleted
-                ? 'border-emerald-200/90 bg-emerald-50/90'
+                ? 'border-emerald-500/30 bg-emerald-500/10'
                 : isInProgress
-                  ? 'border-amber-200/90 bg-amber-50/90'
-                  : 'border-slate-200/90 bg-slate-50/80'
+                  ? 'border-amber-500/30 bg-amber-500/10'
+                  : 'border-white/[0.06] bg-[rgba(15,15,15,0.7)]'
               const statusBadgeClass = isCompleted
-                ? 'border-emerald-300 bg-emerald-100 text-emerald-700'
+                ? 'border-emerald-500/40 bg-emerald-500/15 text-emerald-400'
                 : isInProgress
-                  ? 'border-amber-300/80 bg-amber-100 text-amber-800'
-                  : 'border-slate-300 bg-slate-100 text-slate-600'
+                  ? 'border-amber-500/40 bg-amber-500/15 text-amber-400'
+                  : 'border-white/[0.06] bg-[#1a1a1a] text-[#a1a1aa]'
               const statusLabel = isCompleted ? 'Completed' : isInProgress ? 'In Progress' : 'Not Started'
               return (
                 <article key={stableKey} className={`group relative rounded-2xl border p-3 transition duration-150 ${cardBg}`}>
                   <div className="mb-2 flex items-center justify-between gap-2">
                     <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] ${statusBadgeClass}`}>{statusLabel}</span>
-                    {isUrgent && <span className="inline-flex items-center rounded-full border border-rose-300 bg-rose-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-rose-700">Urgent</span>}
+                    {isUrgent && <span className="inline-flex items-center rounded-full border border-rose-500/40 bg-rose-500/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-rose-400">Urgent</span>}
                   </div>
-                  <p className="text-sm font-bold text-slate-800">{title}</p>
-                  {description ? <p className="mt-1 text-xs text-slate-500">{description}</p> : null}
+                  <p className="text-sm font-bold text-[#e0e0e0]">{title}</p>
+                  {description ? <p className="mt-1 text-xs text-[#71717a]">{description}</p> : null}
                   <div className="mt-3 flex items-center justify-between gap-2">
-                    <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold ${Number.isFinite(timeframeMonths) && timeframeMonths > 0 ? 'border-sky-300/70 bg-sky-50 text-sky-700' : 'border-slate-200 bg-white/60 text-slate-400'}`}>{Number.isFinite(timeframeMonths) && timeframeMonths > 0 ? `${timeframeMonths} mo.` : 'No timeframe'}</span>
+                    <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold ${Number.isFinite(timeframeMonths) && timeframeMonths > 0 ? 'border-white/[0.025]/70 bg-[#0f0f0f] text-[#a1a1aa]' : 'border-white/[0.025] bg-[rgba(20,20,20,0.4)] text-[#52525b]'}`}>{Number.isFinite(timeframeMonths) && timeframeMonths > 0 ? `${timeframeMonths} mo.` : 'No timeframe'}</span>
                     <div className="flex items-center gap-1 pointer-events-none opacity-0 transition-opacity duration-150 group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100">
-                      <button aria-label="Edit goal" className="rounded-lg border border-slate-300 bg-white/80 px-2 py-1 text-xs font-semibold text-slate-700" onClick={() => openEditGoalModal(goalItem)} title="Edit" type="button"><IconEdit /></button>
-                      <button aria-label="Delete goal" className="rounded-lg border border-rose-300 bg-rose-50 px-2 py-1 text-xs font-semibold text-rose-700" onClick={() => { void deleteGoalRecordById(String(goalItem.id ?? '')) }} title="Delete" type="button"><IconTrash /></button>
+                      <button aria-label="Edit goal" className="rounded-lg border border-white/[0.06] bg-[rgba(20,20,20,0.8)] px-2 py-1 text-xs font-semibold text-[#d4d4d4]" onClick={() => openEditGoalModal(goalItem)} title="Edit" type="button"><IconEdit /></button>
+                      <button aria-label="Delete goal" className="rounded-lg border border-rose-500/40 bg-rose-500/10 px-2 py-1 text-xs font-semibold text-rose-400" onClick={() => { void deleteGoalRecordById(String(goalItem.id ?? '')) }} title="Delete" type="button"><IconTrash /></button>
                     </div>
                   </div>
                 </article>
@@ -3647,15 +3752,15 @@ export default function App() {
 
       <section id="debts" className="section-tight glass-panel-soft squircle-md z-layer-section mb-4 scroll-mt-40 p-4 md:mb-6 md:p-6" style={{ order: 2 }}>
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-          <h2 className="text-lg font-bold text-slate-900">Debts / Loans</h2>
+          <h2 className="text-lg font-bold text-[#ededed]">Debts / Loans</h2>
           <div className="flex items-center gap-3">
-            <span className="text-sm font-semibold text-rose-700">{formatCurrencyValueForDashboard(debtRows.reduce((t, d) => t + (typeof d.amount === 'number' ? d.amount : 0), 0))}</span>
-            <button className="inline-flex items-center gap-1.5 rounded-xl border border-white/30 bg-amber-600 px-3 py-2 text-xs font-semibold text-white" onClick={() => openAddRecordModalWithPresetTypeAndCategory('debt', 'Debt Payment')} type="button"><IconPlus /> Add Debt</button>
+            <span className="text-sm font-semibold text-rose-400">{formatCurrencyValueForDashboard(debtRows.reduce((t, d) => t + (typeof d.amount === 'number' ? d.amount : 0), 0))}</span>
+            <button className="inline-flex items-center gap-1.5 rounded-xl border border-white/30 bg-amber-500 px-3 py-2 text-xs font-semibold text-white" onClick={() => openAddRecordModalWithPresetTypeAndCategory('debt', 'Debt Payment')} type="button"><IconPlus /> Add Debt</button>
           </div>
         </div>
-        <div className="table-scroll-region rounded-2xl border border-slate-200/90 bg-white/75 backdrop-blur">
+        <div className="table-scroll-region rounded-lg border border-white/[0.03] backdrop-blur">
           <table className="w-full min-w-[640px] border-collapse text-sm">
-            <thead className="bg-slate-100 text-slate-600">
+            <thead className="bg-[#1a1a1a] text-[#a1a1aa]">
               <tr>
                 {renderSortableHeaderCell('debts', 'person', 'Person')}
                 {renderSortableHeaderCell('debts', 'item', 'Item')}
@@ -3668,7 +3773,7 @@ export default function App() {
             </thead>
             <tbody>
               {debtRows.length === 0 ? (
-                <tr><td colSpan={7} className="px-4 py-8 text-center text-slate-400">No debts recorded yet</td></tr>
+                <tr><td colSpan={7} className="px-4 py-8 text-center text-[#52525b]">No debts recorded yet</td></tr>
               ) : debtRowsSorted.map((debtItem, debtIndex) => {
                 const stableKey = typeof debtItem.id === 'string' ? debtItem.id : `debt-row-${debtIndex}`
                 const person = typeof debtItem.person === 'string' ? debtItem.person : DEFAULT_PERSONA_NAME
@@ -3681,13 +3786,13 @@ export default function App() {
                 const payoffMonthsForProjection = remainingPayments > 0 ? remainingPayments : Number(calculatedPaybackMonths ?? 0)
                 const projectedPayoffDate = formatProjectedPayoffDateFromMonthsOffset(payoffMonthsForProjection)
                 return (
-                  <tr key={stableKey} className="group border-t border-slate-200 bg-white">
-                    <td className="px-3 py-2 text-slate-700">{formatPersonaLabelWithEmoji(person, personaEmojiByName)}</td>
-                    <td className="px-3 py-2 text-slate-700">{item}</td>
-                    <td className="px-3 py-2 text-right font-semibold text-rose-700"><span className="inline-flex items-center gap-1">{formatCurrencyValueForDashboard(value)}{renderStaleUpdateIconIfNeeded(debtItem)}</span></td>
-                    <td className="px-3 py-2 text-right font-semibold text-slate-700">{formatCurrencyValueForDashboard(perMonth)}</td>
-                    <td className="px-3 py-2 text-right font-semibold text-slate-700">{interestRatePercent.toFixed(2)}%</td>
-                    <td className="px-3 py-2 text-right font-semibold text-slate-700">{projectedPayoffDate}</td>
+                  <tr key={stableKey} className="group border-t border-white/[0.025] bg-[#141414]">
+                    <td className="px-3 py-2 text-[#d4d4d4]">{formatPersonaLabelWithEmoji(person, personaEmojiByName)}</td>
+                    <td className="px-3 py-2 text-[#d4d4d4]">{item}</td>
+                    <td className="px-3 py-2 text-right font-semibold text-rose-400"><span className="inline-flex items-center gap-1">{formatCurrencyValueForDashboard(value)}{renderStaleUpdateIconIfNeeded(debtItem)}</span></td>
+                    <td className="px-3 py-2 text-right font-semibold text-[#d4d4d4]">{formatCurrencyValueForDashboard(perMonth)}</td>
+                    <td className="px-3 py-2 text-right font-semibold text-[#d4d4d4]">{interestRatePercent.toFixed(2)}%</td>
+                    <td className="px-3 py-2 text-right font-semibold text-[#d4d4d4]">{projectedPayoffDate}</td>
                     <td className="px-3 py-2 text-right">{renderRecordActionsWithIconButtons(String(debtItem.__collectionName), debtItem)}</td>
                   </tr>
                 )
@@ -3699,16 +3804,16 @@ export default function App() {
 
       <section id="credit" className="section-tight glass-panel-soft squircle-md z-layer-section mb-4 scroll-mt-40 p-4 md:mb-6 md:p-6" style={{ order: 3 }}>
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-          <h2 className="text-lg font-bold text-slate-900">Credit Accounts</h2>
+          <h2 className="text-lg font-bold text-[#ededed]">Credit Accounts</h2>
           <div className="flex items-center gap-3">
-            <span className="text-sm font-semibold text-rose-700">{formatCurrencyValueForDashboard(creditCardSummary.totalCurrent)}</span>
-            <span className="text-sm font-semibold text-violet-700">{creditCardSummary.totalUtilizationPercent.toFixed(1)}% util.</span>
+            <span className="text-sm font-semibold text-rose-400">{formatCurrencyValueForDashboard(creditCardSummary.totalCurrent)}</span>
+            <span className="text-sm font-semibold text-violet-300">{creditCardSummary.totalUtilizationPercent.toFixed(1)}% util.</span>
             <button className="inline-flex items-center gap-1.5 rounded-xl border border-white/30 bg-rose-600 px-3 py-2 text-xs font-semibold text-white" onClick={() => openAddRecordModalWithPresetTypeAndCategory('credit_card', 'Credit Card')} type="button"><IconPlus /> Add Card</button>
           </div>
         </div>
-        <div className="table-scroll-region mb-4 rounded-2xl border border-slate-200/90 bg-white/75 backdrop-blur">
+        <div className="table-scroll-region mb-4 rounded-2xl border border-white/[0.06] bg-[rgba(20,20,20,0.6)] backdrop-blur">
           <table className="w-full min-w-[760px] border-collapse text-sm">
-            <thead className="bg-slate-100 text-slate-600">
+            <thead className="bg-[#1a1a1a] text-[#a1a1aa]">
               <tr>
                 {renderSortableHeaderCell('credit', 'person', 'Person')}
                 {renderSortableHeaderCell('credit', 'item', 'Account')}
@@ -3723,7 +3828,7 @@ export default function App() {
             </thead>
             <tbody>
               {creditCardInformationCollection.length === 0 ? (
-                <tr><td colSpan={9} className="px-4 py-8 text-center text-slate-400">No credit accounts recorded yet</td></tr>
+                <tr><td colSpan={9} className="px-4 py-8 text-center text-[#52525b]">No credit accounts recorded yet</td></tr>
               ) : creditRowsSorted.map((creditCardItem, creditIndex) => {
                 const stableKey = typeof creditCardItem.id === 'string' ? creditCardItem.id : `credit-info-row-${creditIndex}`
                 const person = typeof creditCardItem.person === 'string' ? creditCardItem.person : DEFAULT_PERSONA_NAME
@@ -3737,15 +3842,15 @@ export default function App() {
                 const [paybackMonths] = calculateEstimatedPayoffMonthsFromBalancePaymentAndInterestRate(currentBalance, monthlyPayment, interestRatePercent)
                 const projectedPayoffDate = formatProjectedPayoffDateFromMonthsOffset(Number(paybackMonths ?? 0))
                 return (
-                  <tr key={stableKey} className="group border-t border-slate-200 bg-white">
-                    <td className="px-3 py-2 text-slate-700">{formatPersonaLabelWithEmoji(person, personaEmojiByName)}</td>
-                    <td className="px-3 py-2 text-slate-700">{item}</td>
-                    <td className="px-3 py-2 text-right font-semibold text-rose-700"><span className="inline-flex items-center gap-1">{formatCurrencyValueForDashboard(currentBalance)}{renderStaleUpdateIconIfNeeded(creditCardItem)}</span></td>
-                    <td className="px-3 py-2 text-right font-semibold text-slate-700">{formatCurrencyValueForDashboard(maxCapacity)}</td>
-                    <td className="px-3 py-2 text-right font-semibold text-slate-700">{interestRatePercent.toFixed(2)}%</td>
+                  <tr key={stableKey} className="group border-t border-white/[0.025] bg-[#141414]">
+                    <td className="px-3 py-2 text-[#d4d4d4]">{formatPersonaLabelWithEmoji(person, personaEmojiByName)}</td>
+                    <td className="px-3 py-2 text-[#d4d4d4]">{item}</td>
+                    <td className="px-3 py-2 text-right font-semibold text-rose-400"><span className="inline-flex items-center gap-1">{formatCurrencyValueForDashboard(currentBalance)}{renderStaleUpdateIconIfNeeded(creditCardItem)}</span></td>
+                    <td className="px-3 py-2 text-right font-semibold text-[#d4d4d4]">{formatCurrencyValueForDashboard(maxCapacity)}</td>
+                    <td className="px-3 py-2 text-right font-semibold text-[#d4d4d4]">{interestRatePercent.toFixed(2)}%</td>
                     <td className="px-3 py-2 text-right font-semibold" style={{ color: utilColor }}>{utilizationPercent.toFixed(1)}%</td>
-                    <td className="px-3 py-2 text-right font-semibold text-slate-700">{formatCurrencyValueForDashboard(monthlyPayment)}</td>
-                    <td className="px-3 py-2 text-right font-semibold text-slate-700">{projectedPayoffDate}</td>
+                    <td className="px-3 py-2 text-right font-semibold text-[#d4d4d4]">{formatCurrencyValueForDashboard(monthlyPayment)}</td>
+                    <td className="px-3 py-2 text-right font-semibold text-[#d4d4d4]">{projectedPayoffDate}</td>
                     <td className="px-3 py-2 text-right">{renderRecordActionsWithIconButtons('creditCards', creditCardItem)}</td>
                   </tr>
                 )
@@ -3753,21 +3858,21 @@ export default function App() {
             </tbody>
           </table>
         </div>
-        <div className="rounded-2xl border border-slate-200/90 bg-white/75 backdrop-blur">
-          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200/90 px-4 py-3">
-            <h3 className="text-sm font-bold text-slate-800">Payment Recommendation</h3>
+        <div className="rounded-2xl border border-white/[0.06] bg-[rgba(20,20,20,0.6)] backdrop-blur">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/[0.06] px-4 py-3">
+            <h3 className="text-sm font-bold text-[#e0e0e0]">Payment Recommendation</h3>
             <div className="flex items-center gap-4">
-              <span className="text-xs text-slate-500">{creditCardRecommendations.strategy}</span>
-              <span className="text-xs font-semibold text-slate-600">Now: <span className="text-slate-800">{formatCurrencyValueForDashboard(creditCardRecommendations.currentTotalMonthlyPayment)}</span></span>
-              <span className="text-xs font-semibold text-slate-600">Recommended: <span className="text-teal-700">{formatCurrencyValueForDashboard(creditCardRecommendations.recommendedTotalMonthlyPayment)}</span></span>
+              <span className="text-xs text-[#71717a]">{creditCardRecommendations.strategy}</span>
+              <span className="text-xs font-semibold text-[#a1a1aa]">Now: <span className="text-[#e0e0e0]">{formatCurrencyValueForDashboard(creditCardRecommendations.currentTotalMonthlyPayment)}</span></span>
+              <span className="text-xs font-semibold text-[#a1a1aa]">Recommended: <span className="text-amber-400">{formatCurrencyValueForDashboard(creditCardRecommendations.recommendedTotalMonthlyPayment)}</span></span>
               {Math.max(0, creditCardRecommendations.weightedPayoffMonthsCurrent - creditCardRecommendations.weightedPayoffMonthsRecommended) > 0 ? (
-                <span className="text-xs font-semibold text-sky-700">{Math.max(0, creditCardRecommendations.weightedPayoffMonthsCurrent - creditCardRecommendations.weightedPayoffMonthsRecommended).toFixed(1)} mo. faster</span>
+                <span className="text-xs font-semibold text-[#a1a1aa]">{Math.max(0, creditCardRecommendations.weightedPayoffMonthsCurrent - creditCardRecommendations.weightedPayoffMonthsRecommended).toFixed(1)} mo. faster</span>
               ) : null}
             </div>
           </div>
           <div className="table-scroll-region rounded-b-2xl">
             <table className="w-full min-w-[480px] border-collapse text-sm">
-              <thead className="bg-slate-100 text-slate-600">
+              <thead className="bg-[#1a1a1a] text-[#a1a1aa]">
                 <tr>
                   <th className="px-3 py-2 text-left font-semibold">Account</th>
                   <th className="px-3 py-2 text-right font-semibold">Current Pmt</th>
@@ -3781,17 +3886,17 @@ export default function App() {
                 {creditCardRecommendations.rows.map((rowItem) => {
                   const recoPayoffDate = formatProjectedPayoffDateFromMonthsOffset(Number(rowItem.estimatedMonthsRecommended ?? 0))
                   return (
-                    <tr key={rowItem.id} className="border-t border-slate-200 bg-white">
-                      <td className="px-3 py-2 text-slate-700">{rowItem.item}</td>
-                      <td className="px-3 py-2 text-right font-semibold text-slate-700">{formatCurrencyValueForDashboard(rowItem.currentMonthlyPayment)}</td>
-                      <td className="px-3 py-2 text-right font-semibold text-teal-700">{formatCurrencyValueForDashboard(rowItem.recommendedMonthlyPayment)}</td>
-                      <td className="px-3 py-2 text-right font-semibold text-sky-700">{recoPayoffDate}</td>
-                      <td className="px-3 py-2 text-right font-semibold text-slate-700">
-                        <span className="text-slate-400">{Math.round(rowItem.estimatedMonthsCurrent)}mo</span>
-                        <span className="mx-1 text-slate-300">→</span>
-                        <span className="text-sky-700">{Math.round(rowItem.estimatedMonthsRecommended)}mo</span>
+                    <tr key={rowItem.id} className="border-t border-white/[0.025] bg-[#141414]">
+                      <td className="px-3 py-2 text-[#d4d4d4]">{rowItem.item}</td>
+                      <td className="px-3 py-2 text-right font-semibold text-[#d4d4d4]">{formatCurrencyValueForDashboard(rowItem.currentMonthlyPayment)}</td>
+                      <td className="px-3 py-2 text-right font-semibold text-amber-400">{formatCurrencyValueForDashboard(rowItem.recommendedMonthlyPayment)}</td>
+                      <td className="px-3 py-2 text-right font-semibold text-[#a1a1aa]">{recoPayoffDate}</td>
+                      <td className="px-3 py-2 text-right font-semibold text-[#d4d4d4]">
+                        <span className="text-[#52525b]">{Math.round(rowItem.estimatedMonthsCurrent)}mo</span>
+                        <span className="mx-1 text-white/[0.2]">G��</span>
+                        <span className="text-[#a1a1aa]">{Math.round(rowItem.estimatedMonthsRecommended)}mo</span>
                       </td>
-                      <td className="px-3 py-2 text-slate-500">{rowItem.recommendationReason}</td>
+                      <td className="px-3 py-2 text-[#71717a]">{rowItem.recommendationReason}</td>
                     </tr>
                   )
                 })}
@@ -3803,26 +3908,26 @@ export default function App() {
 
       <section id="savings" className="section-tight glass-panel-soft squircle-md z-layer-section mb-4 scroll-mt-40 p-4 md:mb-6 md:p-6" style={{ order: 4 }}>
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-          <h2 className="text-lg font-bold text-slate-900">Monthly Savings Storage</h2>
+          <h2 className="text-lg font-bold text-[#ededed]">Monthly Savings Storage</h2>
           <div className="flex items-center gap-3">
-            <span className={`text-sm font-semibold ${monthlySavingsStorageSummary.monthlySavingsAmount >= 0 ? 'text-emerald-700' : 'text-rose-700'}`}>{formatCurrencyValueForDashboard(monthlySavingsStorageSummary.monthlySavingsAmount)}</span>
+            <span className={`text-sm font-semibold ${monthlySavingsStorageSummary.monthlySavingsAmount >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>{formatCurrencyValueForDashboard(monthlySavingsStorageSummary.monthlySavingsAmount)}</span>
             <span className={`text-sm font-semibold ${resolveSavingsRateToneClasses(monthlySavingsStorageSummary.monthlySavingsRatePercent).valueClassName}`}>{monthlySavingsStorageSummary.monthlySavingsRatePercent.toFixed(1)}% rate</span>
             <button className="inline-flex items-center gap-1.5 rounded-xl border border-white/30 bg-emerald-600 px-3 py-2 text-xs font-semibold text-white" onClick={() => openAddRecordModalWithPresetTypeAndCategory('savings', 'Savings')} type="button"><IconPlus /> Add</button>
           </div>
         </div>
-        <div className="rounded-2xl border border-slate-200/90 bg-white/75 backdrop-blur">
-          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200/90 px-4 py-3">
-            <h3 className="text-sm font-bold text-slate-800">Recommended Target</h3>
+        <div className="rounded-2xl border border-white/[0.06] bg-[rgba(20,20,20,0.6)] backdrop-blur">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/[0.06] px-4 py-3">
+            <h3 className="text-sm font-bold text-[#e0e0e0]">Recommended Target</h3>
             <div className="flex flex-wrap items-center gap-4">
-              <span className="text-xs text-slate-500">{savingsRecommendation.recommendationReason}</span>
-              <span className="text-xs font-semibold text-slate-600">Recommended: <span className="text-emerald-700">{formatCurrencyValueForDashboard(savingsRecommendation.recommendedMonthlySavings)}</span> ({savingsRecommendation.recommendedSavingsRatePercent.toFixed(1)}%)</span>
-              <span className="text-xs font-semibold text-slate-600">Range: <span className="text-slate-800">{formatCurrencyValueForDashboard(savingsRecommendation.minimumRecommendedSavings)}–{formatCurrencyValueForDashboard(savingsRecommendation.stretchRecommendedSavings)}</span></span>
-              <span className={`text-xs font-semibold ${savingsRecommendation.gapToRecommendedSavings <= 0 ? 'text-emerald-700' : 'text-rose-700'}`}>Gap: {formatCurrencyValueForDashboard(savingsRecommendation.gapToRecommendedSavings)}</span>
+              <span className="text-xs text-[#71717a]">{savingsRecommendation.recommendationReason}</span>
+              <span className="text-xs font-semibold text-[#a1a1aa]">Recommended: <span className="text-emerald-400">{formatCurrencyValueForDashboard(savingsRecommendation.recommendedMonthlySavings)}</span> ({savingsRecommendation.recommendedSavingsRatePercent.toFixed(1)}%)</span>
+              <span className="text-xs font-semibold text-[#a1a1aa]">Range: <span className="text-[#e0e0e0]">{formatCurrencyValueForDashboard(savingsRecommendation.minimumRecommendedSavings)}G��{formatCurrencyValueForDashboard(savingsRecommendation.stretchRecommendedSavings)}</span></span>
+              <span className={`text-xs font-semibold ${savingsRecommendation.gapToRecommendedSavings <= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>Gap: {formatCurrencyValueForDashboard(savingsRecommendation.gapToRecommendedSavings)}</span>
             </div>
           </div>
           <div className="table-scroll-region rounded-b-2xl">
             <table className="w-full min-w-[560px] border-collapse text-sm">
-              <thead className="bg-slate-100 text-slate-600">
+              <thead className="bg-[#1a1a1a] text-[#a1a1aa]">
                 <tr>
                   {renderSortableHeaderCell('savings', 'person', 'Person')}
                   {renderSortableHeaderCell('savings', 'location', 'Storage')}
@@ -3834,14 +3939,14 @@ export default function App() {
               </thead>
               <tbody>
                 {savingsStorageRowsSorted.length === 0 ? (
-                  <tr><td colSpan={6} className="px-4 py-8 text-center text-slate-400">No savings storage recorded yet</td></tr>
+                  <tr><td colSpan={6} className="px-4 py-8 text-center text-[#52525b]">No savings storage recorded yet</td></tr>
                 ) : savingsStorageRowsSorted.map((rowItem) => (
-                  <tr key={rowItem.id} className="group border-t border-slate-200 bg-white">
-                    <td className="px-3 py-2 text-slate-700">{formatPersonaLabelWithEmoji(rowItem.person, personaEmojiByName)}</td>
-                    <td className="px-3 py-2 text-slate-700">{rowItem.location}</td>
-                    <td className="px-3 py-2 text-right font-semibold text-emerald-700">{formatCurrencyValueForDashboard(rowItem.balance)}</td>
-                    <td className="px-3 py-2 text-right font-semibold text-slate-700">{rowItem.allocationPercent.toFixed(1)}%</td>
-                    <td className="px-3 py-2 text-slate-500">{rowItem.description}</td>
+                  <tr key={rowItem.id} className="group border-t border-white/[0.025] bg-[#141414]">
+                    <td className="px-3 py-2 text-[#d4d4d4]">{formatPersonaLabelWithEmoji(rowItem.person, personaEmojiByName)}</td>
+                    <td className="px-3 py-2 text-[#d4d4d4]">{rowItem.location}</td>
+                    <td className="px-3 py-2 text-right font-semibold text-emerald-400">{formatCurrencyValueForDashboard(rowItem.balance)}</td>
+                    <td className="px-3 py-2 text-right font-semibold text-[#d4d4d4]">{rowItem.allocationPercent.toFixed(1)}%</td>
+                    <td className="px-3 py-2 text-[#71717a]">{rowItem.description}</td>
                     <td className="px-3 py-2 text-right">{renderRecordActionsWithIconButtons('assets', rowItem)}</td>
                   </tr>
                 ))}
@@ -3853,15 +3958,15 @@ export default function App() {
 
       <section id="assets" className="section-tight glass-panel-soft squircle-md z-layer-section mb-4 scroll-mt-40 p-4 md:mb-6 md:p-6" style={{ order: 1 }}>
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-          <h2 className="text-lg font-bold text-slate-900">Assets</h2>
+          <h2 className="text-lg font-bold text-[#ededed]">Assets</h2>
           <div className="flex items-center gap-3">
-            <span className={`text-sm font-semibold ${totalAssetHoldingsValue >= 0 ? 'text-emerald-700' : 'text-rose-700'}`}>{formatCurrencyValueForDashboard(totalAssetHoldingsValue)}</span>
+            <span className={`text-sm font-semibold ${totalAssetHoldingsValue >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>{formatCurrencyValueForDashboard(totalAssetHoldingsValue)}</span>
             <button className="inline-flex items-center gap-1.5 rounded-xl border border-white/30 bg-cyan-600 px-3 py-2 text-xs font-semibold text-white" onClick={() => setIsAddAssetModalOpen(true)} type="button"><IconPlus /> Add Asset</button>
           </div>
         </div>
-        <div className="table-scroll-region rounded-2xl border border-slate-200/90 bg-white/75 backdrop-blur">
+        <div className="table-scroll-region rounded-lg border border-white/[0.03] backdrop-blur">
           <table className="w-full min-w-[620px] border-collapse text-sm">
-            <thead className="bg-slate-100 text-slate-600">
+            <thead className="bg-[#1a1a1a] text-[#a1a1aa]">
               <tr>
                 {renderSortableHeaderCell('assets', 'person', 'Person')}
                 {renderSortableHeaderCell('assets', 'item', 'Item')}
@@ -3874,7 +3979,7 @@ export default function App() {
             </thead>
             <tbody>
               {assetHoldingRows.length === 0 ? (
-                <tr><td colSpan={7} className="px-4 py-8 text-center text-slate-400">No assets recorded yet</td></tr>
+                <tr><td colSpan={7} className="px-4 py-8 text-center text-[#52525b]">No assets recorded yet</td></tr>
               ) : assetHoldingRowsSorted.map((rowItem, rowIndex) => {
                 const stableKey = typeof rowItem.id === 'string' ? rowItem.id : `asset-row-${rowIndex}`
                 const marketValue = typeof rowItem.assetMarketValue === 'number' ? rowItem.assetMarketValue : 0
@@ -3883,13 +3988,13 @@ export default function App() {
                 const ltvPercent = marketValue > 0 ? Math.min(100, Math.round((owed / marketValue) * 100)) : 0
                 const ltvColor = ltvPercent <= 50 ? '#10b981' : ltvPercent <= 80 ? '#f59e0b' : '#f43f5e'
                 return (
-                  <tr key={stableKey} className="group border-t border-slate-200 bg-white">
-                    <td className="px-3 py-2 text-slate-700">{formatPersonaLabelWithEmoji(String(rowItem.person ?? ''), personaEmojiByName)}</td>
-                    <td className="px-3 py-2 text-slate-700"><span className="inline-flex items-center gap-1">{String(rowItem.item ?? '—')}{renderStaleUpdateIconIfNeeded(rowItem)}</span></td>
-                    <td className="px-3 py-2 text-right font-semibold text-slate-700">{formatCurrencyValueForDashboard(marketValue)}</td>
-                    <td className="px-3 py-2 text-right font-semibold text-slate-700">{owed > 0 ? formatCurrencyValueForDashboard(owed) : '—'}</td>
+                  <tr key={stableKey} className="group border-t border-white/[0.025] bg-[#141414]">
+                    <td className="px-3 py-2 text-[#d4d4d4]">{formatPersonaLabelWithEmoji(String(rowItem.person ?? ''), personaEmojiByName)}</td>
+                    <td className="px-3 py-2 text-[#d4d4d4]"><span className="inline-flex items-center gap-1">{String(rowItem.item ?? 'G��')}{renderStaleUpdateIconIfNeeded(rowItem)}</span></td>
+                    <td className="px-3 py-2 text-right font-semibold text-[#d4d4d4]">{formatCurrencyValueForDashboard(marketValue)}</td>
+                    <td className="px-3 py-2 text-right font-semibold text-[#d4d4d4]">{owed > 0 ? formatCurrencyValueForDashboard(owed) : 'G��'}</td>
                     <td className="px-3 py-2 text-right font-semibold" style={{ color: equity >= 0 ? '#15803d' : '#be123c' }}>{formatCurrencyValueForDashboard(equity)}</td>
-                    <td className="px-3 py-2 text-right font-semibold" style={{ color: ltvColor }}>{owed > 0 ? `${ltvPercent}%` : '—'}</td>
+                    <td className="px-3 py-2 text-right font-semibold" style={{ color: ltvColor }}>{owed > 0 ? `${ltvPercent}%` : 'G��'}</td>
                     <td className="px-3 py-2 text-right">{renderRecordActionsWithIconButtons('assetHoldings', rowItem)}</td>
                   </tr>
                 )
@@ -3900,56 +4005,56 @@ export default function App() {
       </section>
 
       {false ? (<section id="planning" className="section-tight glass-panel-soft squircle-md z-layer-section mb-4 scroll-mt-40 p-4 md:mb-6 md:p-6" style={{ order: 7 }}>
-        <div className="mb-5"><h2 className="text-lg font-bold text-slate-900">Planning Engine</h2><p className="text-xs text-slate-500">Budget hygiene, forecast layers, debt execution, scenarios, and month-close readiness.</p></div>
+        <div className="mb-5"><h2 className="text-lg font-bold text-[#ededed]">Planning Engine</h2><p className="text-xs text-[#71717a]">Budget hygiene, forecast layers, debt execution, scenarios, and month-close readiness.</p></div>
         <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
-          <article className="squircle-sm border border-slate-200/90 bg-white/90 p-3"><p className="text-xs uppercase tracking-[0.12em] text-slate-500">Forecast: Committed</p><p className="text-xl font-bold text-rose-700">{formatCurrencyValueForDashboard(planningInsights.forecast.committed)}</p></article>
-          <article className="squircle-sm border border-slate-200/90 bg-white/90 p-3"><p className="text-xs uppercase tracking-[0.12em] text-slate-500">Forecast: Planned</p><p className="text-xl font-bold text-sky-700">{formatCurrencyValueForDashboard(planningInsights.forecast.planned)}</p></article>
-          <article className="squircle-sm border border-slate-200/90 bg-white/90 p-3"><p className="text-xs uppercase tracking-[0.12em] text-slate-500">Forecast Risk</p><p className={`text-xl font-bold ${planningInsights.forecast.projectedRiskLevel === 'low' ? 'text-emerald-700' : (planningInsights.forecast.projectedRiskLevel === 'medium' ? 'text-amber-700' : 'text-rose-700')}`}>{planningInsights.forecast.projectedRiskLevel}</p></article>
+          <article className="squircle-sm border border-white/[0.06] bg-[rgba(20,20,20,0.9)] p-3"><p className="text-xs uppercase tracking-[0.12em] text-[#71717a]">Forecast: Committed</p><p className="text-xl font-bold text-rose-400">{formatCurrencyValueForDashboard(planningInsights.forecast.committed)}</p></article>
+          <article className="squircle-sm border border-white/[0.06] bg-[rgba(20,20,20,0.9)] p-3"><p className="text-xs uppercase tracking-[0.12em] text-[#71717a]">Forecast: Planned</p><p className="text-xl font-bold text-[#a1a1aa]">{formatCurrencyValueForDashboard(planningInsights.forecast.planned)}</p></article>
+          <article className="squircle-sm border border-white/[0.06] bg-[rgba(20,20,20,0.9)] p-3"><p className="text-xs uppercase tracking-[0.12em] text-[#71717a]">Forecast Risk</p><p className={`text-xl font-bold ${planningInsights.forecast.projectedRiskLevel === 'low' ? 'text-emerald-400' : (planningInsights.forecast.projectedRiskLevel === 'medium' ? 'text-amber-400' : 'text-rose-400')}`}>{planningInsights.forecast.projectedRiskLevel}</p></article>
         </div>
-        <div className="mb-4 table-scroll-region rounded-2xl border border-slate-200/90 bg-white/75 backdrop-blur">
+        <div className="mb-4 table-scroll-region rounded-lg border border-white/[0.03] backdrop-blur">
           <table className="w-full min-w-[860px] border-collapse text-sm">
-            <thead className="bg-slate-100 text-slate-600"><tr><th className="px-3 py-2 text-left font-semibold">Category</th><th className="px-3 py-2 text-right font-semibold">Budget</th><th className="px-3 py-2 text-right font-semibold">Actual</th><th className="px-3 py-2 text-right font-semibold">Variance</th><th className="px-3 py-2 text-right font-semibold">Run-rate (EOM)</th></tr></thead>
-            <tbody>{planningInsights.budgetVsActualRows.slice(0, 10).map((rowItem) => <tr key={`bva-${rowItem.category}`} className="border-t border-slate-200 bg-white"><td className="px-3 py-2 text-slate-700">{rowItem.category}</td><td className="px-3 py-2 text-right font-semibold text-slate-700">{formatCurrencyValueForDashboard(rowItem.planned)}</td><td className="px-3 py-2 text-right font-semibold text-slate-700">{formatCurrencyValueForDashboard(rowItem.actual)}</td><td className={`px-3 py-2 text-right font-semibold ${rowItem.variance >= 0 ? 'text-emerald-700' : 'text-rose-700'}`}>{formatCurrencyValueForDashboard(rowItem.variance)}</td><td className="px-3 py-2 text-right font-semibold text-slate-700">{formatCurrencyValueForDashboard(rowItem.runRateMonthEnd)}</td></tr>)}</tbody>
+            <thead className="bg-[#1a1a1a] text-[#a1a1aa]"><tr><th className="px-3 py-2 text-left font-semibold">Category</th><th className="px-3 py-2 text-right font-semibold">Budget</th><th className="px-3 py-2 text-right font-semibold">Actual</th><th className="px-3 py-2 text-right font-semibold">Variance</th><th className="px-3 py-2 text-right font-semibold">Run-rate (EOM)</th></tr></thead>
+            <tbody>{planningInsights.budgetVsActualRows.slice(0, 10).map((rowItem) => <tr key={`bva-${rowItem.category}`} className="border-t border-white/[0.025] bg-[#141414]"><td className="px-3 py-2 text-[#d4d4d4]">{rowItem.category}</td><td className="px-3 py-2 text-right font-semibold text-[#d4d4d4]">{formatCurrencyValueForDashboard(rowItem.planned)}</td><td className="px-3 py-2 text-right font-semibold text-[#d4d4d4]">{formatCurrencyValueForDashboard(rowItem.actual)}</td><td className={`px-3 py-2 text-right font-semibold ${rowItem.variance >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>{formatCurrencyValueForDashboard(rowItem.variance)}</td><td className="px-3 py-2 text-right font-semibold text-[#d4d4d4]">{formatCurrencyValueForDashboard(rowItem.runRateMonthEnd)}</td></tr>)}</tbody>
           </table>
         </div>
         <div className="mb-4 grid grid-cols-1 gap-3 lg:grid-cols-2">
-          <div className="table-scroll-region rounded-2xl border border-slate-200/90 bg-white/75 backdrop-blur">
+          <div className="table-scroll-region rounded-lg border border-white/[0.03] backdrop-blur">
             <table className="w-full min-w-[640px] border-collapse text-sm">
-              <thead className="bg-slate-100 text-slate-600"><tr><th className="px-3 py-2 text-left font-semibold">Recurring Baseline</th><th className="px-3 py-2 text-right font-semibold">Amount</th><th className="px-3 py-2 text-left font-semibold">Cadence</th></tr></thead>
-              <tbody>{planningInsights.recurringBaselineRows.slice(0, 10).map((rowItem) => <tr key={rowItem.id} className="border-t border-slate-200 bg-white"><td className="px-3 py-2 text-slate-700">{rowItem.category}</td><td className="px-3 py-2 text-right font-semibold text-slate-700">{formatCurrencyValueForDashboard(rowItem.amount)}</td><td className="px-3 py-2 text-slate-500">{rowItem.cadence}</td></tr>)}</tbody>
+              <thead className="bg-[#1a1a1a] text-[#a1a1aa]"><tr><th className="px-3 py-2 text-left font-semibold">Recurring Baseline</th><th className="px-3 py-2 text-right font-semibold">Amount</th><th className="px-3 py-2 text-left font-semibold">Cadence</th></tr></thead>
+              <tbody>{planningInsights.recurringBaselineRows.slice(0, 10).map((rowItem) => <tr key={rowItem.id} className="border-t border-white/[0.025] bg-[#141414]"><td className="px-3 py-2 text-[#d4d4d4]">{rowItem.category}</td><td className="px-3 py-2 text-right font-semibold text-[#d4d4d4]">{formatCurrencyValueForDashboard(rowItem.amount)}</td><td className="px-3 py-2 text-[#71717a]">{rowItem.cadence}</td></tr>)}</tbody>
             </table>
           </div>
-          <div className="table-scroll-region rounded-2xl border border-slate-200/90 bg-white/75 backdrop-blur">
+          <div className="table-scroll-region rounded-lg border border-white/[0.03] backdrop-blur">
             <table className="w-full min-w-[640px] border-collapse text-sm">
-              <thead className="bg-slate-100 text-slate-600"><tr><th className="px-3 py-2 text-left font-semibold">Scenario</th><th className="px-3 py-2 text-right font-semibold">Monthly Delta</th><th className="px-3 py-2 text-right font-semibold">Debt-free Delta</th><th className="px-3 py-2 text-right font-semibold">Runway (months)</th></tr></thead>
-              <tbody>{planningInsights.scenarioRows.map((rowItem) => <tr key={rowItem.id} className="border-t border-slate-200 bg-white"><td className="px-3 py-2 text-slate-700">{rowItem.label}</td><td className={`px-3 py-2 text-right font-semibold ${rowItem.monthlyDelta >= 0 ? 'text-emerald-700' : 'text-rose-700'}`}>{formatCurrencyValueForDashboard(rowItem.monthlyDelta)}</td><td className="px-3 py-2 text-right font-semibold text-slate-700">{rowItem.debtFreeMonthsDelta.toFixed(1)} mo</td><td className="px-3 py-2 text-right font-semibold text-slate-700">{rowItem.runwayMonths.toFixed(2)}</td></tr>)}</tbody>
+              <thead className="bg-[#1a1a1a] text-[#a1a1aa]"><tr><th className="px-3 py-2 text-left font-semibold">Scenario</th><th className="px-3 py-2 text-right font-semibold">Monthly Delta</th><th className="px-3 py-2 text-right font-semibold">Debt-free Delta</th><th className="px-3 py-2 text-right font-semibold">Runway (months)</th></tr></thead>
+              <tbody>{planningInsights.scenarioRows.map((rowItem) => <tr key={rowItem.id} className="border-t border-white/[0.025] bg-[#141414]"><td className="px-3 py-2 text-[#d4d4d4]">{rowItem.label}</td><td className={`px-3 py-2 text-right font-semibold ${rowItem.monthlyDelta >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>{formatCurrencyValueForDashboard(rowItem.monthlyDelta)}</td><td className="px-3 py-2 text-right font-semibold text-[#d4d4d4]">{rowItem.debtFreeMonthsDelta.toFixed(1)} mo</td><td className="px-3 py-2 text-right font-semibold text-[#d4d4d4]">{rowItem.runwayMonths.toFixed(2)}</td></tr>)}</tbody>
             </table>
           </div>
         </div>
-        <div className="mb-4 table-scroll-region rounded-2xl border border-slate-200/90 bg-white/75 backdrop-blur">
+        <div className="mb-4 table-scroll-region rounded-lg border border-white/[0.03] backdrop-blur">
           <table className="w-full min-w-[920px] border-collapse text-sm">
-            <thead className="bg-slate-100 text-slate-600"><tr><th className="px-3 py-2 text-left font-semibold">Debt / Loan</th><th className="px-3 py-2 text-right font-semibold">Balance</th><th className="px-3 py-2 text-right font-semibold">Payment</th><th className="px-3 py-2 text-right font-semibold">APR</th><th className="px-3 py-2 text-right font-semibold">Remaining Pmts</th><th className="px-3 py-2 text-right font-semibold">Payoff (months)</th></tr></thead>
-            <tbody>{planningInsights.amortizationRows.map((rowItem) => <tr key={rowItem.id} className="border-t border-slate-200 bg-white"><td className="px-3 py-2 text-slate-700">{rowItem.item}</td><td className="px-3 py-2 text-right font-semibold text-slate-700">{formatCurrencyValueForDashboard(rowItem.startBalance)}</td><td className="px-3 py-2 text-right font-semibold text-slate-700">{formatCurrencyValueForDashboard(rowItem.payment)}</td><td className="px-3 py-2 text-right font-semibold text-slate-700">{rowItem.interestRatePercent.toFixed(2)}%</td><td className="px-3 py-2 text-right font-semibold text-slate-700">{Math.round(rowItem.remainingPayments)}</td><td className="px-3 py-2 text-right font-semibold text-slate-700">{rowItem.projectedPayoffMonths.toFixed(1)}</td></tr>)}</tbody>
+            <thead className="bg-[#1a1a1a] text-[#a1a1aa]"><tr><th className="px-3 py-2 text-left font-semibold">Debt / Loan</th><th className="px-3 py-2 text-right font-semibold">Balance</th><th className="px-3 py-2 text-right font-semibold">Payment</th><th className="px-3 py-2 text-right font-semibold">APR</th><th className="px-3 py-2 text-right font-semibold">Remaining Pmts</th><th className="px-3 py-2 text-right font-semibold">Payoff (months)</th></tr></thead>
+            <tbody>{planningInsights.amortizationRows.map((rowItem) => <tr key={rowItem.id} className="border-t border-white/[0.025] bg-[#141414]"><td className="px-3 py-2 text-[#d4d4d4]">{rowItem.item}</td><td className="px-3 py-2 text-right font-semibold text-[#d4d4d4]">{formatCurrencyValueForDashboard(rowItem.startBalance)}</td><td className="px-3 py-2 text-right font-semibold text-[#d4d4d4]">{formatCurrencyValueForDashboard(rowItem.payment)}</td><td className="px-3 py-2 text-right font-semibold text-[#d4d4d4]">{rowItem.interestRatePercent.toFixed(2)}%</td><td className="px-3 py-2 text-right font-semibold text-[#d4d4d4]">{Math.round(rowItem.remainingPayments)}</td><td className="px-3 py-2 text-right font-semibold text-[#d4d4d4]">{rowItem.projectedPayoffMonths.toFixed(1)}</td></tr>)}</tbody>
           </table>
         </div>
         <div className="mb-4 grid grid-cols-1 gap-3 lg:grid-cols-2">
-          <div className="table-scroll-region rounded-2xl border border-slate-200/90 bg-white/75 backdrop-blur">
+          <div className="table-scroll-region rounded-lg border border-white/[0.03] backdrop-blur">
             <table className="w-full min-w-[700px] border-collapse text-sm">
-              <thead className="bg-slate-100 text-slate-600"><tr><th className="px-3 py-2 text-left font-semibold">Goal Template</th><th className="px-3 py-2 text-right font-semibold">Target</th><th className="px-3 py-2 text-right font-semibold">Months</th><th className="px-3 py-2 text-right font-semibold">Req. / Month</th></tr></thead>
-              <tbody>{planningInsights.goalTemplateRows.map((rowItem) => <tr key={rowItem.id} className="border-t border-slate-200 bg-white"><td className="px-3 py-2 text-slate-700">{rowItem.title}</td><td className="px-3 py-2 text-right font-semibold text-slate-700">{formatCurrencyValueForDashboard(rowItem.targetAmount)}</td><td className="px-3 py-2 text-right font-semibold text-slate-700">{Math.round(rowItem.targetMonths)}</td><td className="px-3 py-2 text-right font-semibold text-sky-700">{formatCurrencyValueForDashboard(rowItem.requiredMonthlyContribution)}</td></tr>)}</tbody>
+              <thead className="bg-[#1a1a1a] text-[#a1a1aa]"><tr><th className="px-3 py-2 text-left font-semibold">Goal Template</th><th className="px-3 py-2 text-right font-semibold">Target</th><th className="px-3 py-2 text-right font-semibold">Months</th><th className="px-3 py-2 text-right font-semibold">Req. / Month</th></tr></thead>
+              <tbody>{planningInsights.goalTemplateRows.map((rowItem) => <tr key={rowItem.id} className="border-t border-white/[0.025] bg-[#141414]"><td className="px-3 py-2 text-[#d4d4d4]">{rowItem.title}</td><td className="px-3 py-2 text-right font-semibold text-[#d4d4d4]">{formatCurrencyValueForDashboard(rowItem.targetAmount)}</td><td className="px-3 py-2 text-right font-semibold text-[#d4d4d4]">{Math.round(rowItem.targetMonths)}</td><td className="px-3 py-2 text-right font-semibold text-[#a1a1aa]">{formatCurrencyValueForDashboard(rowItem.requiredMonthlyContribution)}</td></tr>)}</tbody>
             </table>
           </div>
-          <div className="table-scroll-region rounded-2xl border border-slate-200/90 bg-white/75 backdrop-blur">
+          <div className="table-scroll-region rounded-lg border border-white/[0.03] backdrop-blur">
             <table className="w-full min-w-[700px] border-collapse text-sm">
-              <thead className="bg-slate-100 text-slate-600"><tr><th className="px-3 py-2 text-left font-semibold">Risk Provenance</th><th className="px-3 py-2 text-left font-semibold">Formula</th><th className="px-3 py-2 text-left font-semibold">Threshold</th><th className="px-3 py-2 text-right font-semibold">Completeness</th></tr></thead>
-              <tbody>{planningInsights.riskProvenanceRows.map((rowItem) => <tr key={rowItem.id} className="border-t border-slate-200 bg-white"><td className="px-3 py-2 text-slate-700">{rowItem.title}</td><td className="px-3 py-2 text-slate-500">{rowItem.formula}</td><td className="px-3 py-2 text-slate-500">{rowItem.threshold}</td><td className="px-3 py-2 text-right font-semibold text-slate-700">{rowItem.dataCompletenessPercent}%</td></tr>)}</tbody>
+              <thead className="bg-[#1a1a1a] text-[#a1a1aa]"><tr><th className="px-3 py-2 text-left font-semibold">Risk Provenance</th><th className="px-3 py-2 text-left font-semibold">Formula</th><th className="px-3 py-2 text-left font-semibold">Threshold</th><th className="px-3 py-2 text-right font-semibold">Completeness</th></tr></thead>
+              <tbody>{planningInsights.riskProvenanceRows.map((rowItem) => <tr key={rowItem.id} className="border-t border-white/[0.025] bg-[#141414]"><td className="px-3 py-2 text-[#d4d4d4]">{rowItem.title}</td><td className="px-3 py-2 text-[#71717a]">{rowItem.formula}</td><td className="px-3 py-2 text-[#71717a]">{rowItem.threshold}</td><td className="px-3 py-2 text-right font-semibold text-[#d4d4d4]">{rowItem.dataCompletenessPercent}%</td></tr>)}</tbody>
             </table>
           </div>
         </div>
-        <div className="table-scroll-region rounded-2xl border border-slate-200/90 bg-white/75 backdrop-blur">
+        <div className="table-scroll-region rounded-lg border border-white/[0.03] backdrop-blur">
           <table className="w-full min-w-[700px] border-collapse text-sm">
-            <thead className="bg-slate-100 text-slate-600"><tr><th className="px-3 py-2 text-left font-semibold">Reconcile / Close Month</th><th className="px-3 py-2 text-left font-semibold">Status</th><th className="px-3 py-2 text-left font-semibold">Detail</th></tr></thead>
-            <tbody>{planningInsights.reconcileChecklistRows.map((rowItem) => <tr key={rowItem.id} className="border-t border-slate-200 bg-white"><td className="px-3 py-2 text-slate-700">{rowItem.label}</td><td className={`px-3 py-2 font-semibold ${rowItem.status === 'ready' ? 'text-emerald-700' : 'text-amber-700'}`}>{rowItem.status}</td><td className="px-3 py-2 text-slate-500">{rowItem.detail}</td></tr>)}</tbody>
+            <thead className="bg-[#1a1a1a] text-[#a1a1aa]"><tr><th className="px-3 py-2 text-left font-semibold">Reconcile / Close Month</th><th className="px-3 py-2 text-left font-semibold">Status</th><th className="px-3 py-2 text-left font-semibold">Detail</th></tr></thead>
+            <tbody>{planningInsights.reconcileChecklistRows.map((rowItem) => <tr key={rowItem.id} className="border-t border-white/[0.025] bg-[#141414]"><td className="px-3 py-2 text-[#d4d4d4]">{rowItem.label}</td><td className={`px-3 py-2 font-semibold ${rowItem.status === 'ready' ? 'text-emerald-400' : 'text-amber-400'}`}>{rowItem.status}</td><td className="px-3 py-2 text-[#71717a]">{rowItem.detail}</td></tr>)}</tbody>
           </table>
         </div>
       </section>) : null}
@@ -3957,16 +4062,16 @@ export default function App() {
       {false ? (<section id="trends" className="section-tight glass-panel-soft squircle-md z-layer-section mb-4 scroll-mt-40 p-4 md:mb-6 md:p-6" style={{ order: 8 }}>
         <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
           <div>
-            <h2 className="text-lg font-bold text-slate-900">Historical Trends</h2>
-            <p className="text-xs text-slate-500">Net worth, DTI, savings rate, and utilization over 3/6/12 month windows.</p>
+            <h2 className="text-lg font-bold text-[#ededed]">Historical Trends</h2>
+            <p className="text-xs text-[#71717a]">Net worth, DTI, savings rate, and utilization over 3/6/12 month windows.</p>
           </div>
           <div className="flex items-center gap-1">
-            <button className={`rounded-lg border px-2.5 py-1.5 text-xs font-semibold ${trendWindowMonths === 3 ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-200 bg-white text-slate-700'}`} onClick={() => setTrendWindowMonths(3)} type="button">3M</button>
-            <button className={`rounded-lg border px-2.5 py-1.5 text-xs font-semibold ${trendWindowMonths === 6 ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-200 bg-white text-slate-700'}`} onClick={() => setTrendWindowMonths(6)} type="button">6M</button>
-            <button className={`rounded-lg border px-2.5 py-1.5 text-xs font-semibold ${trendWindowMonths === 12 ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-200 bg-white text-slate-700'}`} onClick={() => setTrendWindowMonths(12)} type="button">12M</button>
+            <button className={`rounded-lg border px-2.5 py-1.5 text-xs font-semibold ${trendWindowMonths === 3 ? 'border-amber-500 bg-amber-500/10 text-amber-400' : 'border-white/[0.025] bg-[#141414] text-[#d4d4d4]'}`} onClick={() => setTrendWindowMonths(3)} type="button">3M</button>
+            <button className={`rounded-lg border px-2.5 py-1.5 text-xs font-semibold ${trendWindowMonths === 6 ? 'border-amber-500 bg-amber-500/10 text-amber-400' : 'border-white/[0.025] bg-[#141414] text-[#d4d4d4]'}`} onClick={() => setTrendWindowMonths(6)} type="button">6M</button>
+            <button className={`rounded-lg border px-2.5 py-1.5 text-xs font-semibold ${trendWindowMonths === 12 ? 'border-amber-500 bg-amber-500/10 text-amber-400' : 'border-white/[0.025] bg-[#141414] text-[#d4d4d4]'}`} onClick={() => setTrendWindowMonths(12)} type="button">12M</button>
           </div>
         </div>
-        <div className="mb-4 rounded-2xl border border-slate-200/90 bg-white/75 p-3 backdrop-blur">
+        <div className="mb-4 rounded-2xl border border-white/[0.06] bg-[rgba(20,20,20,0.6)] p-3 backdrop-blur">
           <div className="flex items-end gap-1">
             {trendRowsInSelectedWindow.map((rowItem) => {
               const range = Math.max(1, trendNetWorthMinMax.max - trendNetWorthMinMax.min)
@@ -3974,16 +4079,16 @@ export default function App() {
               return (
                 <div key={`trend-networth-${rowItem.monthKey}`} className="flex min-w-[42px] flex-col items-center gap-1">
                   <div className="w-full rounded-t-md bg-cyan-500/80" style={{ height: `${Math.max(10, normalizedHeight)}px` }} />
-                  <span className="text-[10px] font-semibold text-slate-500">{rowItem.monthKey.slice(5)}</span>
+                  <span className="text-[10px] font-semibold text-[#71717a]">{rowItem.monthKey.slice(5)}</span>
                 </div>
               )
             })}
           </div>
         </div>
-        <div className="table-scroll-region rounded-2xl border border-slate-200/90 bg-white/75 backdrop-blur">
+        <div className="table-scroll-region rounded-lg border border-white/[0.03] backdrop-blur">
           <table className="w-full min-w-[860px] border-collapse text-sm">
-            <thead className="bg-slate-100 text-slate-600"><tr><th className="px-3 py-2 text-left font-semibold">Month</th><th className="px-3 py-2 text-right font-semibold">Net Worth</th><th className="px-3 py-2 text-right font-semibold">DTI</th><th className="px-3 py-2 text-right font-semibold">Savings Rate</th><th className="px-3 py-2 text-right font-semibold">Utilization</th></tr></thead>
-            <tbody>{trendRowsInSelectedWindow.map((rowItem) => <tr key={`trend-row-${rowItem.monthKey}`} className="border-t border-slate-200 bg-white"><td className="px-3 py-2 text-slate-700">{rowItem.monthKey}</td><td className={`px-3 py-2 text-right font-semibold ${rowItem.netWorth >= 0 ? 'text-emerald-700' : 'text-rose-700'}`}>{formatCurrencyValueForDashboard(rowItem.netWorth)}</td><td className="px-3 py-2 text-right font-semibold text-slate-700">{rowItem.debtToIncomePercent.toFixed(2)}%</td><td className={`px-3 py-2 text-right font-semibold ${rowItem.savingsRatePercent >= 0 ? 'text-emerald-700' : 'text-rose-700'}`}>{rowItem.savingsRatePercent.toFixed(2)}%</td><td className="px-3 py-2 text-right font-semibold text-slate-700">{rowItem.utilizationPercent.toFixed(2)}%</td></tr>)}</tbody>
+            <thead className="bg-[#1a1a1a] text-[#a1a1aa]"><tr><th className="px-3 py-2 text-left font-semibold">Month</th><th className="px-3 py-2 text-right font-semibold">Net Worth</th><th className="px-3 py-2 text-right font-semibold">DTI</th><th className="px-3 py-2 text-right font-semibold">Savings Rate</th><th className="px-3 py-2 text-right font-semibold">Utilization</th></tr></thead>
+            <tbody>{trendRowsInSelectedWindow.map((rowItem) => <tr key={`trend-row-${rowItem.monthKey}`} className="border-t border-white/[0.025] bg-[#141414]"><td className="px-3 py-2 text-[#d4d4d4]">{rowItem.monthKey}</td><td className={`px-3 py-2 text-right font-semibold ${rowItem.netWorth >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>{formatCurrencyValueForDashboard(rowItem.netWorth)}</td><td className="px-3 py-2 text-right font-semibold text-[#d4d4d4]">{rowItem.debtToIncomePercent.toFixed(2)}%</td><td className={`px-3 py-2 text-right font-semibold ${rowItem.savingsRatePercent >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>{rowItem.savingsRatePercent.toFixed(2)}%</td><td className="px-3 py-2 text-right font-semibold text-[#d4d4d4]">{rowItem.utilizationPercent.toFixed(2)}%</td></tr>)}</tbody>
           </table>
         </div>
       </section>) : null}
@@ -3991,15 +4096,15 @@ export default function App() {
       {false ? (<section id="audit" className="section-tight glass-panel-soft squircle-md z-layer-section mb-4 scroll-mt-40 p-4 md:mb-6 md:p-6" style={{ order: 9 }}>
         <div className="mb-4 flex items-center justify-between gap-2">
           <div>
-            <h2 className="text-lg font-bold text-slate-900">Audit And Restore</h2>
-            <p className="text-xs text-slate-500">Persistent rollback points with summary metrics for each state change.</p>
+            <h2 className="text-lg font-bold text-[#ededed]">Audit And Restore</h2>
+            <p className="text-xs text-[#71717a]">Persistent rollback points with summary metrics for each state change.</p>
           </div>
-          <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">{auditTimelineEntries.length} snapshots</span>
+          <span className="rounded-full bg-[#1a1a1a] px-3 py-1 text-xs font-semibold text-[#a1a1aa]">{auditTimelineEntries.length} snapshots</span>
         </div>
-        <div className="table-scroll-region rounded-2xl border border-slate-200/90 bg-white/75 backdrop-blur">
+        <div className="table-scroll-region rounded-lg border border-white/[0.03] backdrop-blur">
           <table className="w-full min-w-[920px] border-collapse text-sm">
-            <thead className="bg-slate-100 text-slate-600"><tr><th className="px-3 py-2 text-left font-semibold">Timestamp</th><th className="px-3 py-2 text-left font-semibold">Context</th><th className="px-3 py-2 text-right font-semibold">Income</th><th className="px-3 py-2 text-right font-semibold">Expenses</th><th className="px-3 py-2 text-right font-semibold">Net Worth</th><th className="px-3 py-2 text-right font-semibold">Actions</th></tr></thead>
-            <tbody>{auditTimelineEntries.slice(0, 20).map((entryItem) => <tr key={String(entryItem.id)} className="border-t border-slate-200 bg-white"><td className="px-3 py-2 text-slate-700">{String(entryItem.timestamp ?? '')}</td><td className="px-3 py-2 text-slate-700">{String(entryItem.contextTag ?? '')}</td><td className="px-3 py-2 text-right font-semibold text-slate-700">{formatCurrencyValueForDashboard(typeof entryItem.summary?.totalIncome === 'number' ? entryItem.summary.totalIncome : 0)}</td><td className="px-3 py-2 text-right font-semibold text-slate-700">{formatCurrencyValueForDashboard(typeof entryItem.summary?.totalExpenses === 'number' ? entryItem.summary.totalExpenses : 0)}</td><td className={`px-3 py-2 text-right font-semibold ${(typeof entryItem.summary?.netWorth === 'number' ? entryItem.summary.netWorth : 0) >= 0 ? 'text-emerald-700' : 'text-rose-700'}`}>{formatCurrencyValueForDashboard(typeof entryItem.summary?.netWorth === 'number' ? entryItem.summary.netWorth : 0)}</td><td className="px-3 py-2 text-right"><button className="rounded-lg border border-amber-300 bg-amber-50 px-2.5 py-1.5 text-xs font-semibold text-amber-700" onClick={() => { void restoreCollectionsSnapshotFromAuditEntryById(String(entryItem.id)) }} type="button">Restore</button></td></tr>)}</tbody>
+            <thead className="bg-[#1a1a1a] text-[#a1a1aa]"><tr><th className="px-3 py-2 text-left font-semibold">Timestamp</th><th className="px-3 py-2 text-left font-semibold">Context</th><th className="px-3 py-2 text-right font-semibold">Income</th><th className="px-3 py-2 text-right font-semibold">Expenses</th><th className="px-3 py-2 text-right font-semibold">Net Worth</th><th className="px-3 py-2 text-right font-semibold">Actions</th></tr></thead>
+            <tbody>{auditTimelineEntries.slice(0, 20).map((entryItem) => <tr key={String(entryItem.id)} className="border-t border-white/[0.025] bg-[#141414]"><td className="px-3 py-2 text-[#d4d4d4]">{String(entryItem.timestamp ?? '')}</td><td className="px-3 py-2 text-[#d4d4d4]">{String(entryItem.contextTag ?? '')}</td><td className="px-3 py-2 text-right font-semibold text-[#d4d4d4]">{formatCurrencyValueForDashboard(typeof entryItem.summary?.totalIncome === 'number' ? entryItem.summary.totalIncome : 0)}</td><td className="px-3 py-2 text-right font-semibold text-[#d4d4d4]">{formatCurrencyValueForDashboard(typeof entryItem.summary?.totalExpenses === 'number' ? entryItem.summary.totalExpenses : 0)}</td><td className={`px-3 py-2 text-right font-semibold ${(typeof entryItem.summary?.netWorth === 'number' ? entryItem.summary.netWorth : 0) >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>{formatCurrencyValueForDashboard(typeof entryItem.summary?.netWorth === 'number' ? entryItem.summary.netWorth : 0)}</td><td className="px-3 py-2 text-right"><button className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-2.5 py-1.5 text-xs font-semibold text-amber-400" onClick={() => { void restoreCollectionsSnapshotFromAuditEntryById(String(entryItem.id)) }} type="button">Restore</button></td></tr>)}</tbody>
           </table>
         </div>
       </section>) : null}
@@ -4007,45 +4112,45 @@ export default function App() {
       <section id="loan-calculator" className="section-tight glass-panel-soft squircle-md z-layer-section mb-4 scroll-mt-40 p-4 md:mb-6 md:p-6" style={{ order: 10 }}>
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h2 className="text-lg font-bold text-slate-900">Loan Payoff Calculator</h2>
-            <p className="text-xs text-slate-500">Base vs. base + extra payment — months and interest saved.</p>
+            <h2 className="text-lg font-bold text-[#ededed]">Loan Payoff Calculator</h2>
+            <p className="text-xs text-[#71717a]">Base vs. base + extra payment G�� months and interest saved.</p>
           </div>
         </div>
-        <div className="rounded-2xl border border-slate-200/90 bg-white/75 backdrop-blur">
-          <div className="grid grid-cols-1 gap-3 border-b border-slate-200/90 p-4 sm:grid-cols-2 lg:grid-cols-5">
-            <label className="text-sm font-medium text-slate-700 sm:col-span-2 lg:col-span-1">Existing Debt<select className="mt-1 h-11 w-full rounded-2xl border border-slate-200/90 bg-slate-50/90 px-3 text-slate-900 outline-none transition focus:border-sky-400 focus:bg-white" value={loanCalculatorFormState.selectedLoanKey} onChange={(event) => selectLoanRecordForCalculatorByKey(event.target.value)}><option value="">Manual entry...</option>{loanCalculatorSourceRows.map((rowItem) => <option key={rowItem.key} value={rowItem.key}>{rowItem.label}</option>)}</select></label>
-            <label className="text-sm font-medium text-slate-700">Balance<input className="mt-1 h-11 w-full rounded-2xl border border-slate-200/90 bg-slate-50/90 px-3 text-slate-900 outline-none transition focus:border-sky-400 focus:bg-white" min="0" step="0.01" type="number" value={loanCalculatorFormState.principalBalance} onChange={(event) => updateLoanCalculatorFormFieldValue('principalBalance', event.target.value)} /></label>
-            <label className="text-sm font-medium text-slate-700">APR %<input className="mt-1 h-11 w-full rounded-2xl border border-slate-200/90 bg-slate-50/90 px-3 text-slate-900 outline-none transition focus:border-sky-400 focus:bg-white" min="0" step="0.01" type="number" value={loanCalculatorFormState.annualInterestRatePercent} onChange={(event) => updateLoanCalculatorFormFieldValue('annualInterestRatePercent', event.target.value)} /></label>
-            <label className="text-sm font-medium text-slate-700">Base Payment<input className="mt-1 h-11 w-full rounded-2xl border border-slate-200/90 bg-slate-50/90 px-3 text-slate-900 outline-none transition focus:border-sky-400 focus:bg-white" min="0" step="0.01" type="number" value={loanCalculatorFormState.baseMonthlyPayment} onChange={(event) => updateLoanCalculatorFormFieldValue('baseMonthlyPayment', event.target.value)} /></label>
-            <label className="text-sm font-medium text-slate-700">Extra Payment<input className="mt-1 h-11 w-full rounded-2xl border border-slate-200/90 bg-slate-50/90 px-3 text-slate-900 outline-none transition focus:border-sky-400 focus:bg-white" min="0" step="0.01" type="number" value={loanCalculatorFormState.extraMonthlyPayment} onChange={(event) => updateLoanCalculatorFormFieldValue('extraMonthlyPayment', event.target.value)} /></label>
+        <div className="rounded-2xl border border-white/[0.06] bg-[rgba(20,20,20,0.6)] backdrop-blur">
+          <div className="grid grid-cols-1 gap-3 border-b border-white/[0.06] p-4 sm:grid-cols-2 lg:grid-cols-5">
+            <label className="text-sm font-medium text-[#d4d4d4] sm:col-span-2 lg:col-span-1">Existing Debt<select className="mt-1 h-11 w-full rounded-2xl border border-white/[0.06] bg-[rgba(15,15,15,0.8)] px-3 text-[#ededed] outline-none transition focus:border-amber-500 focus:bg-[#141414]" value={loanCalculatorFormState.selectedLoanKey} onChange={(event) => selectLoanRecordForCalculatorByKey(event.target.value)}><option value="">Manual entry...</option>{loanCalculatorSourceRows.map((rowItem) => <option key={rowItem.key} value={rowItem.key}>{rowItem.label}</option>)}</select></label>
+            <label className="text-sm font-medium text-[#d4d4d4]">Balance<input className="mt-1 h-11 w-full rounded-2xl border border-white/[0.06] bg-[rgba(15,15,15,0.8)] px-3 text-[#ededed] outline-none transition focus:border-amber-500 focus:bg-[#141414]" min="0" step="0.01" type="number" value={loanCalculatorFormState.principalBalance} onChange={(event) => updateLoanCalculatorFormFieldValue('principalBalance', event.target.value)} /></label>
+            <label className="text-sm font-medium text-[#d4d4d4]">APR %<input className="mt-1 h-11 w-full rounded-2xl border border-white/[0.06] bg-[rgba(15,15,15,0.8)] px-3 text-[#ededed] outline-none transition focus:border-amber-500 focus:bg-[#141414]" min="0" step="0.01" type="number" value={loanCalculatorFormState.annualInterestRatePercent} onChange={(event) => updateLoanCalculatorFormFieldValue('annualInterestRatePercent', event.target.value)} /></label>
+            <label className="text-sm font-medium text-[#d4d4d4]">Base Payment<input className="mt-1 h-11 w-full rounded-2xl border border-white/[0.06] bg-[rgba(15,15,15,0.8)] px-3 text-[#ededed] outline-none transition focus:border-amber-500 focus:bg-[#141414]" min="0" step="0.01" type="number" value={loanCalculatorFormState.baseMonthlyPayment} onChange={(event) => updateLoanCalculatorFormFieldValue('baseMonthlyPayment', event.target.value)} /></label>
+            <label className="text-sm font-medium text-[#d4d4d4]">Extra Payment<input className="mt-1 h-11 w-full rounded-2xl border border-white/[0.06] bg-[rgba(15,15,15,0.8)] px-3 text-[#ededed] outline-none transition focus:border-amber-500 focus:bg-[#141414]" min="0" step="0.01" type="number" value={loanCalculatorFormState.extraMonthlyPayment} onChange={(event) => updateLoanCalculatorFormFieldValue('extraMonthlyPayment', event.target.value)} /></label>
           </div>
           {loanCalculatorResult.error ? (
-            <div className="px-4 py-3 text-sm font-semibold text-rose-700">Unable to calculate — check all fields are valid numbers.</div>
+            <div className="px-4 py-3 text-sm font-semibold text-rose-400">Unable to calculate G�� check all fields are valid numbers.</div>
           ) : (
             <div className="flex flex-wrap divide-x divide-slate-200/70">
               <div className="flex min-w-[130px] flex-1 flex-col gap-0.5 px-4 py-3">
-                <span className="text-xs font-semibold uppercase tracking-wide text-slate-400">Base Payoff</span>
-                <span className="text-base font-bold text-slate-800">{loanCalculatorResult.comparison.baseMonths >= 9999 ? 'Not reachable' : `${loanCalculatorResult.comparison.baseMonths.toFixed(1)} mo`}</span>
+                <span className="text-xs font-semibold uppercase tracking-wide text-[#52525b]">Base Payoff</span>
+                <span className="text-base font-bold text-[#e0e0e0]">{loanCalculatorResult.comparison.baseMonths >= 9999 ? 'Not reachable' : `${loanCalculatorResult.comparison.baseMonths.toFixed(1)} mo`}</span>
               </div>
               <div className="flex min-w-[130px] flex-1 flex-col gap-0.5 px-4 py-3">
-                <span className="text-xs font-semibold uppercase tracking-wide text-slate-400">With Extra</span>
-                <span className="text-base font-bold text-sky-700">{loanCalculatorResult.comparison.acceleratedMonths >= 9999 ? 'Not reachable' : `${loanCalculatorResult.comparison.acceleratedMonths.toFixed(1)} mo`}</span>
+                <span className="text-xs font-semibold uppercase tracking-wide text-[#52525b]">With Extra</span>
+                <span className="text-base font-bold text-[#a1a1aa]">{loanCalculatorResult.comparison.acceleratedMonths >= 9999 ? 'Not reachable' : `${loanCalculatorResult.comparison.acceleratedMonths.toFixed(1)} mo`}</span>
               </div>
               <div className="flex min-w-[130px] flex-1 flex-col gap-0.5 px-4 py-3">
-                <span className="text-xs font-semibold uppercase tracking-wide text-slate-400">Months Saved</span>
-                <span className="text-base font-bold text-emerald-700">{loanCalculatorResult.comparison.monthsSaved.toFixed(1)}</span>
+                <span className="text-xs font-semibold uppercase tracking-wide text-[#52525b]">Months Saved</span>
+                <span className="text-base font-bold text-emerald-400">{loanCalculatorResult.comparison.monthsSaved.toFixed(1)}</span>
               </div>
               <div className="flex min-w-[130px] flex-1 flex-col gap-0.5 px-4 py-3">
-                <span className="text-xs font-semibold uppercase tracking-wide text-slate-400">Interest (Base)</span>
-                <span className="text-base font-bold text-slate-700">{Number.isFinite(loanCalculatorResult.comparison.baseInterestPaid) ? formatCurrencyValueForDashboard(loanCalculatorResult.comparison.baseInterestPaid) : '—'}</span>
+                <span className="text-xs font-semibold uppercase tracking-wide text-[#52525b]">Interest (Base)</span>
+                <span className="text-base font-bold text-[#d4d4d4]">{Number.isFinite(loanCalculatorResult.comparison.baseInterestPaid) ? formatCurrencyValueForDashboard(loanCalculatorResult.comparison.baseInterestPaid) : 'G��'}</span>
               </div>
               <div className="flex min-w-[130px] flex-1 flex-col gap-0.5 px-4 py-3">
-                <span className="text-xs font-semibold uppercase tracking-wide text-slate-400">Interest (w/ Extra)</span>
-                <span className="text-base font-bold text-sky-700">{Number.isFinite(loanCalculatorResult.comparison.acceleratedInterestPaid) ? formatCurrencyValueForDashboard(loanCalculatorResult.comparison.acceleratedInterestPaid) : '—'}</span>
+                <span className="text-xs font-semibold uppercase tracking-wide text-[#52525b]">Interest (w/ Extra)</span>
+                <span className="text-base font-bold text-[#a1a1aa]">{Number.isFinite(loanCalculatorResult.comparison.acceleratedInterestPaid) ? formatCurrencyValueForDashboard(loanCalculatorResult.comparison.acceleratedInterestPaid) : 'G��'}</span>
               </div>
               <div className="flex min-w-[130px] flex-1 flex-col gap-0.5 px-4 py-3">
-                <span className="text-xs font-semibold uppercase tracking-wide text-slate-400">Interest Saved</span>
-                <span className="text-base font-bold text-emerald-700">{formatCurrencyValueForDashboard(loanCalculatorResult.comparison.interestSaved)}</span>
+                <span className="text-xs font-semibold uppercase tracking-wide text-[#52525b]">Interest Saved</span>
+                <span className="text-base font-bold text-emerald-400">{formatCurrencyValueForDashboard(loanCalculatorResult.comparison.interestSaved)}</span>
               </div>
             </div>
           )}
@@ -4054,30 +4159,30 @@ export default function App() {
 
       <section id="details" className="section-tight glass-panel-soft squircle-md z-layer-section mb-4 scroll-mt-40 p-4 md:mb-6 md:p-6" style={{ order: 6 }}>
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-          <h2 className="text-lg font-bold text-slate-900">Detailed Dashboard Metrics</h2>
-          <span className="rounded-full bg-slate-100/90 px-3 py-1 text-xs font-semibold text-slate-600 backdrop-blur">{detailedRowsSorted.length} metrics</span>
+          <h2 className="text-lg font-bold text-[#ededed]">Detailed Dashboard Metrics</h2>
+          <span className="rounded-full bg-[rgba(26,26,26,0.9)] px-3 py-1 text-xs font-semibold text-[#a1a1aa] backdrop-blur">{detailedRowsSorted.length} metrics</span>
         </div>
-        <div className="table-scroll-region rounded-2xl border border-slate-200/90 bg-white/75 backdrop-blur">
+        <div className="table-scroll-region rounded-lg border border-white/[0.03] backdrop-blur">
           <table className="w-full min-w-[640px] border-collapse text-sm">
-            <thead className="bg-slate-100 text-slate-600"><tr>{renderSortableHeaderCell('detailed', 'metric', 'Metric')}{renderSortableHeaderCell('detailed', 'value', 'Value', true)}{renderSortableHeaderCell('detailed', 'description', 'Description')}</tr></thead>
+            <thead className="bg-[#1a1a1a] text-[#a1a1aa]"><tr>{renderSortableHeaderCell('detailed', 'metric', 'Metric')}{renderSortableHeaderCell('detailed', 'value', 'Value', true)}{renderSortableHeaderCell('detailed', 'description', 'Description')}</tr></thead>
             <tbody>{detailedRowsSorted.map((rowItem) => {
               const isCurrency = rowItem.valueFormat === 'currency'
               const isDuration = rowItem.valueFormat === 'duration'
               const isPercent = rowItem.valueFormat === 'percent'
               const numVal = typeof rowItem.value === 'number' ? rowItem.value : 0
               const valueColorClass = isCurrency
-                ? (numVal > 0 ? 'text-emerald-700' : numVal < 0 ? 'text-rose-700' : 'text-slate-600')
-                : (isPercent || isDuration ? 'text-slate-700' : 'text-slate-700')
+                ? (numVal > 0 ? 'text-emerald-400' : numVal < 0 ? 'text-rose-400' : 'text-[#a1a1aa]')
+                : (isPercent || isDuration ? 'text-[#d4d4d4]' : 'text-[#d4d4d4]')
               const formattedValue = isCurrency
                 ? formatCurrencyValueForDashboard(numVal)
                 : (isDuration
-                    ? (Number.isFinite(numVal) && numVal > 0 ? `${numVal.toFixed(1)} mo` : '—')
+                    ? (Number.isFinite(numVal) && numVal > 0 ? `${numVal.toFixed(1)} mo` : 'G��')
                     : formatPlainNumericValueForDashboard(numVal, rowItem.valueFormat) + (isPercent ? '%' : ''))
               return (
-                <tr key={rowItem.metric} className="border-t border-slate-200 bg-white">
-                  <td className="px-3 py-2 font-semibold text-slate-800">{rowItem.metric}</td>
+                <tr key={rowItem.metric} className="border-t border-white/[0.025] bg-[#141414]">
+                  <td className="px-3 py-2 font-semibold text-[#e0e0e0]">{rowItem.metric}</td>
                   <td className={`px-3 py-2 text-right font-semibold tabular-nums ${valueColorClass}`}>{formattedValue}</td>
-                  <td className="px-3 py-2 text-slate-500">{rowItem.description}</td>
+                  <td className="px-3 py-2 text-[#71717a]">{rowItem.description}</td>
                 </tr>
               )
             })}</tbody>
@@ -4085,22 +4190,46 @@ export default function App() {
         </div>
       </section>
 
-      <section id="records" className="section-tight glass-panel-soft squircle-md z-layer-section mb-4 scroll-mt-40 p-4 md:mb-6 md:p-6" style={{ order: 5 }}>
+      <section id="records" className="section-tight glass-panel-soft squircle-md z-layer-section mb-4 scroll-mt-40 p-4 md:mb-6 md:p-5" style={{ order: 5 }}>
+        {/* -- Header -- */}
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-          <div className="flex flex-wrap items-center gap-3">
-            <h2 className="text-lg font-bold text-slate-900">Records</h2>
-            <span className="text-sm font-semibold text-emerald-700">In {formatCurrencyValueForDashboard(recordsFlowSummary.totalIn)}</span>
-            <span className="text-xs text-slate-300">|</span>
-            <span className="text-sm font-semibold text-rose-700">Out {formatCurrencyValueForDashboard(recordsFlowSummary.totalOut)}</span>
-            <span className="text-xs text-slate-300">|</span>
-            <span className={`text-sm font-semibold ${recordsFlowSummary.diff > 0 ? 'text-emerald-700' : (recordsFlowSummary.diff < 0 ? 'text-rose-700' : 'text-slate-600')}`}>Net {formatCurrencyValueForDashboard(recordsFlowSummary.diff)}</span>
+          <div className="flex items-center gap-3">
+            <h2 className="text-sm font-bold tracking-wide text-[#ededed]">Records</h2>
+            <span className="h-3.5 w-px bg-white/[0.1]" aria-hidden="true" />
+            <span className="tabular-nums text-sm font-bold" style={{ color: '#34d399' }}>+{formatCurrencyValueForDashboard(recordsFlowSummary.totalIn)}</span>
+            <span className="tabular-nums text-sm font-bold" style={{ color: '#fb7185' }}>-{formatCurrencyValueForDashboard(recordsFlowSummary.totalOut)}</span>
+            <span className="tabular-nums text-sm font-bold" style={{ color: recordsFlowSummary.diff > 0 ? '#34d399' : (recordsFlowSummary.diff < 0 ? '#fb7185' : '#52525b') }}>
+              ={recordsFlowSummary.diff > 0 ? '+' : ''}{formatCurrencyValueForDashboard(recordsFlowSummary.diff)}
+            </span>
           </div>
-          <div className="flex flex-wrap items-center gap-2"><button className="inline-flex items-center gap-1.5 rounded-xl border border-white/30 bg-emerald-600 px-3 py-2 text-xs font-semibold text-white" onClick={() => openAddRecordModalWithPresetTypeAndCategory('income', 'Income')} type="button"><IconPlus /> Income</button><button className="inline-flex items-center gap-1.5 rounded-xl border border-white/30 bg-rose-600 px-3 py-2 text-xs font-semibold text-white" onClick={() => openAddRecordModalWithPresetTypeAndCategory('expense', 'Miscellaneous')} type="button"><IconPlus /> Expense</button><button className="inline-flex items-center gap-1.5 rounded-xl border border-white/30 bg-sky-600 px-3 py-2 text-xs font-semibold text-white" onClick={() => openAddRecordModalWithPresetTypeAndCategory('savings', 'Savings')} type="button"><IconPlus /> Savings</button><button className="inline-flex items-center gap-1.5 rounded-xl border border-slate-300 bg-white/85 px-3 py-2 text-xs font-semibold text-slate-700 disabled:cursor-not-allowed disabled:opacity-40" disabled={transactionUndoDepth <= 0} onClick={() => { void undoMostRecentTransactionChangeFromUndoStack() }} type="button"><IconRefresh /> Undo</button><span className="rounded-full bg-slate-100/90 px-3 py-1 text-xs font-semibold text-slate-600 backdrop-blur">{incomeAndExpenseRows.length} records</span></div>
+          <div className="flex items-center gap-1.5">
+            <button className="records-quick-btn records-quick-btn-income" onClick={() => openAddRecordModalWithPresetTypeAndCategory('income', 'Income')} type="button">+ Income</button>
+            <button className="records-quick-btn records-quick-btn-expense" onClick={() => openAddRecordModalWithPresetTypeAndCategory('expense', 'Miscellaneous')} type="button">+ Expense</button>
+            <button className="records-quick-btn records-quick-btn-savings" onClick={() => openAddRecordModalWithPresetTypeAndCategory('savings', 'Savings')} type="button">+ Savings</button>
+            <button
+              className="records-quick-btn records-quick-btn-undo disabled:opacity-20 disabled:cursor-not-allowed"
+              disabled={transactionUndoDepth <= 0}
+              onClick={() => { void undoMostRecentTransactionChangeFromUndoStack() }}
+              type="button"
+              title="Undo"
+            ><IconRefresh /></button>
+            <span className="ml-1 text-[11px] text-[#52525b]">{incomeAndExpenseRows.length}</span>
+          </div>
         </div>
-        <div className="table-scroll-region rounded-2xl border border-slate-200/90 bg-white/75 backdrop-blur">
-          <table className="w-full min-w-[840px] border-collapse text-sm">
-            <thead className="bg-slate-100 text-slate-600">
-              <tr>{renderSortableHeaderCell('records', 'person', 'User')}{renderSortableHeaderCell('records', 'recordType', 'Type')}{renderSortableHeaderCell('records', 'date', 'Date')}{renderSortableHeaderCell('records', 'category', 'Category')}{renderSortableHeaderCell('records', 'description', 'Description')}{renderSortableHeaderCell('records', 'signedAmount', 'Amount', true)}<th className="px-3 py-2 text-right font-semibold">Notes</th><th className="px-3 py-2 text-right font-semibold">Actions</th></tr>
+
+        {/* -- Table -- */}
+        <div className="table-scroll-region -mx-4 md:-mx-5">
+          <table className="w-full min-w-[780px] border-collapse">
+            <thead>
+              <tr className="border-b border-white/[0.03]">
+                {renderSortableHeaderCell('records', 'person', 'Person')}
+                {renderSortableHeaderCell('records', 'recordType', 'Type')}
+                {renderSortableHeaderCell('records', 'date', 'Date')}
+                {renderSortableHeaderCell('records', 'category', 'Category')}
+                {renderSortableHeaderCell('records', 'description', 'Note')}
+                {renderSortableHeaderCell('records', 'signedAmount', 'Amount', true)}
+                <th className="w-24 px-3 py-2" />
+              </tr>
             </thead>
             <tbody>
               {incomeExpenseRowsSorted.map((recordItem, recordIndex) => {
@@ -4110,13 +4239,18 @@ export default function App() {
                 const isSavings = recordType === 'savings'
                 const isAssetType = recordType === 'asset'
                 const isDebtLike = recordType === 'debt' || recordType === 'loan' || recordType === 'credit' || recordType === 'credit card'
-                const amountValue = typeof recordItem.amount === 'number' ? recordItem.amount : 0
+                const amountValue = typeof recordItem.amount === 'number'
+                  ? recordItem.amount
+                  : (typeof recordItem.amount === 'string' && recordItem.amount.trim().length > 0 ? Number(recordItem.amount) : 0)
                 const badgeClassName = isIncome
                   ? 'record-type-badge record-type-badge-income'
                   : (isSavings ? 'record-type-badge record-type-badge-savings' : 'record-type-badge record-type-badge-expense')
-                const amountClassName = amountValue === 0
-                  ? 'text-slate-600'
-                  : (isIncome ? 'text-emerald-700' : (isAssetType ? 'text-sky-700' : 'text-rose-700'))
+                const amountClassName = !amountValue || !Number.isFinite(amountValue)
+                  ? 'text-[#52525b]'
+                  : (isIncome ? 'text-emerald-400' : 'text-rose-400')
+                const amountColorStyle = !amountValue || !Number.isFinite(amountValue)
+                  ? '#52525b'
+                  : (isIncome ? '#34d399' : '#fb7185')
                 const editCollectionName = isIncome
                   ? 'income'
                   : (isSavings
@@ -4132,15 +4266,16 @@ export default function App() {
                             : (recordType === 'credit' ? 'credit' : 'expenses'))))))
                 const rowStableKey = `${recordType}-${String(recordItem.id ?? 'row')}-${recordIndex}`
                 return (
-                  <tr key={rowStableKey} className="group border-t border-slate-200 bg-white">
-                    <td className="px-3 py-2 text-slate-700">{formatPersonaLabelWithEmoji(person, personaEmojiByName)}</td>
-                    <td className="px-3 py-2"><span className={`rounded-full px-2 py-1 text-xs font-semibold ${badgeClassName}`}>{recordType}</span></td>
-                    <td className="px-3 py-2 text-slate-700">{typeof recordItem.date === 'string' ? recordItem.date : ''}</td>
-                    <td className="px-3 py-2 text-slate-700">{typeof recordItem.category === 'string' ? recordItem.category : (typeof recordItem.item === 'string' ? recordItem.item : '')}</td>
-                    <td className="px-3 py-2 text-slate-500">{typeof recordItem.description === 'string' ? recordItem.description : (isDebtLike ? 'Liability record' : '')}</td>
-                    <td className={`px-3 py-2 text-right font-semibold ${amountClassName}`}><span className="inline-flex items-center">{formatCurrencyValueForDashboard(amountValue)}{renderStaleUpdateIconIfNeeded(recordItem)}</span></td>
-                    <td className="px-3 py-2 text-right">{renderRecordMoreNotesHoverAction(editCollectionName, recordItem)}</td>
-                    <td className="px-3 py-2 text-right">{renderRecordActionsWithIconButtons(editCollectionName, recordItem)}</td>
+                  <tr key={rowStableKey} className="records-row group border-t border-white/[0.025]">
+                    <td className="px-4 py-3 text-xs text-[#71717a] md:px-5">{formatPersonaLabelWithEmoji(person, personaEmojiByName)}</td>
+                    <td className="px-3 py-3"><span className={`record-type-badge ${badgeClassName}`}>{recordType}</span></td>
+                    <td className="px-3 py-3 text-xs tabular-nums text-[#52525b]">{typeof recordItem.date === 'string' ? recordItem.date : ''}</td>
+                    <td className="px-3 py-3 text-xs font-medium text-[#d4d4d4]">{typeof recordItem.category === 'string' ? recordItem.category : (typeof recordItem.item === 'string' ? recordItem.item : '')}</td>
+                    <td className="max-w-[180px] truncate px-3 py-3 text-xs text-[#52525b]">{typeof recordItem.description === 'string' ? recordItem.description : (isDebtLike ? 'Liability record' : '')}</td>
+                    <td className={`px-3 py-3 text-right text-xs font-semibold tabular-nums ${amountClassName}`} style={{ color: amountColorStyle }}>
+                      <span className="inline-flex items-center gap-1">{formatCurrencyValueForDashboard(amountValue)}{renderStaleUpdateIconIfNeeded(recordItem)}</span>
+                    </td>
+                    <td className="px-3 py-3 pr-4 text-right md:pr-5">{renderRecordActionsWithIconButtons(editCollectionName, recordItem)}</td>
                   </tr>
                 )
               })}
@@ -4150,91 +4285,156 @@ export default function App() {
       </section>
       </div>
 
-      <button className="fixed bottom-4 right-4 z-50 rounded-full border border-white/40 bg-teal-600 px-4 py-3 text-xs font-bold text-white shadow-xl backdrop-blur hover:bg-teal-700" onClick={scrollViewportToTopFromUtilityButton} type="button">Top</button>
+      {isScrolledPastThreshold && (
+        <button
+          className="fixed bottom-5 right-5 z-50 flex h-10 w-10 items-center justify-center rounded-full border border-amber-500/40 bg-amber-500/90 text-black shadow-lg backdrop-blur transition-opacity hover:bg-amber-400 focus:outline-none"
+          style={{ animation: 'fadeInUp 0.2s ease-out' }}
+          onClick={scrollViewportToTopFromUtilityButton}
+          type="button"
+          aria-label="Scroll to top"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M18 15l-6-6-6 6"/></svg>
+        </button>
+      )}
 
       {isAddRecordModalOpen ? (
-        <section className="fixed inset-0 z-[5000] flex items-center justify-center p-3 sm:p-4" role="dialog" aria-modal="true" aria-label="Add Income Or Expense Modal">
-          <button className="absolute inset-0 bg-slate-950/55 backdrop-blur-sm" onClick={() => setIsAddRecordModalOpen(false)} type="button" aria-label="Close add record modal backdrop" />
-          <div className="relative z-[5001] w-full max-w-2xl rounded-3xl border border-white/40 bg-white p-4 shadow-2xl sm:p-6">
-            <div className="mb-4 flex items-center justify-between gap-3"><h3 className="text-lg font-bold text-slate-900">{entryFormState.recordType === 'income' ? 'Add Income Record' : entryFormState.recordType === 'savings' ? 'Add Savings Record' : entryFormState.recordType === 'asset' ? 'Add Asset Record' : entryFormState.recordType === 'debt' ? 'Add Debt Record' : entryFormState.recordType === 'loan' ? 'Add Loan Record' : entryFormState.recordType === 'credit_card' ? 'Add Credit Card Record' : 'Add Expense Record'}</h3><button className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700" onClick={() => setIsAddRecordModalOpen(false)} type="button"><IconX /> Close</button></div>
-            <form className="grid grid-cols-1 gap-4 sm:grid-cols-2" onSubmit={submitNewIncomeOrExpenseRecord}>
-              <label className="text-sm font-medium text-slate-700">Person<select className="mt-1 h-11 w-full rounded-2xl border border-slate-200/90 bg-slate-50/90 px-3 text-slate-900 outline-none transition focus:border-teal-400 focus:bg-white" value={entryFormState.person} onChange={(event) => updateEntryFormFieldValue('person', event.target.value)}>{personaSelectOptions.map((personaOption) => <option key={personaOption.value} value={personaOption.value}>{personaOption.label}</option>)}<option value="__custom__">Custom person...</option></select></label>
-              <label className="text-sm font-medium text-slate-700">Type<select className="mt-1 h-11 w-full rounded-2xl border border-slate-200/90 bg-slate-50/90 px-3 text-slate-900 outline-none transition focus:border-teal-400 focus:bg-white" value={entryFormState.recordType} onChange={(event) => updateEntryFormFieldValue('recordType', event.target.value)}><option value="expense">Expense</option><option value="income">Income</option><option value="savings">Savings</option><option value="asset">Asset</option><option value="debt">Debt</option><option value="loan">Loan</option><option value="credit_card">Credit Account</option></select></label>
-              {entryFormState.person === '__custom__' ? (
-                <label className="text-sm font-medium text-slate-700 sm:col-span-2">Custom Person<input className="mt-1 h-11 w-full rounded-2xl border border-slate-200/90 bg-slate-50/90 px-3 text-slate-900 outline-none transition focus:border-teal-400 focus:bg-white" type="text" value={entryFormState.customPerson} onChange={(event) => updateEntryFormFieldValue('customPerson', event.target.value)} /></label>
-              ) : null}
-              {entryFormState.recordType === 'credit_card' ? (
-                <label className="text-sm font-medium text-slate-700">Account<input className="mt-1 h-11 w-full rounded-2xl border border-slate-200/90 bg-slate-50/90 px-3 text-slate-900 outline-none transition focus:border-teal-400 focus:bg-white" type="text" value={entryFormState.item} onChange={(event) => updateEntryFormFieldValue('item', event.target.value)} /></label>
-              ) : null}
-              {entryFormState.recordType === 'debt' || entryFormState.recordType === 'loan' ? (
-                <label className="text-sm font-medium text-slate-700">Item<input className="mt-1 h-11 w-full rounded-2xl border border-slate-200/90 bg-slate-50/90 px-3 text-slate-900 outline-none transition focus:border-teal-400 focus:bg-white" type="text" value={entryFormState.item} onChange={(event) => updateEntryFormFieldValue('item', event.target.value)} /></label>
-              ) : null}
-              <label className="text-sm font-medium text-slate-700">{entryFormState.recordType === 'credit_card' ? 'Current Balance' : 'Amount'}<input className="mt-1 h-11 w-full rounded-2xl border border-slate-200/90 bg-slate-50/90 px-3 text-slate-900 outline-none transition focus:border-teal-400 focus:bg-white" type="number" step="0.01" autoFocus value={entryFormState.recordType === 'credit_card' ? entryFormState.currentBalance : entryFormState.amount} onChange={(event) => updateEntryFormFieldValue(entryFormState.recordType === 'credit_card' ? 'currentBalance' : 'amount', event.target.value)} /></label>
-              {entryFormState.recordType === 'credit_card' ? (
-                <label className="text-sm font-medium text-slate-700">Max Capacity<input className="mt-1 h-11 w-full rounded-2xl border border-slate-200/90 bg-slate-50/90 px-3 text-slate-900 outline-none transition focus:border-teal-400 focus:bg-white" type="number" step="0.01" value={entryFormState.maxCapacity} onChange={(event) => updateEntryFormFieldValue('maxCapacity', event.target.value)} /></label>
-              ) : (
-                <label className="text-sm font-medium text-slate-700">Category<select className="mt-1 h-11 w-full rounded-2xl border border-slate-200/90 bg-slate-50/90 px-3 text-slate-900 outline-none transition focus:border-teal-400 focus:bg-white" value={entryFormState.category} onChange={(event) => updateEntryFormFieldValue('category', event.target.value)}><option value="">Select a category</option>{COMMON_BUDGET_CATEGORIES.map((categoryName) => <option key={categoryName} value={categoryName}>{categoryName}</option>)}<option value="__custom__">Custom category...</option></select></label>
-              )}
-              {entryFormState.category === '__custom__' ? (
-                <label className="text-sm font-medium text-slate-700 sm:col-span-2">Custom Category<input className="mt-1 h-11 w-full rounded-2xl border border-slate-200/90 bg-slate-50/90 px-3 text-slate-900 outline-none transition focus:border-teal-400 focus:bg-white" type="text" value={entryFormState.customCategory} onChange={(event) => updateEntryFormFieldValue('customCategory', event.target.value)} /></label>
-              ) : null}
-              {entryFormState.recordType !== 'credit_card' && entryFormState.recordType !== 'debt' && entryFormState.recordType !== 'loan' ? (
-                <div className="sm:col-span-2">
-                  <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-slate-400">Quick pick</p>
-                  <div className="flex flex-wrap gap-1.5">
-                    {(entryFormState.recordType === 'income'
-                      ? ['Income', 'Investments', 'Savings']
-                      : entryFormState.recordType === 'savings'
-                        ? ['Savings', 'Investments', 'Income']
-                        : entryFormState.recordType === 'asset'
-                          ? ['Investments', 'Housing', 'Transportation']
-                          : ['Groceries', 'Dining', 'Transportation', 'Fuel', 'Housing', 'Entertainment', 'Personal Care', 'Healthcare', 'Miscellaneous']
-                    ).map((cat) => (
-                      <button key={cat} type="button" className={`rounded-lg border px-2.5 py-1 text-xs font-semibold transition ${entryFormState.category === cat ? 'border-teal-400 bg-teal-50 text-teal-700' : 'border-slate-200 bg-slate-100/80 text-slate-600 hover:border-slate-300 hover:bg-slate-200'}`} onClick={() => updateEntryFormFieldValue('category', cat)}>{cat}</button>
-                    ))}
-                  </div>
+        <section style={{ position: 'fixed', inset: 0, zIndex: 5000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }} role="dialog" aria-modal="true" aria-label="Add Record Modal">
+          <button style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)' }} onClick={() => setIsAddRecordModalOpen(false)} type="button" aria-label="Close add record modal backdrop" />
+          <div
+            style={{
+              position: 'relative', zIndex: 5001, width: '100%', maxWidth: '520px',
+              overflow: 'hidden', borderRadius: '24px', boxShadow: '0 25px 60px rgba(0,0,0,0.6)',
+              background: 'rgba(17,17,17,0.95)', backdropFilter: 'blur(24px)', WebkitBackdropFilter: 'blur(24px)',
+              border: `1px solid ${entryFormState.recordType === 'income' ? 'rgba(52,211,153,0.2)' : entryFormState.recordType === 'savings' ? 'rgba(251,191,36,0.2)' : entryFormState.recordType === 'expense' ? 'rgba(251,113,133,0.18)' : 'rgba(255,255,255,0.08)'}`
+            }}
+          >
+            <div style={{ height: '3px', background: entryFormState.recordType === 'income' ? 'linear-gradient(90deg,#34d399,#059669)' : entryFormState.recordType === 'savings' ? 'linear-gradient(90deg,#fbbf24,#d97706)' : entryFormState.recordType === 'expense' ? 'linear-gradient(90deg,#fb7185,#e11d48)' : 'linear-gradient(90deg,#a855f7,#7c3aed)' }} />
+            <div style={{ padding: '20px 24px 24px' }}>
+              <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '16px', marginBottom: '20px' }}>
+                <div>
+                  <p style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#71717a', margin: 0 }}>New Record</p>
+                  <h3 style={{ marginTop: '2px', fontSize: '20px', fontWeight: 700, letterSpacing: '-0.01em', color: entryFormState.recordType === 'income' ? '#34d399' : entryFormState.recordType === 'savings' ? '#fbbf24' : entryFormState.recordType === 'expense' ? '#fb7185' : '#d4d4d4', margin: '2px 0 0' }}>
+                    {entryFormState.recordType === 'income' ? 'Income' : entryFormState.recordType === 'savings' ? 'Savings' : entryFormState.recordType === 'asset' ? 'Asset' : entryFormState.recordType === 'debt' ? 'Debt' : entryFormState.recordType === 'loan' ? 'Loan' : entryFormState.recordType === 'credit_card' ? 'Credit Account' : 'Expense'}
+                  </h3>
                 </div>
-              ) : null}
-              {entryFormState.recordType === 'debt' || entryFormState.recordType === 'loan' || entryFormState.recordType === 'credit_card' ? (
-                <label className="text-sm font-medium text-slate-700">Minimum Payment<input className="mt-1 h-11 w-full rounded-2xl border border-slate-200/90 bg-slate-50/90 px-3 text-slate-900 outline-none transition focus:border-teal-400 focus:bg-white" type="number" step="0.01" value={entryFormState.minimumPayment} onChange={(event) => updateEntryFormFieldValue('minimumPayment', event.target.value)} /></label>
-              ) : null}
-              {entryFormState.recordType === 'credit_card' ? (
-                <label className="text-sm font-medium text-slate-700">Monthly Payment<input className="mt-1 h-11 w-full rounded-2xl border border-slate-200/90 bg-slate-50/90 px-3 text-slate-900 outline-none transition focus:border-teal-400 focus:bg-white" type="number" step="0.01" value={entryFormState.monthlyPayment} onChange={(event) => updateEntryFormFieldValue('monthlyPayment', event.target.value)} /></label>
-              ) : null}
-              {entryFormState.recordType === 'debt' || entryFormState.recordType === 'loan' || entryFormState.recordType === 'credit_card' ? (
-                <label className="text-sm font-medium text-slate-700">APR (%)<input className="mt-1 h-11 w-full rounded-2xl border border-slate-200/90 bg-slate-50/90 px-3 text-slate-900 outline-none transition focus:border-teal-400 focus:bg-white" type="number" step="0.01" value={entryFormState.interestRatePercent} onChange={(event) => updateEntryFormFieldValue('interestRatePercent', event.target.value)} /></label>
-              ) : null}
-              {entryFormState.recordType === 'debt' || entryFormState.recordType === 'loan' ? (
-                <label className="text-sm font-medium text-slate-700">Remaining Payments<input className="mt-1 h-11 w-full rounded-2xl border border-slate-200/90 bg-slate-50/90 px-3 text-slate-900 outline-none transition focus:border-teal-400 focus:bg-white" type="number" step="1" min="0" value={entryFormState.remainingPayments} onChange={(event) => updateEntryFormFieldValue('remainingPayments', event.target.value)} /></label>
-              ) : null}
-              {entryFormState.recordType === 'debt' || entryFormState.recordType === 'loan' ? (
-                <label className="text-sm font-medium text-slate-700">Loan Start Date<input className="mt-1 h-11 w-full rounded-2xl border border-slate-200/90 bg-slate-50/90 px-3 text-slate-900 outline-none transition focus:border-teal-400 focus:bg-white" type="date" value={entryFormState.loanStartDate} onChange={(event) => updateEntryFormFieldValue('loanStartDate', event.target.value)} /></label>
-              ) : null}
-              {entryFormState.recordType === 'debt' || entryFormState.recordType === 'loan' ? (
-                <label className="text-sm font-medium text-slate-700">Collateral Asset<input className="mt-1 h-11 w-full rounded-2xl border border-slate-200/90 bg-slate-50/90 px-3 text-slate-900 outline-none transition focus:border-teal-400 focus:bg-white" type="text" value={entryFormState.collateralAssetName} onChange={(event) => updateEntryFormFieldValue('collateralAssetName', event.target.value)} /></label>
-              ) : null}
-              {entryFormState.recordType === 'debt' || entryFormState.recordType === 'loan' ? (
-                <label className="text-sm font-medium text-slate-700">Collateral Market Value<input className="mt-1 h-11 w-full rounded-2xl border border-slate-200/90 bg-slate-50/90 px-3 text-slate-900 outline-none transition focus:border-teal-400 focus:bg-white" type="number" step="0.01" min="0" value={entryFormState.collateralAssetMarketValue} onChange={(event) => updateEntryFormFieldValue('collateralAssetMarketValue', event.target.value)} /></label>
-              ) : null}
-              <label className="text-sm font-medium text-slate-700">Date<input className="mt-1 h-11 w-full rounded-2xl border border-slate-200/90 bg-slate-50/90 px-3 text-slate-900 outline-none transition focus:border-teal-400 focus:bg-white" type="date" value={entryFormState.date} onChange={(event) => updateEntryFormFieldValue('date', event.target.value)} /></label>
-              <label className="text-sm font-medium text-slate-700 sm:col-span-2">Description<input className="mt-1 h-11 w-full rounded-2xl border border-slate-200/90 bg-slate-50/90 px-3 text-slate-900 outline-none transition focus:border-teal-400 focus:bg-white" type="text" value={entryFormState.description} onChange={(event) => updateEntryFormFieldValue('description', event.target.value)} /></label>
-              <div className="sm:col-span-2 flex flex-wrap justify-end gap-2"><button className="inline-flex items-center gap-1.5 rounded-2xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700" onClick={() => setIsAddRecordModalOpen(false)} type="button"><IconX /> Cancel</button><button className="rounded-2xl bg-teal-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-teal-700 inline-flex items-center gap-1.5" type="submit"><IconCheck /> Save Record</button></div>
-            </form>
+                <button style={{ flexShrink: 0, width: '32px', height: '32px', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.08)', background: 'rgba(255,255,255,0.03)', color: '#52525b', cursor: 'pointer', transition: 'color 0.12s, border-color 0.12s' }} onClick={() => setIsAddRecordModalOpen(false)} type="button" aria-label="Close"><IconX /></button>
+              </div>
+
+              <div style={{ marginBottom: '16px' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px' }}>
+                  {[['income', '#34d399', 'rgba(52,211,153,0.1)', 'rgba(52,211,153,0.22)'], ['expense', '#fb7185', 'rgba(251,113,133,0.09)', 'rgba(251,113,133,0.2)'], ['savings', '#fbbf24', 'rgba(251,191,36,0.08)', 'rgba(251,191,36,0.2)']].map(([typeName, color, bg, borderColor]) => (
+                    <button key={typeName} type="button"
+                      style={{
+                        padding: '10px 0', fontSize: '13px', fontWeight: 700, letterSpacing: '0.01em',
+                        borderRadius: '10px', border: `1px solid ${entryFormState.recordType === typeName ? borderColor : 'rgba(255,255,255,0.05)'}`,
+                        background: entryFormState.recordType === typeName ? bg : 'rgba(255,255,255,0.02)',
+                        color: entryFormState.recordType === typeName ? color : '#71717a',
+                        cursor: 'pointer', transition: 'all 0.12s'
+                      }}
+                      onClick={() => updateEntryFormFieldValue('recordType', typeName)}
+                    >{typeName === 'income' ? 'Income' : typeName === 'expense' ? 'Expense' : 'Savings'}</button>
+                  ))}
+                </div>
+                {['asset', 'debt', 'loan', 'credit_card'].includes(entryFormState.recordType) ? (
+                  <div style={{ marginTop: '8px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.06)', background: 'rgba(15,15,15,0.5)', padding: '8px 12px' }}>
+                    <span style={{ fontSize: '12px', fontWeight: 600, color: '#71717a' }}>Advanced: <span style={{ color: '#a1a1aa' }}>{entryFormState.recordType === 'credit_card' ? 'Credit Account' : entryFormState.recordType.charAt(0).toUpperCase() + entryFormState.recordType.slice(1)}</span></span>
+                    <button type="button" style={{ fontSize: '10px', fontWeight: 600, color: '#a1a1aa', background: 'none', border: 'none', textDecoration: 'underline', cursor: 'pointer' }} onClick={() => updateEntryFormFieldValue('recordType', 'expense')}>switch to expense</button>
+                  </div>
+                ) : (
+                  <select style={{ marginTop: '8px', height: '32px', width: '100%', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.05)', background: 'transparent', padding: '0 12px', fontSize: '11px', color: '#71717a', outline: 'none', cursor: 'pointer' }} value="" onChange={(e) => e.target.value && updateEntryFormFieldValue('recordType', e.target.value)}>
+                    <option value="" style={{ background: '#111' }}>Advanced types...</option>
+                    <option value="asset" style={{ background: '#111' }}>Asset</option>
+                    <option value="debt" style={{ background: '#111' }}>Debt</option>
+                    <option value="loan" style={{ background: '#111' }}>Loan</option>
+                    <option value="credit_card" style={{ background: '#111' }}>Credit Account</option>
+                  </select>
+                )}
+              </div>
+
+              <form style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }} onSubmit={submitNewIncomeOrExpenseRecord}>
+                <label style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#71717a' }}>Person<select style={{ marginTop: '6px', height: '40px', width: '100%', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.07)', background: 'rgba(15,15,15,0.8)', padding: '0 12px', fontSize: '13px', fontWeight: 400, textTransform: 'none', letterSpacing: 'normal', color: '#ededed', outline: 'none' }} value={entryFormState.person} onChange={(event) => updateEntryFormFieldValue('person', event.target.value)}>{personaSelectOptions.map((personaOption) => <option key={personaOption.value} value={personaOption.value}>{personaOption.label}</option>)}<option value="__custom__">Custom person...</option></select></label>
+                {entryFormState.person === '__custom__' ? (
+                  <label style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#71717a', gridColumn: '1 / -1' }}>Custom Person<input style={{ marginTop: '6px', height: '40px', width: '100%', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.07)', background: 'rgba(15,15,15,0.8)', padding: '0 12px', fontSize: '13px', color: '#ededed', outline: 'none', boxSizing: 'border-box' }} type="text" value={entryFormState.customPerson} onChange={(event) => updateEntryFormFieldValue('customPerson', event.target.value)} /></label>
+                ) : null}
+                {entryFormState.recordType === 'credit_card' ? (
+                  <label style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#71717a' }}>Account<input style={{ marginTop: '6px', height: '40px', width: '100%', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.07)', background: 'rgba(15,15,15,0.8)', padding: '0 12px', fontSize: '13px', color: '#ededed', outline: 'none', boxSizing: 'border-box' }} type="text" value={entryFormState.item} onChange={(event) => updateEntryFormFieldValue('item', event.target.value)} /></label>
+                ) : null}
+                {entryFormState.recordType === 'debt' || entryFormState.recordType === 'loan' ? (
+                  <label style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#71717a' }}>Item<input style={{ marginTop: '6px', height: '40px', width: '100%', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.07)', background: 'rgba(15,15,15,0.8)', padding: '0 12px', fontSize: '13px', color: '#ededed', outline: 'none', boxSizing: 'border-box' }} type="text" value={entryFormState.item} onChange={(event) => updateEntryFormFieldValue('item', event.target.value)} /></label>
+                ) : null}
+                <label style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#71717a' }}>{entryFormState.recordType === 'credit_card' ? 'Current Balance' : 'Amount'}<input style={{ marginTop: '6px', height: '40px', width: '100%', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.07)', background: 'rgba(15,15,15,0.8)', padding: '0 12px', fontSize: '13px', color: '#ededed', outline: 'none', boxSizing: 'border-box' }} type="number" step="0.01" autoFocus value={entryFormState.recordType === 'credit_card' ? entryFormState.currentBalance : entryFormState.amount} onChange={(event) => updateEntryFormFieldValue(entryFormState.recordType === 'credit_card' ? 'currentBalance' : 'amount', event.target.value)} /></label>
+                {entryFormState.recordType === 'credit_card' ? (
+                  <label style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#71717a' }}>Max Capacity<input style={{ marginTop: '6px', height: '40px', width: '100%', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.07)', background: 'rgba(15,15,15,0.8)', padding: '0 12px', fontSize: '13px', color: '#ededed', outline: 'none', boxSizing: 'border-box' }} type="number" step="0.01" value={entryFormState.maxCapacity} onChange={(event) => updateEntryFormFieldValue('maxCapacity', event.target.value)} /></label>
+                ) : (
+                  <label style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#71717a' }}>Category<select style={{ marginTop: '6px', height: '40px', width: '100%', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.07)', background: 'rgba(15,15,15,0.8)', padding: '0 12px', fontSize: '13px', color: '#ededed', outline: 'none' }} value={entryFormState.category} onChange={(event) => updateEntryFormFieldValue('category', event.target.value)}><option value="">Select a category</option>{COMMON_BUDGET_CATEGORIES.map((categoryName) => <option key={categoryName} value={categoryName}>{categoryName}</option>)}<option value="__custom__">Custom category...</option></select></label>
+                )}
+                {entryFormState.category === '__custom__' ? (
+                  <label style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#71717a', gridColumn: '1 / -1' }}>Custom Category<input style={{ marginTop: '6px', height: '40px', width: '100%', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.07)', background: 'rgba(15,15,15,0.8)', padding: '0 12px', fontSize: '13px', color: '#ededed', outline: 'none', boxSizing: 'border-box' }} type="text" value={entryFormState.customCategory} onChange={(event) => updateEntryFormFieldValue('customCategory', event.target.value)} /></label>
+                ) : null}
+                {entryFormState.recordType !== 'credit_card' && entryFormState.recordType !== 'debt' && entryFormState.recordType !== 'loan' ? (
+                  <div style={{ gridColumn: '1 / -1' }}>
+                    <p style={{ marginBottom: '6px', fontSize: '10px', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#71717a' }}>Quick pick</p>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                      {(entryFormState.recordType === 'income'
+                        ? ['Income', 'Investments', 'Savings']
+                        : entryFormState.recordType === 'savings'
+                          ? ['Savings', 'Investments', 'Income']
+                          : entryFormState.recordType === 'asset'
+                            ? ['Investments', 'Housing', 'Transportation']
+                            : ['Groceries', 'Dining', 'Transportation', 'Fuel', 'Housing', 'Entertainment', 'Personal Care', 'Healthcare', 'Miscellaneous']
+                      ).map((cat) => (
+                        <button key={cat} type="button" style={{ padding: '4px 10px', fontSize: '11px', fontWeight: 600, borderRadius: '7px', border: `1px solid ${entryFormState.category === cat ? 'rgba(251,191,36,0.4)' : 'rgba(255,255,255,0.06)'}`, background: entryFormState.category === cat ? 'rgba(251,191,36,0.1)' : 'rgba(26,26,26,0.8)', color: entryFormState.category === cat ? '#fbbf24' : '#a1a1aa', cursor: 'pointer' }} onClick={() => updateEntryFormFieldValue('category', cat)}>{cat}</button>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+                {entryFormState.recordType === 'debt' || entryFormState.recordType === 'loan' || entryFormState.recordType === 'credit_card' ? (
+                  <label style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#71717a' }}>Minimum Payment<input style={{ marginTop: '6px', height: '40px', width: '100%', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.07)', background: 'rgba(15,15,15,0.8)', padding: '0 12px', fontSize: '13px', color: '#ededed', outline: 'none', boxSizing: 'border-box' }} type="number" step="0.01" value={entryFormState.minimumPayment} onChange={(event) => updateEntryFormFieldValue('minimumPayment', event.target.value)} /></label>
+                ) : null}
+                {entryFormState.recordType === 'credit_card' ? (
+                  <label style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#71717a' }}>Monthly Payment<input style={{ marginTop: '6px', height: '40px', width: '100%', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.07)', background: 'rgba(15,15,15,0.8)', padding: '0 12px', fontSize: '13px', color: '#ededed', outline: 'none', boxSizing: 'border-box' }} type="number" step="0.01" value={entryFormState.monthlyPayment} onChange={(event) => updateEntryFormFieldValue('monthlyPayment', event.target.value)} /></label>
+                ) : null}
+                {entryFormState.recordType === 'debt' || entryFormState.recordType === 'loan' || entryFormState.recordType === 'credit_card' ? (
+                  <label style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#71717a' }}>APR (%)<input style={{ marginTop: '6px', height: '40px', width: '100%', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.07)', background: 'rgba(15,15,15,0.8)', padding: '0 12px', fontSize: '13px', color: '#ededed', outline: 'none', boxSizing: 'border-box' }} type="number" step="0.01" value={entryFormState.interestRatePercent} onChange={(event) => updateEntryFormFieldValue('interestRatePercent', event.target.value)} /></label>
+                ) : null}
+                {entryFormState.recordType === 'debt' || entryFormState.recordType === 'loan' ? (
+                  <label style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#71717a' }}>Remaining Payments<input style={{ marginTop: '6px', height: '40px', width: '100%', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.07)', background: 'rgba(15,15,15,0.8)', padding: '0 12px', fontSize: '13px', color: '#ededed', outline: 'none', boxSizing: 'border-box' }} type="number" step="1" min="0" value={entryFormState.remainingPayments} onChange={(event) => updateEntryFormFieldValue('remainingPayments', event.target.value)} /></label>
+                ) : null}
+                {entryFormState.recordType === 'debt' || entryFormState.recordType === 'loan' ? (
+                  <label style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#71717a' }}>Loan Start Date<input style={{ marginTop: '6px', height: '40px', width: '100%', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.07)', background: 'rgba(15,15,15,0.8)', padding: '0 12px', fontSize: '13px', color: '#ededed', outline: 'none', boxSizing: 'border-box' }} type="date" value={entryFormState.loanStartDate} onChange={(event) => updateEntryFormFieldValue('loanStartDate', event.target.value)} /></label>
+                ) : null}
+                {entryFormState.recordType === 'debt' || entryFormState.recordType === 'loan' ? (
+                  <label style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#71717a' }}>Collateral Asset<input style={{ marginTop: '6px', height: '40px', width: '100%', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.07)', background: 'rgba(15,15,15,0.8)', padding: '0 12px', fontSize: '13px', color: '#ededed', outline: 'none', boxSizing: 'border-box' }} type="text" value={entryFormState.collateralAssetName} onChange={(event) => updateEntryFormFieldValue('collateralAssetName', event.target.value)} /></label>
+                ) : null}
+                {entryFormState.recordType === 'debt' || entryFormState.recordType === 'loan' ? (
+                  <label style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#71717a' }}>Collateral Market Value<input style={{ marginTop: '6px', height: '40px', width: '100%', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.07)', background: 'rgba(15,15,15,0.8)', padding: '0 12px', fontSize: '13px', color: '#ededed', outline: 'none', boxSizing: 'border-box' }} type="number" step="0.01" min="0" value={entryFormState.collateralAssetMarketValue} onChange={(event) => updateEntryFormFieldValue('collateralAssetMarketValue', event.target.value)} /></label>
+                ) : null}
+                <label style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#71717a' }}>Date<input style={{ marginTop: '6px', height: '40px', width: '100%', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.07)', background: 'rgba(15,15,15,0.8)', padding: '0 12px', fontSize: '13px', color: '#ededed', outline: 'none', boxSizing: 'border-box' }} type="date" value={entryFormState.date} onChange={(event) => updateEntryFormFieldValue('date', event.target.value)} /></label>
+                <label style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#71717a', gridColumn: '1 / -1' }}>Description<input style={{ marginTop: '6px', height: '40px', width: '100%', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.07)', background: 'rgba(15,15,15,0.8)', padding: '0 12px', fontSize: '13px', color: '#ededed', outline: 'none', boxSizing: 'border-box' }} type="text" value={entryFormState.description} onChange={(event) => updateEntryFormFieldValue('description', event.target.value)} /></label>
+                <div style={{ gridColumn: '1 / -1', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', paddingTop: '4px' }}>
+                  <button style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '8px 14px', fontSize: '13px', fontWeight: 600, borderRadius: '10px', border: '1px solid rgba(255,255,255,0.07)', background: 'none', color: '#a1a1aa', cursor: 'pointer' }} onClick={() => setIsAddRecordModalOpen(false)} type="button"><IconX /> Cancel</button>
+                  <button
+                    style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '10px 20px', fontSize: '13px', fontWeight: 700, borderRadius: '10px', border: 'none', cursor: 'pointer', background: entryFormState.recordType === 'income' ? '#34d399' : entryFormState.recordType === 'savings' ? '#fbbf24' : entryFormState.recordType === 'expense' ? '#fb7185' : '#a855f7', color: '#000' }}
+                    type="submit"
+                  ><IconCheck /> Save {entryFormState.recordType === 'income' ? 'Income' : entryFormState.recordType === 'savings' ? 'Savings' : entryFormState.recordType === 'asset' ? 'Asset' : entryFormState.recordType === 'debt' ? 'Debt' : entryFormState.recordType === 'loan' ? 'Loan' : entryFormState.recordType === 'credit_card' ? 'Credit Account' : 'Expense'}</button>
+                </div>
+              </form>
+            </div>
           </div>
         </section>
       ) : null}
 
       {isAddGoalModalOpen ? (
         <section className="fixed inset-0 z-[5000] flex items-center justify-center p-3 sm:p-4" role="dialog" aria-modal="true" aria-label="Add Goal Modal">
-          <button className="absolute inset-0 bg-slate-950/55 backdrop-blur-sm" onClick={closeGoalModalAndResetForm} type="button" aria-label="Close add goal modal backdrop" />
-          <div className="relative z-[5001] w-full max-w-2xl rounded-3xl border border-white/40 bg-white p-4 shadow-2xl sm:p-6">
-            <div className="mb-4 flex items-center justify-between gap-3"><h3 className="text-lg font-bold text-slate-900">{editingGoalId ? 'Edit Goal' : 'Add Goal'}</h3><button className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700" onClick={closeGoalModalAndResetForm} type="button"><IconX /> Close</button></div>
+          <button className="absolute inset-0 bg-black/55 backdrop-blur-sm" onClick={closeGoalModalAndResetForm} type="button" aria-label="Close add goal modal backdrop" />
+          <div className="relative z-[5001] w-full max-w-2xl rounded-3xl border border-white/40 bg-[#141414] p-4 shadow-2xl sm:p-6">
+            <div className="mb-4 flex items-center justify-between gap-3"><h3 className="text-lg font-bold text-[#ededed]">{editingGoalId ? 'Edit Goal' : 'Add Goal'}</h3><button className="inline-flex items-center gap-1.5 rounded-xl border border-white/[0.025] px-3 py-2 text-sm font-semibold text-[#d4d4d4]" onClick={closeGoalModalAndResetForm} type="button"><IconX /> Close</button></div>
             <form className="grid grid-cols-1 gap-4 sm:grid-cols-2" onSubmit={submitNewGoalRecord}>
-              <label className="text-sm font-medium text-slate-700 sm:col-span-2">Item<input className="mt-1 h-11 w-full rounded-2xl border border-slate-200/90 bg-slate-50/90 px-3 text-slate-900 outline-none transition focus:border-sky-400 focus:bg-white" type="text" value={goalEntryFormState.title} onChange={(event) => updateGoalEntryFormFieldValue('title', event.target.value)} /></label>
-              <label className="text-sm font-medium text-slate-700">Status<select className="mt-1 h-11 w-full rounded-2xl border border-slate-200/90 bg-slate-50/90 px-3 text-slate-900 outline-none transition focus:border-sky-400 focus:bg-white" value={goalEntryFormState.status} onChange={(event) => updateGoalEntryFormFieldValue('status', event.target.value)}><option value="not started">Not started</option><option value="in progress">In progress</option><option value="completed">Completed</option></select></label>
-              <label className="text-sm font-medium text-slate-700">Timeframe(months)<input className="mt-1 h-11 w-full rounded-2xl border border-slate-200/90 bg-slate-50/90 px-3 text-slate-900 outline-none transition focus:border-sky-400 focus:bg-white" type="number" min="0" step="1" value={goalEntryFormState.timeframeMonths} onChange={(event) => updateGoalEntryFormFieldValue('timeframeMonths', event.target.value)} /></label>
-              <label className="text-sm font-medium text-slate-700 sm:col-span-2">Description<textarea className="mt-1 min-h-[90px] w-full rounded-2xl border border-slate-200/90 bg-slate-50/90 px-3 py-2 text-slate-900 outline-none transition focus:border-sky-400 focus:bg-white" value={goalEntryFormState.description} onChange={(event) => updateGoalEntryFormFieldValue('description', event.target.value)} /></label>
-              <div className="sm:col-span-2 flex flex-wrap justify-end gap-2"><button className="inline-flex items-center gap-1.5 rounded-2xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700" onClick={closeGoalModalAndResetForm} type="button"><IconX /> Cancel</button>{editingGoalId ? <button className="inline-flex items-center gap-1.5 rounded-2xl border border-rose-300 bg-rose-50 px-4 py-2 text-sm font-semibold text-rose-700" onClick={() => { void deleteGoalRecordById(editingGoalId) }} type="button"><IconTrash /> Delete Goal</button> : null}<button className="rounded-2xl bg-sky-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-sky-700 inline-flex items-center gap-1.5" type="submit"><IconCheck /> {editingGoalId ? 'Save Changes' : 'Save Goal'}</button></div>
+              <label className="text-sm font-medium text-[#d4d4d4] sm:col-span-2">Item<input className="mt-1 h-11 w-full rounded-2xl border border-white/[0.06] bg-[rgba(15,15,15,0.8)] px-3 text-[#ededed] outline-none transition focus:border-amber-500 focus:bg-[#141414]" type="text" value={goalEntryFormState.title} onChange={(event) => updateGoalEntryFormFieldValue('title', event.target.value)} /></label>
+              <label className="text-sm font-medium text-[#d4d4d4]">Status<select className="mt-1 h-11 w-full rounded-2xl border border-white/[0.06] bg-[rgba(15,15,15,0.8)] px-3 text-[#ededed] outline-none transition focus:border-amber-500 focus:bg-[#141414]" value={goalEntryFormState.status} onChange={(event) => updateGoalEntryFormFieldValue('status', event.target.value)}><option value="not started">Not started</option><option value="in progress">In progress</option><option value="completed">Completed</option></select></label>
+              <label className="text-sm font-medium text-[#d4d4d4]">Timeframe(months)<input className="mt-1 h-11 w-full rounded-2xl border border-white/[0.06] bg-[rgba(15,15,15,0.8)] px-3 text-[#ededed] outline-none transition focus:border-amber-500 focus:bg-[#141414]" type="number" min="0" step="1" value={goalEntryFormState.timeframeMonths} onChange={(event) => updateGoalEntryFormFieldValue('timeframeMonths', event.target.value)} /></label>
+              <label className="text-sm font-medium text-[#d4d4d4] sm:col-span-2">Description<textarea className="mt-1 min-h-[90px] w-full rounded-2xl border border-white/[0.06] bg-[rgba(15,15,15,0.8)] px-3 py-2 text-[#ededed] outline-none transition focus:border-amber-500 focus:bg-[#141414]" value={goalEntryFormState.description} onChange={(event) => updateGoalEntryFormFieldValue('description', event.target.value)} /></label>
+              <div className="sm:col-span-2 flex flex-wrap justify-end gap-2"><button className="inline-flex items-center gap-1.5 rounded-2xl border border-white/[0.025] px-4 py-2 text-sm font-semibold text-[#d4d4d4]" onClick={closeGoalModalAndResetForm} type="button"><IconX /> Cancel</button>{editingGoalId ? <button className="inline-flex items-center gap-1.5 rounded-2xl border border-rose-500/40 bg-rose-500/10 px-4 py-2 text-sm font-semibold text-rose-400" onClick={() => { void deleteGoalRecordById(editingGoalId) }} type="button"><IconTrash /> Delete Goal</button> : null}<button className="rounded-2xl bg-[#1a1a1a] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#1a1a1a] inline-flex items-center gap-1.5" type="submit"><IconCheck /> {editingGoalId ? 'Save Changes' : 'Save Goal'}</button></div>
             </form>
           </div>
         </section>
@@ -4242,18 +4442,18 @@ export default function App() {
 
       {isAddAssetModalOpen ? (
         <section className="fixed inset-0 z-[5000] flex items-center justify-center p-3 sm:p-4" role="dialog" aria-modal="true" aria-label="Add Asset Modal">
-          <button className="absolute inset-0 bg-slate-950/55 backdrop-blur-sm" onClick={() => setIsAddAssetModalOpen(false)} type="button" aria-label="Close add asset modal backdrop" />
-          <div className="relative z-[5001] w-full max-w-2xl rounded-3xl border border-white/40 bg-white p-4 shadow-2xl sm:p-6">
-            <div className="mb-4 flex items-center justify-between gap-3"><h3 className="text-lg font-bold text-slate-900">Add Asset</h3><button className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700" onClick={() => setIsAddAssetModalOpen(false)} type="button"><IconX /> Close</button></div>
+          <button className="absolute inset-0 bg-black/55 backdrop-blur-sm" onClick={() => setIsAddAssetModalOpen(false)} type="button" aria-label="Close add asset modal backdrop" />
+          <div className="relative z-[5001] w-full max-w-2xl rounded-3xl border border-white/40 bg-[#141414] p-4 shadow-2xl sm:p-6">
+            <div className="mb-4 flex items-center justify-between gap-3"><h3 className="text-lg font-bold text-[#ededed]">Add Asset</h3><button className="inline-flex items-center gap-1.5 rounded-xl border border-white/[0.025] px-3 py-2 text-sm font-semibold text-[#d4d4d4]" onClick={() => setIsAddAssetModalOpen(false)} type="button"><IconX /> Close</button></div>
             <form className="grid grid-cols-1 gap-4 sm:grid-cols-2" onSubmit={submitNewAssetHoldingRecord}>
-              <label className="text-sm font-medium text-slate-700">Person<select className="mt-1 h-11 w-full rounded-2xl border border-slate-200/90 bg-slate-50/90 px-3 text-slate-900 outline-none transition focus:border-cyan-400 focus:bg-white" value={assetHoldingEntryFormState.person} onChange={(event) => updateAssetHoldingEntryFormFieldValue('person', event.target.value)}>{personaSelectOptions.map((personaOption) => <option key={personaOption.value} value={personaOption.value}>{personaOption.label}</option>)}<option value="__custom__">Custom person...</option></select></label>
-              {assetHoldingEntryFormState.person === '__custom__' ? <label className="text-sm font-medium text-slate-700">Custom Person<input className="mt-1 h-11 w-full rounded-2xl border border-slate-200/90 bg-slate-50/90 px-3 text-slate-900 outline-none transition focus:border-cyan-400 focus:bg-white" type="text" value={assetHoldingEntryFormState.customPerson} onChange={(event) => updateAssetHoldingEntryFormFieldValue('customPerson', event.target.value)} /></label> : null}
-              <label className="text-sm font-medium text-slate-700">Item<input className="mt-1 h-11 w-full rounded-2xl border border-slate-200/90 bg-slate-50/90 px-3 text-slate-900 outline-none transition focus:border-cyan-400 focus:bg-white" type="text" value={assetHoldingEntryFormState.item} onChange={(event) => updateAssetHoldingEntryFormFieldValue('item', event.target.value)} /></label>
-              <label className="text-sm font-medium text-slate-700">Asset Value Owed<input className="mt-1 h-11 w-full rounded-2xl border border-slate-200/90 bg-slate-50/90 px-3 text-slate-900 outline-none transition focus:border-cyan-400 focus:bg-white" type="number" min="0" step="0.01" value={assetHoldingEntryFormState.assetValueOwed} onChange={(event) => updateAssetHoldingEntryFormFieldValue('assetValueOwed', event.target.value)} /></label>
-              <label className="text-sm font-medium text-slate-700">Asset Market Value<input className="mt-1 h-11 w-full rounded-2xl border border-slate-200/90 bg-slate-50/90 px-3 text-slate-900 outline-none transition focus:border-cyan-400 focus:bg-white" type="number" min="0" step="0.01" value={assetHoldingEntryFormState.assetMarketValue} onChange={(event) => updateAssetHoldingEntryFormFieldValue('assetMarketValue', event.target.value)} /></label>
-              <label className="text-sm font-medium text-slate-700">Date<input className="mt-1 h-11 w-full rounded-2xl border border-slate-200/90 bg-slate-50/90 px-3 text-slate-900 outline-none transition focus:border-cyan-400 focus:bg-white" type="date" value={assetHoldingEntryFormState.date} onChange={(event) => updateAssetHoldingEntryFormFieldValue('date', event.target.value)} /></label>
-              <label className="text-sm font-medium text-slate-700 sm:col-span-2">Description<input className="mt-1 h-11 w-full rounded-2xl border border-slate-200/90 bg-slate-50/90 px-3 text-slate-900 outline-none transition focus:border-cyan-400 focus:bg-white" type="text" value={assetHoldingEntryFormState.description} onChange={(event) => updateAssetHoldingEntryFormFieldValue('description', event.target.value)} /></label>
-              <div className="sm:col-span-2 flex flex-wrap justify-end gap-2"><button className="inline-flex items-center gap-1.5 rounded-2xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700" onClick={() => setIsAddAssetModalOpen(false)} type="button"><IconX /> Cancel</button><button className="rounded-2xl bg-cyan-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-cyan-700 inline-flex items-center gap-1.5" type="submit"><IconCheck /> Save Asset</button></div>
+              <label className="text-sm font-medium text-[#d4d4d4]">Person<select className="mt-1 h-11 w-full rounded-2xl border border-white/[0.06] bg-[rgba(15,15,15,0.8)] px-3 text-[#ededed] outline-none transition focus:border-cyan-400 focus:bg-[#141414]" value={assetHoldingEntryFormState.person} onChange={(event) => updateAssetHoldingEntryFormFieldValue('person', event.target.value)}>{personaSelectOptions.map((personaOption) => <option key={personaOption.value} value={personaOption.value}>{personaOption.label}</option>)}<option value="__custom__">Custom person...</option></select></label>
+              {assetHoldingEntryFormState.person === '__custom__' ? <label className="text-sm font-medium text-[#d4d4d4]">Custom Person<input className="mt-1 h-11 w-full rounded-2xl border border-white/[0.06] bg-[rgba(15,15,15,0.8)] px-3 text-[#ededed] outline-none transition focus:border-cyan-400 focus:bg-[#141414]" type="text" value={assetHoldingEntryFormState.customPerson} onChange={(event) => updateAssetHoldingEntryFormFieldValue('customPerson', event.target.value)} /></label> : null}
+              <label className="text-sm font-medium text-[#d4d4d4]">Item<input className="mt-1 h-11 w-full rounded-2xl border border-white/[0.06] bg-[rgba(15,15,15,0.8)] px-3 text-[#ededed] outline-none transition focus:border-cyan-400 focus:bg-[#141414]" type="text" value={assetHoldingEntryFormState.item} onChange={(event) => updateAssetHoldingEntryFormFieldValue('item', event.target.value)} /></label>
+              <label className="text-sm font-medium text-[#d4d4d4]">Asset Value Owed<input className="mt-1 h-11 w-full rounded-2xl border border-white/[0.06] bg-[rgba(15,15,15,0.8)] px-3 text-[#ededed] outline-none transition focus:border-cyan-400 focus:bg-[#141414]" type="number" min="0" step="0.01" value={assetHoldingEntryFormState.assetValueOwed} onChange={(event) => updateAssetHoldingEntryFormFieldValue('assetValueOwed', event.target.value)} /></label>
+              <label className="text-sm font-medium text-[#d4d4d4]">Asset Market Value<input className="mt-1 h-11 w-full rounded-2xl border border-white/[0.06] bg-[rgba(15,15,15,0.8)] px-3 text-[#ededed] outline-none transition focus:border-cyan-400 focus:bg-[#141414]" type="number" min="0" step="0.01" value={assetHoldingEntryFormState.assetMarketValue} onChange={(event) => updateAssetHoldingEntryFormFieldValue('assetMarketValue', event.target.value)} /></label>
+              <label className="text-sm font-medium text-[#d4d4d4]">Date<input className="mt-1 h-11 w-full rounded-2xl border border-white/[0.06] bg-[rgba(15,15,15,0.8)] px-3 text-[#ededed] outline-none transition focus:border-cyan-400 focus:bg-[#141414]" type="date" value={assetHoldingEntryFormState.date} onChange={(event) => updateAssetHoldingEntryFormFieldValue('date', event.target.value)} /></label>
+              <label className="text-sm font-medium text-[#d4d4d4] sm:col-span-2">Description<input className="mt-1 h-11 w-full rounded-2xl border border-white/[0.06] bg-[rgba(15,15,15,0.8)] px-3 text-[#ededed] outline-none transition focus:border-cyan-400 focus:bg-[#141414]" type="text" value={assetHoldingEntryFormState.description} onChange={(event) => updateAssetHoldingEntryFormFieldValue('description', event.target.value)} /></label>
+              <div className="sm:col-span-2 flex flex-wrap justify-end gap-2"><button className="inline-flex items-center gap-1.5 rounded-2xl border border-white/[0.025] px-4 py-2 text-sm font-semibold text-[#d4d4d4]" onClick={() => setIsAddAssetModalOpen(false)} type="button"><IconX /> Cancel</button><button className="rounded-2xl bg-cyan-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-cyan-700 inline-flex items-center gap-1.5" type="submit"><IconCheck /> Save Asset</button></div>
             </form>
           </div>
         </section>
@@ -4261,67 +4461,67 @@ export default function App() {
 
       {isAddPersonaModalOpen ? (
         <section className="manage-personas-modal fixed inset-0 z-[5000] flex items-center justify-center p-3 sm:p-4" role="dialog" aria-modal="true" aria-label="Manage Personas Modal">
-          <button className="absolute inset-0 bg-slate-950/55 backdrop-blur-sm" onClick={() => setIsAddPersonaModalOpen(false)} type="button" aria-label="Close manage personas modal backdrop" />
-          <div className="manage-personas-shell relative z-[5001] w-full max-w-6xl rounded-3xl border border-white/40 bg-white p-4 shadow-2xl sm:p-6">
-            <div className="mb-4 flex items-center justify-between gap-3"><h3 className="text-lg font-bold text-slate-900">Manage Personas</h3><button className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700" onClick={() => setIsAddPersonaModalOpen(false)} type="button"><IconX /> Close</button></div>
+          <button className="absolute inset-0 bg-black/55 backdrop-blur-sm" onClick={() => setIsAddPersonaModalOpen(false)} type="button" aria-label="Close manage personas modal backdrop" />
+          <div className="manage-personas-shell relative z-[5001] w-full max-w-6xl rounded-3xl border border-white/40 bg-[#141414] p-4 shadow-2xl sm:p-6">
+            <div className="mb-4 flex items-center justify-between gap-3"><h3 className="text-lg font-bold text-[#ededed]">Manage Personas</h3><button className="inline-flex items-center gap-1.5 rounded-xl border border-white/[0.025] px-3 py-2 text-sm font-semibold text-[#d4d4d4]" onClick={() => setIsAddPersonaModalOpen(false)} type="button"><IconX /> Close</button></div>
             <div className="grid grid-cols-1 gap-4 lg:grid-cols-[300px_minmax(0,1fr)]">
-              <aside className="manage-personas-panel rounded-2xl border border-slate-200/90 bg-slate-50/80 p-3">
-                <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Existing Personas</p>
+              <aside className="manage-personas-panel rounded-2xl border border-white/[0.06] bg-[rgba(15,15,15,0.7)] p-3">
+                <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[#71717a]">Existing Personas</p>
                 <ul className="mt-3 space-y-2">
                   {personaOptions.map((personaName) => {
                     const isSelected = normalizePersonaNameForDisplay(personaCrudFormState.personaName).toLowerCase() === normalizePersonaNameForDisplay(personaName).toLowerCase()
                     return (
                       <li key={personaName}>
-                        <button className={`manage-persona-row w-full rounded-xl border px-3 py-2 text-left text-sm font-semibold transition ${isSelected ? 'border-violet-300 bg-violet-50 text-violet-800' : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300'}`} type="button" onClick={() => selectPersonaForCrudByName(personaName)}>{formatPersonaLabelWithEmoji(personaName, personaEmojiByName)}</button>
+                        <button className={`manage-persona-row w-full rounded-xl border px-3 py-2 text-left text-sm font-semibold transition ${isSelected ? 'border-violet-500/40 bg-violet-500/10 text-violet-300' : 'border-white/[0.025] bg-[#141414] text-[#d4d4d4] hover:border-white/[0.06]'}`} type="button" onClick={() => selectPersonaForCrudByName(personaName)}>{formatPersonaLabelWithEmoji(personaName, personaEmojiByName)}</button>
                       </li>
                     )
                   })}
                 </ul>
                 {personaDangerBackupState ? (
-                  <div className="manage-personas-warning mt-3 rounded-xl border border-amber-300/80 bg-amber-50/80 p-3">
-                    <p className="text-xs font-semibold uppercase tracking-[0.12em] text-amber-700">Backup Available</p>
-                    <p className="mt-1 text-xs text-amber-800">Destructive change backup from {personaDangerBackupState.at}.</p>
-                    <button className="inline-flex items-center gap-1.5 mt-2 rounded-lg border border-amber-400 bg-amber-100 px-3 py-2 text-xs font-semibold text-amber-800" type="button" onClick={() => void restorePersonaDangerBackupIntoCollections()}><IconRefresh /> Restore Backup</button>
+                  <div className="manage-personas-warning mt-3 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3">
+                    <p className="text-xs font-semibold uppercase tracking-[0.12em] text-amber-400">Backup Available</p>
+                    <p className="mt-1 text-xs text-amber-300">Destructive change backup from {personaDangerBackupState.at}.</p>
+                    <button className="inline-flex items-center gap-1.5 mt-2 rounded-lg border border-amber-500/40 bg-amber-500/15 px-3 py-2 text-xs font-semibold text-amber-300" type="button" onClick={() => void restorePersonaDangerBackupIntoCollections()}><IconRefresh /> Restore Backup</button>
                   </div>
                 ) : null}
               </aside>
 
               <div className="space-y-4">
-                <form className="manage-personas-panel rounded-2xl border border-slate-200/90 bg-slate-50/70 p-4" onSubmit={submitNewPersonaRecord}>
-                  <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Create Persona</p>
+                <form className="manage-personas-panel rounded-2xl border border-white/[0.06] bg-[#0f0f0f]/70 p-4" onSubmit={submitNewPersonaRecord}>
+                  <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[#71717a]">Create Persona</p>
                   <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
-                    <label className="text-sm font-medium text-slate-700">Name<input className="mt-1 h-11 w-full rounded-2xl border border-slate-200/90 bg-white px-3 text-slate-900 outline-none transition focus:border-violet-400" type="text" value={personaEntryFormState.name} onChange={(event) => updatePersonaEntryFormFieldValue('name', event.target.value)} /></label>
-                    <label className="text-sm font-medium text-slate-700">Emoji Preset<select className="mt-1 h-11 w-full rounded-2xl border border-slate-200/90 bg-white px-3 text-xl text-slate-900 outline-none transition focus:border-violet-400" value={personaEntryFormState.emojiPreset} onChange={(event) => updatePersonaEntryFormFieldValue('emojiPreset', event.target.value)}>{PERSONA_EMOJI_OPTIONS.map((emojiOption) => <option key={emojiOption} value={emojiOption}>{emojiOption}</option>)}</select></label>
-                    <label className="text-sm font-medium text-slate-700">Custom Emoji (Optional)<input className="mt-1 h-11 w-full rounded-2xl border border-slate-200/90 bg-white px-3 text-2xl text-slate-900 outline-none transition focus:border-violet-400" type="text" maxLength="4" value={personaEntryFormState.customEmoji} onChange={(event) => updatePersonaEntryFormFieldValue('customEmoji', event.target.value)} /></label>
-                    <label className="text-sm font-medium text-slate-700">Note (Optional)<input className="mt-1 h-11 w-full rounded-2xl border border-slate-200/90 bg-white px-3 text-slate-900 outline-none transition focus:border-violet-400" type="text" value={personaEntryFormState.note} onChange={(event) => updatePersonaEntryFormFieldValue('note', event.target.value)} /></label>
+                    <label className="text-sm font-medium text-[#d4d4d4]">Name<input className="mt-1 h-11 w-full rounded-2xl border border-white/[0.06] bg-[#141414] px-3 text-[#ededed] outline-none transition focus:border-violet-400" type="text" value={personaEntryFormState.name} onChange={(event) => updatePersonaEntryFormFieldValue('name', event.target.value)} /></label>
+                    <label className="text-sm font-medium text-[#d4d4d4]">Emoji Preset<select className="mt-1 h-11 w-full rounded-2xl border border-white/[0.06] bg-[#141414] px-3 text-xl text-[#ededed] outline-none transition focus:border-violet-400" value={personaEntryFormState.emojiPreset} onChange={(event) => updatePersonaEntryFormFieldValue('emojiPreset', event.target.value)}>{PERSONA_EMOJI_OPTIONS.map((emojiOption) => <option key={emojiOption} value={emojiOption}>{emojiOption}</option>)}</select></label>
+                    <label className="text-sm font-medium text-[#d4d4d4]">Custom Emoji (Optional)<input className="mt-1 h-11 w-full rounded-2xl border border-white/[0.06] bg-[#141414] px-3 text-2xl text-[#ededed] outline-none transition focus:border-violet-400" type="text" maxLength="4" value={personaEntryFormState.customEmoji} onChange={(event) => updatePersonaEntryFormFieldValue('customEmoji', event.target.value)} /></label>
+                    <label className="text-sm font-medium text-[#d4d4d4]">Note (Optional)<input className="mt-1 h-11 w-full rounded-2xl border border-white/[0.06] bg-[#141414] px-3 text-[#ededed] outline-none transition focus:border-violet-400" type="text" value={personaEntryFormState.note} onChange={(event) => updatePersonaEntryFormFieldValue('note', event.target.value)} /></label>
                   </div>
-                  <div className="mt-3 flex justify-end gap-2"><button className="inline-flex items-center gap-1.5 rounded-2xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700" type="button" onClick={() => setPersonaEntryFormState(buildInitialPersonaEntryFormState())}><IconX /> Clear</button><button className="inline-flex items-center gap-1.5 rounded-2xl bg-violet-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-violet-700" type="submit"><IconPlus /> Create Persona</button></div>
+                  <div className="mt-3 flex justify-end gap-2"><button className="inline-flex items-center gap-1.5 rounded-2xl border border-white/[0.025] px-4 py-2 text-sm font-semibold text-[#d4d4d4]" type="button" onClick={() => setPersonaEntryFormState(buildInitialPersonaEntryFormState())}><IconX /> Clear</button><button className="inline-flex items-center gap-1.5 rounded-2xl bg-violet-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-violet-700" type="submit"><IconPlus /> Create Persona</button></div>
                 </form>
 
                 {personaCrudFormState.personaName ? (
-                  <form className="manage-personas-panel rounded-2xl border border-slate-200/90 bg-white/80 p-4" onSubmit={submitPersonaCrudOperation}>
+                  <form className="manage-personas-panel rounded-2xl border border-white/[0.06] bg-[rgba(20,20,20,0.8)] p-4" onSubmit={submitPersonaCrudOperation}>
                     <div className="mb-3 flex items-center justify-between gap-3">
-                      <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Edit / Delete Persona</p>
-                      <span className="rounded-full bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-700">{formatPersonaLabelWithEmoji(personaCrudFormState.personaName, personaEmojiByName)}</span>
+                      <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[#71717a]">Edit / Delete Persona</p>
+                      <span className="rounded-full bg-[#1a1a1a] px-2 py-1 text-xs font-semibold text-[#d4d4d4]">{formatPersonaLabelWithEmoji(personaCrudFormState.personaName, personaEmojiByName)}</span>
                     </div>
                     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                      <label className="text-sm font-medium text-slate-700">Mode<select className="mt-1 h-11 w-full rounded-2xl border border-slate-200/90 bg-white px-3 text-slate-900 outline-none transition focus:border-violet-400" value={personaCrudFormState.mode} onChange={(event) => updatePersonaCrudFormFieldValue('mode', event.target.value)}><option value="edit">Edit</option><option value="delete_reassign">Delete + Reassign</option><option value="delete_cascade">Delete Cascade</option></select></label>
-                      {selectedPersonaImpactSummary ? <div className="rounded-2xl border border-slate-200/90 bg-slate-50 px-3 py-2 text-xs text-slate-600"><p className="font-semibold text-slate-700">Impacted records</p><p className="mt-1">Total: {Math.round(typeof selectedPersonaImpactSummary.total === 'number' ? selectedPersonaImpactSummary.total : 0)}</p></div> : <div />}
-                      {personaCrudFormState.mode === 'edit' ? <label className="text-sm font-medium text-slate-700">Name<input className="mt-1 h-11 w-full rounded-2xl border border-slate-200/90 bg-white px-3 text-slate-900 outline-none transition focus:border-violet-400" type="text" value={personaCrudFormState.nextName} onChange={(event) => updatePersonaCrudFormFieldValue('nextName', event.target.value)} /></label> : null}
-                      {personaCrudFormState.mode === 'edit' ? <label className="text-sm font-medium text-slate-700">Emoji Preset<select className="mt-1 h-11 w-full rounded-2xl border border-slate-200/90 bg-white px-3 text-xl text-slate-900 outline-none transition focus:border-violet-400" value={personaCrudFormState.nextEmojiPreset} onChange={(event) => updatePersonaCrudFormFieldValue('nextEmojiPreset', event.target.value)}>{PERSONA_EMOJI_OPTIONS.map((emojiOption) => <option key={emojiOption} value={emojiOption}>{emojiOption}</option>)}</select></label> : null}
-                      {personaCrudFormState.mode === 'edit' ? <label className="text-sm font-medium text-slate-700">Custom Emoji<input className="mt-1 h-11 w-full rounded-2xl border border-slate-200/90 bg-white px-3 text-2xl text-slate-900 outline-none transition focus:border-violet-400" type="text" maxLength="4" value={personaCrudFormState.nextCustomEmoji} onChange={(event) => updatePersonaCrudFormFieldValue('nextCustomEmoji', event.target.value)} /></label> : null}
-                      {personaCrudFormState.mode === 'edit' ? <label className="text-sm font-medium text-slate-700">Note<input className="mt-1 h-11 w-full rounded-2xl border border-slate-200/90 bg-white px-3 text-slate-900 outline-none transition focus:border-violet-400" type="text" value={personaCrudFormState.nextNote} onChange={(event) => updatePersonaCrudFormFieldValue('nextNote', event.target.value)} /></label> : null}
-                      {personaCrudFormState.mode === 'delete_reassign' ? <label className="text-sm font-medium text-slate-700 sm:col-span-2">Reassign all records to<select className="mt-1 h-11 w-full rounded-2xl border border-slate-200/90 bg-white px-3 text-slate-900 outline-none transition focus:border-violet-400" value={personaCrudFormState.reassignToPersonaName} onChange={(event) => updatePersonaCrudFormFieldValue('reassignToPersonaName', event.target.value)}>{reassignablePersonaOptions.map((personaName) => <option key={personaName} value={personaName}>{formatPersonaLabelWithEmoji(personaName, personaEmojiByName)}</option>)}</select></label> : null}
-                      {personaCrudFormState.mode === 'delete_reassign' && reassignablePersonaOptions.length === 0 ? <div className="sm:col-span-2 rounded-xl border border-amber-300 bg-amber-50/80 px-3 py-2 text-xs text-amber-900">No alternate persona exists to reassign records. To delete the default user profile, switch to <span className="font-semibold">Delete Cascade</span>.<button className="inline-flex items-center gap-1 ml-2 rounded-md border border-rose-300 bg-rose-50 px-2 py-1 text-xs font-semibold text-rose-700" type="button" onClick={() => updatePersonaCrudFormFieldValue('mode', 'delete_cascade')}><IconTrash /> Switch to Cascade</button></div> : null}
-                      {personaCrudFormState.mode === 'delete_cascade' ? <label className="text-sm font-medium text-rose-700 sm:col-span-2">Type to confirm hard delete<input className="mt-1 h-11 w-full rounded-2xl border border-rose-300 bg-rose-50/70 px-3 text-slate-900 outline-none transition focus:border-rose-500" type="text" placeholder={`DELETE ${personaCrudFormState.personaName}`} value={personaCrudFormState.deleteConfirmText} onChange={(event) => updatePersonaCrudFormFieldValue('deleteConfirmText', event.target.value)} /></label> : null}
+                      <label className="text-sm font-medium text-[#d4d4d4]">Mode<select className="mt-1 h-11 w-full rounded-2xl border border-white/[0.06] bg-[#141414] px-3 text-[#ededed] outline-none transition focus:border-violet-400" value={personaCrudFormState.mode} onChange={(event) => updatePersonaCrudFormFieldValue('mode', event.target.value)}><option value="edit">Edit</option><option value="delete_reassign">Delete + Reassign</option><option value="delete_cascade">Delete Cascade</option></select></label>
+                      {selectedPersonaImpactSummary ? <div className="rounded-2xl border border-white/[0.06] bg-[#0f0f0f] px-3 py-2 text-xs text-[#a1a1aa]"><p className="font-semibold text-[#d4d4d4]">Impacted records</p><p className="mt-1">Total: {Math.round(typeof selectedPersonaImpactSummary.total === 'number' ? selectedPersonaImpactSummary.total : 0)}</p></div> : <div />}
+                      {personaCrudFormState.mode === 'edit' ? <label className="text-sm font-medium text-[#d4d4d4]">Name<input className="mt-1 h-11 w-full rounded-2xl border border-white/[0.06] bg-[#141414] px-3 text-[#ededed] outline-none transition focus:border-violet-400" type="text" value={personaCrudFormState.nextName} onChange={(event) => updatePersonaCrudFormFieldValue('nextName', event.target.value)} /></label> : null}
+                      {personaCrudFormState.mode === 'edit' ? <label className="text-sm font-medium text-[#d4d4d4]">Emoji Preset<select className="mt-1 h-11 w-full rounded-2xl border border-white/[0.06] bg-[#141414] px-3 text-xl text-[#ededed] outline-none transition focus:border-violet-400" value={personaCrudFormState.nextEmojiPreset} onChange={(event) => updatePersonaCrudFormFieldValue('nextEmojiPreset', event.target.value)}>{PERSONA_EMOJI_OPTIONS.map((emojiOption) => <option key={emojiOption} value={emojiOption}>{emojiOption}</option>)}</select></label> : null}
+                      {personaCrudFormState.mode === 'edit' ? <label className="text-sm font-medium text-[#d4d4d4]">Custom Emoji<input className="mt-1 h-11 w-full rounded-2xl border border-white/[0.06] bg-[#141414] px-3 text-2xl text-[#ededed] outline-none transition focus:border-violet-400" type="text" maxLength="4" value={personaCrudFormState.nextCustomEmoji} onChange={(event) => updatePersonaCrudFormFieldValue('nextCustomEmoji', event.target.value)} /></label> : null}
+                      {personaCrudFormState.mode === 'edit' ? <label className="text-sm font-medium text-[#d4d4d4]">Note<input className="mt-1 h-11 w-full rounded-2xl border border-white/[0.06] bg-[#141414] px-3 text-[#ededed] outline-none transition focus:border-violet-400" type="text" value={personaCrudFormState.nextNote} onChange={(event) => updatePersonaCrudFormFieldValue('nextNote', event.target.value)} /></label> : null}
+                      {personaCrudFormState.mode === 'delete_reassign' ? <label className="text-sm font-medium text-[#d4d4d4] sm:col-span-2">Reassign all records to<select className="mt-1 h-11 w-full rounded-2xl border border-white/[0.06] bg-[#141414] px-3 text-[#ededed] outline-none transition focus:border-violet-400" value={personaCrudFormState.reassignToPersonaName} onChange={(event) => updatePersonaCrudFormFieldValue('reassignToPersonaName', event.target.value)}>{reassignablePersonaOptions.map((personaName) => <option key={personaName} value={personaName}>{formatPersonaLabelWithEmoji(personaName, personaEmojiByName)}</option>)}</select></label> : null}
+                      {personaCrudFormState.mode === 'delete_reassign' && reassignablePersonaOptions.length === 0 ? <div className="sm:col-span-2 rounded-xl border border-amber-500/40 bg-amber-500/10/80 px-3 py-2 text-xs text-amber-300">No alternate persona exists to reassign records. To delete the default user profile, switch to <span className="font-semibold">Delete Cascade</span>.<button className="inline-flex items-center gap-1 ml-2 rounded-md border border-rose-500/40 bg-rose-500/10 px-2 py-1 text-xs font-semibold text-rose-400" type="button" onClick={() => updatePersonaCrudFormFieldValue('mode', 'delete_cascade')}><IconTrash /> Switch to Cascade</button></div> : null}
+                      {personaCrudFormState.mode === 'delete_cascade' ? <label className="text-sm font-medium text-rose-400 sm:col-span-2">Type to confirm hard delete<input className="mt-1 h-11 w-full rounded-2xl border border-rose-500/40 bg-rose-500/10/70 px-3 text-[#ededed] outline-none transition focus:border-rose-500" type="text" placeholder={`DELETE ${personaCrudFormState.personaName}`} value={personaCrudFormState.deleteConfirmText} onChange={(event) => updatePersonaCrudFormFieldValue('deleteConfirmText', event.target.value)} /></label> : null}
                     </div>
                     <div className="mt-3 flex flex-wrap justify-end gap-2">
-                      <button className="inline-flex items-center gap-1.5 rounded-2xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700" type="button" onClick={() => setPersonaCrudFormState(buildInitialPersonaCrudFormState())}><IconX /> Clear Selection</button>
-                      <button className={`inline-flex items-center gap-1.5 rounded-2xl px-4 py-2 text-sm font-semibold text-white transition ${personaCrudFormState.mode === 'edit' ? 'bg-violet-600 hover:bg-violet-700' : 'bg-rose-600 hover:bg-rose-700'}`} type="submit">{personaCrudFormState.mode === 'edit' ? <><IconCheck /> Save Persona</> : <><IconTrash /> Apply Delete Operation</>}</button>
+                      <button className="inline-flex items-center gap-1.5 rounded-2xl border border-white/[0.025] px-4 py-2 text-sm font-semibold text-[#d4d4d4]" type="button" onClick={() => setPersonaCrudFormState(buildInitialPersonaCrudFormState())}><IconX /> Clear Selection</button>
+                      <button className={`inline-flex items-center gap-1.5 rounded-2xl px-4 py-2 text-sm font-semibold text-white transition ${personaCrudFormState.mode === 'edit' ? 'bg-violet-500/20 hover:bg-violet-500/30' : 'bg-rose-500/20 hover:bg-rose-500/30'}`} type="submit">{personaCrudFormState.mode === 'edit' ? <><IconCheck /> Save Persona</> : <><IconTrash /> Apply Delete Operation</>}</button>
                     </div>
                   </form>
                 ) : (
-                  <div className="manage-personas-panel rounded-2xl border border-slate-200/90 bg-white/80 p-4 text-sm text-slate-600">Select a persona from the left list to edit or delete with safety controls.</div>
+                  <div className="manage-personas-panel rounded-2xl border border-white/[0.06] bg-[rgba(20,20,20,0.8)] p-4 text-sm text-[#a1a1aa]">Select a persona from the left list to edit or delete with safety controls.</div>
                 )}
               </div>
             </div>
@@ -4331,33 +4531,33 @@ export default function App() {
 
       {isProfileTransferModalOpen ? (
         <section className="profile-transfer-modal fixed inset-0 z-[5000] flex items-center justify-center p-3 sm:p-4" role="dialog" aria-modal="true" aria-label="Financial Profile Import Export Modal">
-          <button className="absolute inset-0 bg-slate-950/55 backdrop-blur-sm" onClick={() => setIsProfileTransferModalOpen(false)} type="button" aria-label="Close profile transfer modal backdrop" />
-          <div className="profile-transfer-shell relative z-[5001] w-full max-w-2xl rounded-3xl border border-white/40 bg-white p-4 shadow-2xl sm:p-6">
+          <button className="absolute inset-0 bg-black/55 backdrop-blur-sm" onClick={() => setIsProfileTransferModalOpen(false)} type="button" aria-label="Close profile transfer modal backdrop" />
+          <div className="profile-transfer-shell relative z-[5001] w-full max-w-2xl rounded-3xl border border-white/40 bg-[#141414] p-4 shadow-2xl sm:p-6">
             <div className="mb-4 flex items-center justify-between gap-3">
-              <h3 className="text-lg font-bold text-slate-900">{profileTransferFormState.mode === 'import' ? 'Import Profile' : 'Export Profile'}</h3>
-              <button className="rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 inline-flex items-center gap-1.5" onClick={() => setIsProfileTransferModalOpen(false)} type="button"><IconX /> Close</button>
+              <h3 className="text-lg font-bold text-[#ededed]">{profileTransferFormState.mode === 'import' ? 'Import Profile' : 'Export Profile'}</h3>
+              <button className="rounded-xl border border-white/[0.025] px-3 py-2 text-sm font-semibold text-[#d4d4d4] inline-flex items-center gap-1.5" onClick={() => setIsProfileTransferModalOpen(false)} type="button"><IconX /> Close</button>
             </div>
             <form className="grid grid-cols-1 gap-3" onSubmit={submitImportedProfileJson}>
-              <textarea className="min-h-[260px] w-full rounded-2xl border border-slate-200/90 bg-slate-50/90 p-3 font-mono text-xs text-slate-900 outline-none transition focus:border-indigo-400 focus:bg-white" value={profileTransferFormState.jsonText} onChange={(event) => updateProfileTransferFormFieldValue('jsonText', event.target.value)} readOnly={profileTransferFormState.mode === 'export'} placeholder={profileTransferFormState.mode === 'import' ? 'Paste profile JSON here...' : ''} />
+              <textarea className="min-h-[260px] w-full rounded-2xl border border-white/[0.06] bg-[rgba(15,15,15,0.8)] p-3 font-mono text-xs text-[#ededed] outline-none transition focus:border-indigo-400 focus:bg-[#141414]" value={profileTransferFormState.jsonText} onChange={(event) => updateProfileTransferFormFieldValue('jsonText', event.target.value)} readOnly={profileTransferFormState.mode === 'export'} placeholder={profileTransferFormState.mode === 'import' ? 'Paste profile JSON here...' : ''} />
               {!supabaseAuthUserSummary ? (
                 <p className="text-[11px] text-amber-600">Log in as admin to enable server sync.</p>
               ) : (
                 <p className="text-[11px] text-emerald-600">Signed in as {supabaseAuthUserSummary.email || supabaseAuthUserSummary.id}.</p>
               )}
               <div className="flex flex-wrap justify-end gap-2">
-                <button className="rounded-2xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 inline-flex items-center gap-1.5" onClick={() => setIsProfileTransferModalOpen(false)} type="button"><IconX /> Cancel</button>
+                <button className="rounded-2xl border border-white/[0.025] px-4 py-2 text-sm font-semibold text-[#d4d4d4] inline-flex items-center gap-1.5" onClick={() => setIsProfileTransferModalOpen(false)} type="button"><IconX /> Cancel</button>
                 {profileTransferFormState.mode === 'export' ? (
                   <React.Fragment>
                     <button className="rounded-2xl border border-indigo-300 bg-indigo-50 px-4 py-2 text-sm font-semibold text-indigo-700 disabled:cursor-not-allowed disabled:opacity-40" onClick={() => { void copyProfileTransferJsonTextToClipboard() }} type="button">Copy JSON</button>
-                    <button className="rounded-2xl border border-sky-300 bg-sky-50 px-4 py-2 text-sm font-semibold text-sky-700 disabled:cursor-not-allowed disabled:opacity-40" disabled={!supabaseAuthUserSummary || isSupabaseOperationInFlight} onClick={() => { void pushCurrentProfileSnapshotToSupabase() }} type="button">Save to Server</button>
+                    <button className="rounded-2xl border border-white/[0.025] bg-[#0f0f0f] px-4 py-2 text-sm font-semibold text-[#a1a1aa] disabled:cursor-not-allowed disabled:opacity-40" disabled={!supabaseAuthUserSummary || isSupabaseOperationInFlight} onClick={() => { void pushCurrentProfileSnapshotToSupabase() }} type="button">Save to Server</button>
                     {profileDeleteUndoSnapshotJsonText ? (
-                      <button className="rounded-2xl border border-emerald-300 bg-emerald-50 px-4 py-2 text-sm font-semibold text-emerald-700" onClick={() => { void restoreDeletedLocalFinancialProfileDataFromUndoSnapshot() }} type="button">Undo Delete</button>
+                      <button className="rounded-2xl border border-emerald-500/40 bg-emerald-500/10 px-4 py-2 text-sm font-semibold text-emerald-400" onClick={() => { void restoreDeletedLocalFinancialProfileDataFromUndoSnapshot() }} type="button">Undo Delete</button>
                     ) : null}
-                    <button className="rounded-2xl border border-rose-300 bg-rose-50 px-4 py-2 text-sm font-semibold text-rose-700" onClick={() => { void deleteAllLocalFinancialProfileDataWithUndoSnapshot() }} type="button">Delete Local</button>
+                    <button className="rounded-2xl border border-rose-500/40 bg-rose-500/10 px-4 py-2 text-sm font-semibold text-rose-400" onClick={() => { void deleteAllLocalFinancialProfileDataWithUndoSnapshot() }} type="button">Delete Local</button>
                   </React.Fragment>
                 ) : (
                   <React.Fragment>
-                    <button className="rounded-2xl border border-sky-300 bg-sky-50 px-4 py-2 text-sm font-semibold text-sky-700 disabled:cursor-not-allowed disabled:opacity-40" disabled={!supabaseAuthUserSummary || isSupabaseOperationInFlight} onClick={() => { void pullProfileSnapshotFromSupabase() }} type="button">Restore from Server</button>
+                    <button className="rounded-2xl border border-white/[0.025] bg-[#0f0f0f] px-4 py-2 text-sm font-semibold text-[#a1a1aa] disabled:cursor-not-allowed disabled:opacity-40" disabled={!supabaseAuthUserSummary || isSupabaseOperationInFlight} onClick={() => { void pullProfileSnapshotFromSupabase() }} type="button">Restore from Server</button>
                     <button className="rounded-2xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-indigo-700" type="submit">Import JSON</button>
                   </React.Fragment>
                 )}
@@ -4369,36 +4569,36 @@ export default function App() {
 
       {selectedRiskFinding && selectedRiskTemplate ? (
         <section className="fixed inset-0 z-[5000] flex items-center justify-center p-3 sm:p-4" role="dialog" aria-modal="true" aria-label="Risk Flag Detail Modal">
-          <button className="absolute inset-0 bg-slate-950/55 backdrop-blur-sm" onClick={() => setSelectedRiskFinding(null)} type="button" aria-label="Close risk detail modal backdrop" />
-          <div className="relative z-[5001] w-full max-w-2xl rounded-3xl border border-white/40 bg-white p-4 shadow-2xl sm:p-6">
+          <button className="absolute inset-0 bg-black/55 backdrop-blur-sm" onClick={() => setSelectedRiskFinding(null)} type="button" aria-label="Close risk detail modal backdrop" />
+          <div className="relative z-[5001] w-full max-w-2xl rounded-3xl border border-white/40 bg-[#141414] p-4 shadow-2xl sm:p-6">
             <div className="mb-4 flex items-center justify-between gap-3">
-              <h3 className="text-lg font-bold text-slate-900">Risk Flag Guidance</h3>
-              <button className="rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 inline-flex items-center gap-1.5" onClick={() => setSelectedRiskFinding(null)} type="button"><IconX /> Close</button>
+              <h3 className="text-lg font-bold text-[#ededed]">Risk Flag Guidance</h3>
+              <button className="rounded-xl border border-white/[0.025] px-3 py-2 text-sm font-semibold text-[#d4d4d4] inline-flex items-center gap-1.5" onClick={() => setSelectedRiskFinding(null)} type="button"><IconX /> Close</button>
             </div>
             <div className="space-y-4">
               <article className={`risk-modal-selected rounded-2xl border p-3 ${
                 selectedRiskFinding.severity === 'high'
-                  ? 'border-rose-200/90 bg-rose-50/90'
-                  : (selectedRiskFinding.severity === 'low' ? 'border-emerald-200/90 bg-emerald-50/90' : 'border-amber-200/90 bg-amber-50/90')
+                  ? 'border-rose-500/30 bg-rose-500/10'
+                  : (selectedRiskFinding.severity === 'low' ? 'border-emerald-500/30 bg-emerald-500/10' : 'border-amber-500/30 bg-amber-500/10')
               }`}>
                 <p className={`risk-flag-severity text-xs font-semibold uppercase tracking-[0.12em] ${
                   selectedRiskFinding.severity === 'high'
                     ? 'risk-flag-severity-high'
                     : (selectedRiskFinding.severity === 'low' ? 'risk-flag-severity-low' : 'risk-flag-severity-medium')
                 }`}>Selected Risk</p>
-                <p className="mt-1 text-sm font-semibold text-slate-800">{selectedRiskTemplate.title}</p>
+                <p className="mt-1 text-sm font-semibold text-[#e0e0e0]">{selectedRiskTemplate.title}</p>
               </article>
-              <article className="risk-modal-panel rounded-2xl border border-slate-200/90 bg-slate-50/90 p-3">
-                <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">What it means</p>
-                <p className="mt-1 text-sm text-slate-700">{selectedRiskTemplate.meaningText}</p>
+              <article className="risk-modal-panel rounded-2xl border border-white/[0.06] bg-[rgba(15,15,15,0.8)] p-3">
+                <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[#71717a]">What it means</p>
+                <p className="mt-1 text-sm text-[#d4d4d4]">{selectedRiskTemplate.meaningText}</p>
               </article>
-              <article className="risk-modal-panel rounded-2xl border border-slate-200/90 bg-slate-50/90 p-3">
-                <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">How it affects personas</p>
-                <p className="mt-1 text-sm text-slate-700">{selectedRiskTemplate.impactText}</p>
+              <article className="risk-modal-panel rounded-2xl border border-white/[0.06] bg-[rgba(15,15,15,0.8)] p-3">
+                <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[#71717a]">How it affects personas</p>
+                <p className="mt-1 text-sm text-[#d4d4d4]">{selectedRiskTemplate.impactText}</p>
               </article>
-              <article className="risk-modal-panel rounded-2xl border border-slate-200/90 bg-slate-50/90 p-3">
-                <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">How to fix it</p>
-                <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-slate-700">
+              <article className="risk-modal-panel rounded-2xl border border-white/[0.06] bg-[rgba(15,15,15,0.8)] p-3">
+                <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[#71717a]">How to fix it</p>
+                <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-[#d4d4d4]">
                   {selectedRiskTemplate.fixChecklist.map((fixItem) => <li key={fixItem}>{fixItem}</li>)}
                 </ul>
               </article>
@@ -4408,56 +4608,85 @@ export default function App() {
       ) : null}
 
       {isRecordNotesModalOpen ? (
-        <section className="fixed inset-0 z-[5000] flex items-center justify-center p-3 sm:p-4" role="dialog" aria-modal="true" aria-label="Record Notes Modal">
-          <button className="absolute inset-0 bg-slate-950/55 backdrop-blur-sm" onClick={() => setIsRecordNotesModalOpen(false)} type="button" aria-label="Close record notes modal backdrop" />
-          <div className="relative z-[5001] w-full max-w-xl rounded-3xl border border-white/40 bg-white p-4 shadow-2xl sm:p-6">
-            <div className="mb-4 flex items-center justify-between gap-3">
-              <h3 className="text-lg font-bold text-slate-900">Record Notes</h3>
-              <button className="rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 inline-flex items-center gap-1.5" onClick={() => setIsRecordNotesModalOpen(false)} type="button"><IconX /> Close</button>
-            </div>
-            <form className="space-y-4" onSubmit={submitRecordNotesFormChanges}>
-              <p className="text-sm text-slate-600">Category: <span className="font-semibold text-slate-800">{recordNotesFormState.recordLabel || 'Record'}</span></p>
-              <label className="block text-sm font-medium text-slate-700">
-                Notes
-                <textarea
-                  className="mt-1 min-h-[120px] w-full rounded-2xl border border-slate-200/90 bg-slate-50/90 px-3 py-2 text-slate-900 outline-none transition focus:border-sky-400 focus:bg-white"
-                  value={recordNotesFormState.notes}
-                  onChange={(event) => setRecordNotesFormState((previousFormState) => ({ ...previousFormState, notes: event.target.value }))}
-                />
-              </label>
-              <div className="flex justify-end gap-2">
-                <button className="rounded-2xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 inline-flex items-center gap-1.5" onClick={() => setIsRecordNotesModalOpen(false)} type="button"><IconX /> Cancel</button>
-                <button className="rounded-2xl bg-sky-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-sky-700" type="submit">Save Notes</button>
+        <section style={{ position: 'fixed', inset: 0, zIndex: 5000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }} role="dialog" aria-modal="true" aria-label="Record Notes Modal">
+          <button style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)' }} onClick={() => setIsRecordNotesModalOpen(false)} type="button" aria-label="Close record notes modal backdrop" />
+          <div style={{ position: 'relative', zIndex: 5001, width: '100%', maxWidth: '480px', overflow: 'hidden', borderRadius: '24px', boxShadow: '0 25px 60px rgba(0,0,0,0.6)', background: 'rgba(17,17,17,0.95)', backdropFilter: 'blur(24px)', WebkitBackdropFilter: 'blur(24px)', border: '1px solid rgba(255,255,255,0.08)' }}>
+            <div style={{ height: '3px', background: 'linear-gradient(90deg,#818cf8,#6366f1)' }} />
+            <div style={{ padding: '20px 24px 24px' }}>
+              <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '16px', marginBottom: '20px' }}>
+                <div>
+                  <p style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#71717a', margin: 0 }}>Record</p>
+                  <h3 style={{ marginTop: '2px', fontSize: '20px', fontWeight: 700, letterSpacing: '-0.01em', color: '#a5b4fc', margin: '2px 0 0' }}>Notes</h3>
+                </div>
+                <button style={{ flexShrink: 0, width: '32px', height: '32px', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.08)', background: 'rgba(255,255,255,0.03)', color: '#71717a', cursor: 'pointer' }} onClick={() => setIsRecordNotesModalOpen(false)} type="button" aria-label="Close"><IconX /></button>
               </div>
-            </form>
+              <form onSubmit={submitRecordNotesFormChanges}>
+                <p style={{ fontSize: '12px', color: '#71717a', marginBottom: '16px' }}>For: <span style={{ fontWeight: 600, color: '#d4d4d4' }}>{recordNotesFormState.recordLabel || 'Record'}</span></p>
+                <label style={{ display: 'block', fontSize: '10px', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#71717a' }}>
+                  Notes
+                  <textarea
+                    style={{ display: 'block', marginTop: '6px', minHeight: '130px', width: '100%', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.07)', background: 'rgba(15,15,15,0.8)', padding: '10px 12px', fontSize: '13px', fontWeight: 400, textTransform: 'none', letterSpacing: 'normal', color: '#ededed', outline: 'none', resize: 'vertical', boxSizing: 'border-box', fontFamily: 'inherit' }}
+                    value={recordNotesFormState.notes}
+                    onChange={(event) => setRecordNotesFormState((previousFormState) => ({ ...previousFormState, notes: event.target.value }))}
+                  />
+                </label>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', marginTop: '16px' }}>
+                  <button style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '8px 14px', fontSize: '13px', fontWeight: 600, borderRadius: '10px', border: '1px solid rgba(255,255,255,0.07)', background: 'none', color: '#a1a1aa', cursor: 'pointer' }} onClick={() => setIsRecordNotesModalOpen(false)} type="button"><IconX /> Cancel</button>
+                  <button style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '10px 20px', fontSize: '13px', fontWeight: 700, borderRadius: '10px', border: 'none', cursor: 'pointer', background: '#6366f1', color: '#fff' }} type="submit"><IconCheck /> Save Notes</button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </section>
+      ) : null}
+
+      {pendingDeleteRecordTarget ? (
+        <section style={{ position: 'fixed', inset: 0, zIndex: 5000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }} role="dialog" aria-modal="true" aria-label="Delete record confirmation">
+          <button style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)' }} onClick={() => setPendingDeleteRecordTarget(null)} type="button" aria-label="Close delete confirmation" />
+          <div style={{ position: 'relative', zIndex: 5001, width: '100%', maxWidth: '400px', overflow: 'hidden', borderRadius: '24px', boxShadow: '0 25px 60px rgba(0,0,0,0.6)', background: 'rgba(17,17,17,0.95)', backdropFilter: 'blur(24px)', WebkitBackdropFilter: 'blur(24px)', border: '1px solid rgba(255,255,255,0.08)' }}>
+            <div style={{ height: '3px', background: 'linear-gradient(90deg,#f43f5e,#fb7185)' }} />
+            <div style={{ padding: '20px 24px 24px' }}>
+              <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '16px', marginBottom: '16px' }}>
+                <div>
+                  <p style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#71717a', margin: 0 }}>Record</p>
+                  <h3 style={{ marginTop: '2px', fontSize: '20px', fontWeight: 700, letterSpacing: '-0.01em', color: '#fb7185', margin: '2px 0 0' }}>Delete</h3>
+                </div>
+                <button style={{ flexShrink: 0, width: '32px', height: '32px', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.08)', background: 'rgba(255,255,255,0.03)', color: '#71717a', cursor: 'pointer' }} onClick={() => setPendingDeleteRecordTarget(null)} type="button" aria-label="Close"><IconX /></button>
+              </div>
+              <p style={{ fontSize: '13px', color: '#a1a1aa', marginBottom: '20px', lineHeight: '1.5' }}>Delete <span style={{ fontWeight: 600, color: '#d4d4d4' }}>{pendingDeleteRecordTarget.displayLabel}</span>? This action cannot be undone.</p>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
+                <button style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '8px 14px', fontSize: '13px', fontWeight: 600, borderRadius: '10px', border: '1px solid rgba(255,255,255,0.07)', background: 'none', color: '#a1a1aa', cursor: 'pointer' }} onClick={() => setPendingDeleteRecordTarget(null)} type="button"><IconX /> Cancel</button>
+                <button style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '10px 20px', fontSize: '13px', fontWeight: 700, borderRadius: '10px', border: 'none', cursor: 'pointer', background: '#f43f5e', color: '#fff' }} onClick={() => { void deleteRecordFromCollectionByCollectionNameAndId(pendingDeleteRecordTarget.collectionName, String(pendingDeleteRecordTarget.recordItem.id ?? '')); setPendingDeleteRecordTarget(null) }} type="button"><IconTrash /> Delete Record</button>
+              </div>
+            </div>
           </div>
         </section>
       ) : null}
 
       {isLoginModalOpen ? (
         <section className="fixed inset-0 z-[5000] flex items-center justify-center p-3 sm:p-4" role="dialog" aria-modal="true" aria-label="Admin Login Modal">
-          <button className="absolute inset-0 bg-slate-950/55 backdrop-blur-sm" onClick={() => setIsLoginModalOpen(false)} type="button" aria-label="Close login modal backdrop" />
-          <div className="relative z-[5001] w-full max-w-sm rounded-3xl border border-white/40 bg-white p-4 shadow-2xl sm:p-6">
+          <button className="absolute inset-0 bg-black/55 backdrop-blur-sm" onClick={() => setIsLoginModalOpen(false)} type="button" aria-label="Close login modal backdrop" />
+          <div className="relative z-[5001] w-full max-w-sm rounded-3xl border border-white/40 bg-[#141414] p-4 shadow-2xl sm:p-6">
             <div className="mb-5 flex items-center justify-between gap-3">
-              <h3 className="text-lg font-bold text-slate-900">{supabaseAuthUserSummary ? 'Admin Session' : 'Admin Login'}</h3>
-              <button className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700" onClick={() => setIsLoginModalOpen(false)} type="button"><IconX /> Close</button>
+              <h3 className="text-lg font-bold text-[#ededed]">{supabaseAuthUserSummary ? 'Admin Session' : 'Admin Login'}</h3>
+              <button className="inline-flex items-center gap-1.5 rounded-xl border border-white/[0.025] px-3 py-2 text-sm font-semibold text-[#d4d4d4]" onClick={() => setIsLoginModalOpen(false)} type="button"><IconX /> Close</button>
             </div>
             {supabaseAuthUserSummary ? (
               <div className="space-y-4">
-                <p className="rounded-2xl border border-emerald-200/90 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">Signed in as <span className="font-semibold">{supabaseAuthUserSummary.email || supabaseAuthUserSummary.id}</span>.</p>
+                <p className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-400">Signed in as <span className="font-semibold">{supabaseAuthUserSummary.email || supabaseAuthUserSummary.id}</span>.</p>
                 <div className="flex justify-end gap-2">
-                  <button className="rounded-2xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700" onClick={() => setIsLoginModalOpen(false)} type="button">Close</button>
+                  <button className="rounded-2xl border border-white/[0.025] px-4 py-2 text-sm font-semibold text-[#d4d4d4]" onClick={() => setIsLoginModalOpen(false)} type="button">Close</button>
                   <button className="inline-flex items-center gap-1.5 rounded-2xl bg-rose-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-40" disabled={isLoginOperationInFlight} onClick={() => void submitAdminLogoutFromModal()} type="button"><IconLogOut /> Sign Out</button>
                 </div>
               </div>
             ) : (
               <form className="space-y-4" onSubmit={(e) => void submitAdminLoginFromModal(e)}>
                 <label className="block">
-                  <span className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Admin Password</span>
+                  <span className="text-xs font-semibold uppercase tracking-[0.12em] text-[#71717a]">Admin Password</span>
                   <div className="relative mt-2">
                     <input
                       autoFocus
-                      className="h-11 w-full rounded-2xl border border-slate-200/90 bg-slate-50/90 text-slate-900 outline-none transition focus:border-indigo-400 focus:bg-white"
+                      className="h-11 w-full rounded-2xl border border-white/[0.06] bg-[rgba(15,15,15,0.8)] text-[#ededed] outline-none transition focus:border-indigo-400 focus:bg-[#141414]"
                       style={{ paddingLeft: '14px', paddingRight: '44px' }}
                       type={isLoginPasswordVisible ? 'text' : 'password'}
                       value={loginPasswordInputValue}
@@ -4465,7 +4694,7 @@ export default function App() {
                       disabled={isLoginOperationInFlight}
                     />
                     <button
-                      className="absolute flex h-8 w-8 items-center justify-center rounded-xl text-slate-400 transition hover:bg-slate-200/70 hover:text-slate-600"
+                      className="absolute flex h-8 w-8 items-center justify-center rounded-xl text-[#52525b] transition hover:bg-white/[0.07] hover:text-[#a1a1aa]"
                       style={{ right: '6px', top: '50%', transform: 'translateY(-50%)' }}
                       type="button"
                       tabIndex={-1}
@@ -4477,10 +4706,10 @@ export default function App() {
                   </div>
                 </label>
                 {loginStatusMessage ? (
-                  <p className="rounded-2xl border border-rose-200/90 bg-rose-50 px-4 py-3 text-sm text-rose-700">{loginStatusMessage}</p>
+                  <p className="rounded-2xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-400">{loginStatusMessage}</p>
                 ) : null}
                 <div className="flex justify-end gap-2">
-                  <button className="rounded-2xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700" onClick={() => setIsLoginModalOpen(false)} type="button">Cancel</button>
+                  <button className="rounded-2xl border border-white/[0.025] px-4 py-2 text-sm font-semibold text-[#d4d4d4]" onClick={() => setIsLoginModalOpen(false)} type="button">Cancel</button>
                   <button className="inline-flex items-center gap-1.5 rounded-2xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-40" disabled={isLoginOperationInFlight} type="submit"><IconLogIn /> {isLoginOperationInFlight ? 'Signing in...' : 'Sign In'}</button>
                 </div>
               </form>
@@ -4489,86 +4718,118 @@ export default function App() {
         </section>
       ) : null}
 
-      {isEditRecordModalOpen ? (
-        <section className="fixed inset-0 z-[5000] flex items-center justify-center p-3 sm:p-4" role="dialog" aria-modal="true" aria-label="Edit Record Modal">
-          <button className="absolute inset-0 bg-slate-950/55 backdrop-blur-sm" onClick={() => setIsEditRecordModalOpen(false)} type="button" aria-label="Close edit record modal backdrop" />
-          <div className="relative z-[5001] w-full max-w-2xl rounded-3xl border border-white/40 bg-white p-4 shadow-2xl sm:p-6">
-            <div className="mb-4 flex items-center justify-between gap-3"><h3 className="text-lg font-bold text-slate-900">Edit Record</h3><button className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700" onClick={() => setIsEditRecordModalOpen(false)} type="button"><IconX /> Close</button></div>
-            <form className="grid grid-cols-1 gap-4 sm:grid-cols-2" onSubmit={submitEditedRecordChanges}>
-              <label className="text-sm font-medium text-slate-700">Person<select className="mt-1 h-11 w-full rounded-2xl border border-slate-200/90 bg-slate-50/90 px-3 text-slate-900 outline-none transition focus:border-teal-400 focus:bg-white" value={editRecordFormState.person} onChange={(event) => updateEditRecordFormFieldValue('person', event.target.value)}>{personaSelectOptions.map((personaOption) => <option key={personaOption.value} value={personaOption.value}>{personaOption.label}</option>)}<option value="__custom__">Custom person...</option></select></label>
-              {editRecordFormState.person === '__custom__' ? (
-                <label className="text-sm font-medium text-slate-700">Custom Person<input className="mt-1 h-11 w-full rounded-2xl border border-slate-200/90 bg-slate-50/90 px-3 text-slate-900 outline-none transition focus:border-teal-400 focus:bg-white" type="text" value={editRecordFormState.customPerson} onChange={(event) => updateEditRecordFormFieldValue('customPerson', event.target.value)} /></label>
-              ) : null}
-              {editRecordFormState.collectionName === 'creditCards' || editRecordFormState.collectionName === 'assetHoldings' ? (
-                <label className="text-sm font-medium text-slate-700">Item<input className="mt-1 h-11 w-full rounded-2xl border border-slate-200/90 bg-slate-50/90 px-3 text-slate-900 outline-none transition focus:border-teal-400 focus:bg-white" type="text" value={editRecordFormState.item} onChange={(event) => updateEditRecordFormFieldValue('item', event.target.value)} /></label>
-              ) : null}
-              {editRecordFormState.collectionName === 'debts' || editRecordFormState.collectionName === 'credit' || editRecordFormState.collectionName === 'loans' ? (
-                <label className="text-sm font-medium text-slate-700">Category<select className="mt-1 h-11 w-full rounded-2xl border border-slate-200/90 bg-slate-50/90 px-3 text-slate-900 outline-none transition focus:border-teal-400 focus:bg-white" value={editRecordFormState.category} onChange={(event) => updateEditRecordFormFieldValue('category', event.target.value)}><option value="">Select a category</option>{COMMON_BUDGET_CATEGORIES.map((categoryName) => <option key={categoryName} value={categoryName}>{categoryName}</option>)}<option value="__custom__">Custom category...</option></select></label>
-              ) : null}
-              {(editRecordFormState.collectionName === 'debts' || editRecordFormState.collectionName === 'credit' || editRecordFormState.collectionName === 'loans') && editRecordFormState.category === '__custom__' ? (
-                <label className="text-sm font-medium text-slate-700">Custom Category<input className="mt-1 h-11 w-full rounded-2xl border border-slate-200/90 bg-slate-50/90 px-3 text-slate-900 outline-none transition focus:border-teal-400 focus:bg-white" type="text" value={editRecordFormState.customCategory} onChange={(event) => updateEditRecordFormFieldValue('customCategory', event.target.value)} /></label>
-              ) : null}
-              {editRecordFormState.collectionName === 'income' || editRecordFormState.collectionName === 'expenses' || editRecordFormState.collectionName === 'assets' ? (
-                <label className="text-sm font-medium text-slate-700">Category<select className="mt-1 h-11 w-full rounded-2xl border border-slate-200/90 bg-slate-50/90 px-3 text-slate-900 outline-none transition focus:border-teal-400 focus:bg-white" value={editRecordFormState.category} onChange={(event) => updateEditRecordFormFieldValue('category', event.target.value)}><option value="">Select a category</option>{COMMON_BUDGET_CATEGORIES.map((categoryName) => <option key={categoryName} value={categoryName}>{categoryName}</option>)}<option value="__custom__">Custom category...</option></select></label>
-              ) : null}
-              {(editRecordFormState.collectionName === 'income' || editRecordFormState.collectionName === 'expenses' || editRecordFormState.collectionName === 'assets') && editRecordFormState.category === '__custom__' ? (
-                <label className="text-sm font-medium text-slate-700">Custom Category<input className="mt-1 h-11 w-full rounded-2xl border border-slate-200/90 bg-slate-50/90 px-3 text-slate-900 outline-none transition focus:border-teal-400 focus:bg-white" type="text" value={editRecordFormState.customCategory} onChange={(event) => updateEditRecordFormFieldValue('customCategory', event.target.value)} /></label>
-              ) : null}
-              {editRecordFormState.collectionName === 'income' || editRecordFormState.collectionName === 'expenses' || editRecordFormState.collectionName === 'assets' ? (
-                <label className="text-sm font-medium text-slate-700">Item<input className="mt-1 h-11 w-full rounded-2xl border border-slate-200/90 bg-slate-50/90 px-3 text-slate-900 outline-none transition focus:border-teal-400 focus:bg-white" type="text" value={editRecordFormState.item} onChange={(event) => updateEditRecordFormFieldValue('item', event.target.value)} /></label>
-              ) : null}
-              {editRecordFormState.collectionName !== 'assetHoldings' ? (
-                <label className="text-sm font-medium text-slate-700">Amount / Value<input className="mt-1 h-11 w-full rounded-2xl border border-slate-200/90 bg-slate-50/90 px-3 text-slate-900 outline-none transition focus:border-teal-400 focus:bg-white" type="number" step="0.01" value={editRecordFormState.amount} onChange={(event) => updateEditRecordFormFieldValue('amount', event.target.value)} /></label>
-              ) : null}
-              {editRecordFormState.collectionName === 'assetHoldings' ? (
-                <label className="text-sm font-medium text-slate-700">Asset Value Owed<input className="mt-1 h-11 w-full rounded-2xl border border-slate-200/90 bg-slate-50/90 px-3 text-slate-900 outline-none transition focus:border-teal-400 focus:bg-white" type="number" min="0" step="0.01" value={editRecordFormState.assetValueOwed} onChange={(event) => updateEditRecordFormFieldValue('assetValueOwed', event.target.value)} /></label>
-              ) : null}
-              {editRecordFormState.collectionName === 'assetHoldings' ? (
-                <label className="text-sm font-medium text-slate-700">Asset Market Value<input className="mt-1 h-11 w-full rounded-2xl border border-slate-200/90 bg-slate-50/90 px-3 text-slate-900 outline-none transition focus:border-teal-400 focus:bg-white" type="number" min="0" step="0.01" value={editRecordFormState.assetMarketValue} onChange={(event) => updateEditRecordFormFieldValue('assetMarketValue', event.target.value)} /></label>
-              ) : null}
-              {editRecordFormState.collectionName === 'debts' || editRecordFormState.collectionName === 'credit' || editRecordFormState.collectionName === 'loans' ? (
-                <label className="text-sm font-medium text-slate-700">Minimum Payment<input className="mt-1 h-11 w-full rounded-2xl border border-slate-200/90 bg-slate-50/90 px-3 text-slate-900 outline-none transition focus:border-teal-400 focus:bg-white" type="number" step="0.01" value={editRecordFormState.minimumPayment} onChange={(event) => updateEditRecordFormFieldValue('minimumPayment', event.target.value)} /></label>
-              ) : null}
-              {editRecordFormState.collectionName === 'debts' || editRecordFormState.collectionName === 'credit' || editRecordFormState.collectionName === 'loans' ? (
-                <label className="text-sm font-medium text-slate-700">Loan Start Date<input className="mt-1 h-11 w-full rounded-2xl border border-slate-200/90 bg-slate-50/90 px-3 text-slate-900 outline-none transition focus:border-teal-400 focus:bg-white" type="date" value={editRecordFormState.loanStartDate} onChange={(event) => updateEditRecordFormFieldValue('loanStartDate', event.target.value)} /></label>
-              ) : null}
-              {editRecordFormState.collectionName === 'debts' || editRecordFormState.collectionName === 'credit' || editRecordFormState.collectionName === 'loans' ? (
-                <label className="text-sm font-medium text-slate-700">Remaining Payments<input className="mt-1 h-11 w-full rounded-2xl border border-slate-200/90 bg-slate-50/90 px-3 text-slate-900 outline-none transition focus:border-teal-400 focus:bg-white" type="number" min="0" step="1" value={editRecordFormState.remainingPayments} onChange={(event) => updateEditRecordFormFieldValue('remainingPayments', event.target.value)} /></label>
-              ) : null}
-              {editRecordFormState.collectionName === 'debts' || editRecordFormState.collectionName === 'loans' ? (
-                <label className="text-sm font-medium text-slate-700">Collateral Asset<input className="mt-1 h-11 w-full rounded-2xl border border-slate-200/90 bg-slate-50/90 px-3 text-slate-900 outline-none transition focus:border-teal-400 focus:bg-white" type="text" value={editRecordFormState.collateralAssetName} onChange={(event) => updateEditRecordFormFieldValue('collateralAssetName', event.target.value)} /></label>
-              ) : null}
-              {editRecordFormState.collectionName === 'debts' || editRecordFormState.collectionName === 'loans' ? (
-                <label className="text-sm font-medium text-slate-700">Collateral Market Value<input className="mt-1 h-11 w-full rounded-2xl border border-slate-200/90 bg-slate-50/90 px-3 text-slate-900 outline-none transition focus:border-teal-400 focus:bg-white" type="number" min="0" step="0.01" value={editRecordFormState.collateralAssetMarketValue} onChange={(event) => updateEditRecordFormFieldValue('collateralAssetMarketValue', event.target.value)} /></label>
-              ) : null}
-              {editRecordFormState.collectionName === 'debts' || editRecordFormState.collectionName === 'credit' || editRecordFormState.collectionName === 'loans' || editRecordFormState.collectionName === 'creditCards' ? (
-                <label className="text-sm font-medium text-slate-700">Interest Rate (%)<input className="mt-1 h-11 w-full rounded-2xl border border-slate-200/90 bg-slate-50/90 px-3 text-slate-900 outline-none transition focus:border-teal-400 focus:bg-white" type="number" min="0" step="0.01" value={editRecordFormState.interestRatePercent} onChange={(event) => updateEditRecordFormFieldValue('interestRatePercent', event.target.value)} /></label>
-              ) : null}
-              {editRecordFormState.collectionName === 'credit' ? (
-                <label className="text-sm font-medium text-slate-700">Credit Limit<input className="mt-1 h-11 w-full rounded-2xl border border-slate-200/90 bg-slate-50/90 px-3 text-slate-900 outline-none transition focus:border-teal-400 focus:bg-white" type="number" step="0.01" value={editRecordFormState.creditLimit} onChange={(event) => updateEditRecordFormFieldValue('creditLimit', event.target.value)} /></label>
-              ) : null}
-              {editRecordFormState.collectionName === 'creditCards' ? (
-                <>
-                  <label className="text-sm font-medium text-slate-700">Max Capacity<input className="mt-1 h-11 w-full rounded-2xl border border-slate-200/90 bg-slate-50/90 px-3 text-slate-900 outline-none transition focus:border-teal-400 focus:bg-white" type="number" step="0.01" value={editRecordFormState.maxCapacity} onChange={(event) => updateEditRecordFormFieldValue('maxCapacity', event.target.value)} /></label>
-                  <label className="text-sm font-medium text-slate-700">Current Balance<input className="mt-1 h-11 w-full rounded-2xl border border-slate-200/90 bg-slate-50/90 px-3 text-slate-900 outline-none transition focus:border-teal-400 focus:bg-white" type="number" step="0.01" value={editRecordFormState.currentBalance} onChange={(event) => updateEditRecordFormFieldValue('currentBalance', event.target.value)} /></label>
-                  <label className="text-sm font-medium text-slate-700">Minimum Payment<input className="mt-1 h-11 w-full rounded-2xl border border-slate-200/90 bg-slate-50/90 px-3 text-slate-900 outline-none transition focus:border-teal-400 focus:bg-white" type="number" step="0.01" value={editRecordFormState.minimumPayment} onChange={(event) => updateEditRecordFormFieldValue('minimumPayment', event.target.value)} /></label>
-                  <label className="text-sm font-medium text-slate-700">Monthly Payment<input className="mt-1 h-11 w-full rounded-2xl border border-slate-200/90 bg-slate-50/90 px-3 text-slate-900 outline-none transition focus:border-teal-400 focus:bg-white" type="number" step="0.01" value={editRecordFormState.monthlyPayment} onChange={(event) => updateEditRecordFormFieldValue('monthlyPayment', event.target.value)} /></label>
-                </>
-              ) : null}
-              <label className="text-sm font-medium text-slate-700">Date<input className="mt-1 h-11 w-full rounded-2xl border border-slate-200/90 bg-slate-50/90 px-3 text-slate-900 outline-none transition focus:border-teal-400 focus:bg-white" type="date" value={editRecordFormState.date} onChange={(event) => updateEditRecordFormFieldValue('date', event.target.value)} /></label>
-              <label className="text-sm font-medium text-slate-700 sm:col-span-2">Description<input className="mt-1 h-11 w-full rounded-2xl border border-slate-200/90 bg-slate-50/90 px-3 text-slate-900 outline-none transition focus:border-teal-400 focus:bg-white" type="text" value={editRecordFormState.description} onChange={(event) => updateEditRecordFormFieldValue('description', event.target.value)} /></label>
-              <div className="sm:col-span-2 flex flex-wrap justify-end gap-2"><button className="inline-flex items-center gap-1.5 rounded-2xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700" onClick={() => setIsEditRecordModalOpen(false)} type="button"><IconX /> Cancel</button>{editRecordFormState.collectionName === 'assetHoldings' ? <button className="inline-flex items-center gap-1.5 rounded-2xl border border-rose-300 bg-rose-50 px-4 py-2 text-sm font-semibold text-rose-700" onClick={() => { void deleteRecordFromCollectionByCollectionNameAndId('assetHoldings', editRecordFormState.recordId); setIsEditRecordModalOpen(false) }} type="button"><IconTrash /> Delete Asset</button> : null}<button className="rounded-2xl bg-teal-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-teal-700 inline-flex items-center gap-1.5" type="submit"><IconCheck /> Save Changes</button></div>
-            </form>
-          </div>
-        </section>
-      ) : null}
+      {isEditRecordModalOpen ? (() => {
+        const col = editRecordFormState.collectionName
+        const isStandard = col === 'income' || col === 'expenses' || col === 'assets'
+        const isDebtLike = col === 'debts' || col === 'credit' || col === 'loans'
+        const isCreditCard = col === 'creditCards'
+        const isAssetHolding = col === 'assetHoldings'
+        const accentColor = col === 'income' ? '#34d399' : col === 'expenses' ? '#fb7185' : isDebtLike ? '#a855f7' : isCreditCard ? '#38bdf8' : '#fbbf24'
+        const accentBg = col === 'income' ? 'rgba(52,211,153,0.15)' : col === 'expenses' ? 'rgba(251,113,133,0.15)' : isDebtLike ? 'rgba(168,85,247,0.15)' : isCreditCard ? 'rgba(56,189,248,0.15)' : 'rgba(251,191,36,0.15)'
+        const collectionLabel = col === 'income' ? 'Income' : col === 'expenses' ? 'Expense' : col === 'assets' ? 'Savings' : col === 'debts' ? 'Debt' : col === 'loans' ? 'Loan' : col === 'credit' ? 'Credit Line' : col === 'creditCards' ? 'Credit Card' : col === 'assetHoldings' ? 'Asset' : 'Record'
+        const lbl = { display: 'block', fontSize: '10px', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#71717a' }
+        const inp = { display: 'block', marginTop: '6px', height: '40px', width: '100%', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.07)', background: 'rgba(15,15,15,0.8)', padding: '0 12px', fontSize: '13px', color: '#ededed', outline: 'none', boxSizing: 'border-box', fontFamily: 'inherit' }
+        const sel = { ...inp, cursor: 'pointer' }
+        return (
+          <section style={{ position: 'fixed', inset: 0, zIndex: 5000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }} role="dialog" aria-modal="true" aria-label="Edit Record Modal">
+            <button style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)' }} onClick={() => setIsEditRecordModalOpen(false)} type="button" aria-label="Close edit record modal backdrop" />
+            <div style={{ position: 'relative', zIndex: 5001, width: '100%', maxWidth: '560px', overflow: 'hidden', borderRadius: '24px', boxShadow: '0 25px 60px rgba(0,0,0,0.6)', background: 'rgba(17,17,17,0.95)', backdropFilter: 'blur(24px)', WebkitBackdropFilter: 'blur(24px)', border: `1px solid ${accentBg}` }}>
+              <div style={{ height: '3px', background: `linear-gradient(90deg,${accentColor},${accentColor}88)` }} />
+              <div style={{ padding: '20px 24px 24px', maxHeight: 'calc(85vh - 3px)', overflowY: 'auto' }}>
+                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '16px', marginBottom: '20px' }}>
+                  <div>
+                    <p style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#71717a', margin: 0 }}>Edit</p>
+                    <h3 style={{ marginTop: '2px', fontSize: '20px', fontWeight: 700, letterSpacing: '-0.01em', color: accentColor, margin: '2px 0 0' }}>{collectionLabel}</h3>
+                  </div>
+                  <button style={{ flexShrink: 0, width: '32px', height: '32px', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.08)', background: 'rgba(255,255,255,0.03)', color: '#71717a', cursor: 'pointer' }} onClick={() => setIsEditRecordModalOpen(false)} type="button" aria-label="Close"><IconX /></button>
+                </div>
+                <form style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }} onSubmit={submitEditedRecordChanges}>
+                  <label style={lbl}>Person
+                    <select style={sel} value={editRecordFormState.person} onChange={(e) => updateEditRecordFormFieldValue('person', e.target.value)}>
+                      {personaSelectOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                      <option value="__custom__">Custom person...</option>
+                    </select>
+                  </label>
+                  {editRecordFormState.person === '__custom__' ? (
+                    <label style={lbl}>Custom Person<input style={inp} type="text" value={editRecordFormState.customPerson} onChange={(e) => updateEditRecordFormFieldValue('customPerson', e.target.value)} /></label>
+                  ) : null}
+                  {(isStandard || isDebtLike) ? (
+                    <label style={lbl}>Category
+                      <select style={sel} value={editRecordFormState.category} onChange={(e) => updateEditRecordFormFieldValue('category', e.target.value)}>
+                        <option value="">Select a category</option>
+                        {COMMON_BUDGET_CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
+                        <option value="__custom__">Custom category...</option>
+                      </select>
+                    </label>
+                  ) : null}
+                  {(isStandard || isDebtLike) && editRecordFormState.category === '__custom__' ? (
+                    <label style={lbl}>Custom Category<input style={inp} type="text" value={editRecordFormState.customCategory} onChange={(e) => updateEditRecordFormFieldValue('customCategory', e.target.value)} /></label>
+                  ) : null}
+                  {(isStandard || isCreditCard || isAssetHolding) ? (
+                    <label style={lbl}>Item<input style={inp} type="text" value={editRecordFormState.item} onChange={(e) => updateEditRecordFormFieldValue('item', e.target.value)} /></label>
+                  ) : null}
+                  {!isAssetHolding ? (
+                    <label style={lbl}>Amount / Value<input style={inp} type="number" step="0.01" value={editRecordFormState.amount} onChange={(e) => updateEditRecordFormFieldValue('amount', e.target.value)} /></label>
+                  ) : null}
+                  {isAssetHolding ? (
+                    <label style={lbl}>Value Owed<input style={inp} type="number" min="0" step="0.01" value={editRecordFormState.assetValueOwed} onChange={(e) => updateEditRecordFormFieldValue('assetValueOwed', e.target.value)} /></label>
+                  ) : null}
+                  {isAssetHolding ? (
+                    <label style={lbl}>Market Value<input style={inp} type="number" min="0" step="0.01" value={editRecordFormState.assetMarketValue} onChange={(e) => updateEditRecordFormFieldValue('assetMarketValue', e.target.value)} /></label>
+                  ) : null}
+                  {isDebtLike ? (
+                    <label style={lbl}>Minimum Payment<input style={inp} type="number" step="0.01" value={editRecordFormState.minimumPayment} onChange={(e) => updateEditRecordFormFieldValue('minimumPayment', e.target.value)} /></label>
+                  ) : null}
+                  {isDebtLike ? (
+                    <label style={lbl}>Loan Start Date<input style={inp} type="date" value={editRecordFormState.loanStartDate} onChange={(e) => updateEditRecordFormFieldValue('loanStartDate', e.target.value)} /></label>
+                  ) : null}
+                  {isDebtLike ? (
+                    <label style={lbl}>Remaining Payments<input style={inp} type="number" min="0" step="1" value={editRecordFormState.remainingPayments} onChange={(e) => updateEditRecordFormFieldValue('remainingPayments', e.target.value)} /></label>
+                  ) : null}
+                  {(col === 'debts' || col === 'loans') ? (
+                    <label style={lbl}>Collateral Asset<input style={inp} type="text" value={editRecordFormState.collateralAssetName} onChange={(e) => updateEditRecordFormFieldValue('collateralAssetName', e.target.value)} /></label>
+                  ) : null}
+                  {(col === 'debts' || col === 'loans') ? (
+                    <label style={lbl}>Collateral Market Value<input style={inp} type="number" min="0" step="0.01" value={editRecordFormState.collateralAssetMarketValue} onChange={(e) => updateEditRecordFormFieldValue('collateralAssetMarketValue', e.target.value)} /></label>
+                  ) : null}
+                  {(isDebtLike || isCreditCard) ? (
+                    <label style={lbl}>Interest Rate (%)<input style={inp} type="number" min="0" step="0.01" value={editRecordFormState.interestRatePercent} onChange={(e) => updateEditRecordFormFieldValue('interestRatePercent', e.target.value)} /></label>
+                  ) : null}
+                  {col === 'credit' ? (
+                    <label style={lbl}>Credit Limit<input style={inp} type="number" step="0.01" value={editRecordFormState.creditLimit} onChange={(e) => updateEditRecordFormFieldValue('creditLimit', e.target.value)} /></label>
+                  ) : null}
+                  {isCreditCard ? (
+                    <>
+                      <label style={lbl}>Max Capacity<input style={inp} type="number" step="0.01" value={editRecordFormState.maxCapacity} onChange={(e) => updateEditRecordFormFieldValue('maxCapacity', e.target.value)} /></label>
+                      <label style={lbl}>Current Balance<input style={inp} type="number" step="0.01" value={editRecordFormState.currentBalance} onChange={(e) => updateEditRecordFormFieldValue('currentBalance', e.target.value)} /></label>
+                      <label style={lbl}>Minimum Payment<input style={inp} type="number" step="0.01" value={editRecordFormState.minimumPayment} onChange={(e) => updateEditRecordFormFieldValue('minimumPayment', e.target.value)} /></label>
+                      <label style={lbl}>Monthly Payment<input style={inp} type="number" step="0.01" value={editRecordFormState.monthlyPayment} onChange={(e) => updateEditRecordFormFieldValue('monthlyPayment', e.target.value)} /></label>
+                    </>
+                  ) : null}
+                  <label style={lbl}>Date<input style={inp} type="date" value={editRecordFormState.date} onChange={(e) => updateEditRecordFormFieldValue('date', e.target.value)} /></label>
+                  <label style={{ ...lbl, gridColumn: '1 / -1' }}>Description<input style={inp} type="text" value={editRecordFormState.description} onChange={(e) => updateEditRecordFormFieldValue('description', e.target.value)} /></label>
+                  <div style={{ gridColumn: '1 / -1', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', marginTop: '4px' }}>
+                    <button style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '8px 14px', fontSize: '13px', fontWeight: 600, borderRadius: '10px', border: '1px solid rgba(255,255,255,0.07)', background: 'none', color: '#a1a1aa', cursor: 'pointer' }} onClick={() => setIsEditRecordModalOpen(false)} type="button"><IconX /> Cancel</button>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      {isAssetHolding ? (
+                        <button style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '8px 14px', fontSize: '13px', fontWeight: 600, borderRadius: '10px', border: '1px solid rgba(251,113,133,0.3)', background: 'rgba(251,113,133,0.1)', color: '#fb7185', cursor: 'pointer' }} onClick={() => { void deleteRecordFromCollectionByCollectionNameAndId('assetHoldings', editRecordFormState.recordId); setIsEditRecordModalOpen(false) }} type="button"><IconTrash /> Delete Asset</button>
+                      ) : null}
+                      <button style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '10px 20px', fontSize: '13px', fontWeight: 700, borderRadius: '10px', border: 'none', cursor: 'pointer', background: accentColor, color: col === 'income' ? '#000' : '#fff' }} type="submit"><IconCheck /> Save Changes</button>
+                    </div>
+                  </div>
+                </form>
+              </div>
+            </div>
+          </section>
+        )
+      })() : null}
       {syncNoticeState.message ? (
         <section aria-live="polite" className="pointer-events-none fixed bottom-4 right-4 z-[5200]">
           <div
             className={`rounded-xl border px-3 py-2 text-xs font-medium shadow-lg backdrop-blur ${
               syncNoticeState.tone === SYNC_NOTICE_TONE_SUCCESS
-                ? 'border-emerald-200/80 bg-emerald-50/90 text-emerald-800'
-                : 'border-rose-200/80 bg-rose-50/90 text-rose-800'
+                ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400'
+                : 'border-rose-500/30 bg-rose-500/10 text-rose-400'
             }`}
           >
             {syncNoticeState.message}
