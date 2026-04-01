@@ -37,8 +37,48 @@ const API_ERR_LOGIN_PASSWORD_REQUIRED = 'login password is required'
 const API_ERR_PROFILE_EXPORT_EMPTY = 'profile json export is empty'
 const API_ERR_PROFILE_NOT_FOUND = 'no api profile snapshot exists'
 const API_ERR_PROFILE_JSON_EMPTY = 'api profile json is unexpectedly empty'
+const API_ERR_PROFILE_PAYLOAD_INVALID = 'profile payload is malformed before api push'
+const API_ERR_PROFILE_COLLECTIONS_MISSING = 'profile payload is missing supported collections shape'
 const API_DEFAULT_ADMIN_USER = 'admin'
 const API_SYNC_DEFAULT_BASE_URL = ''
+
+/**
+ * Probes whether collections match either v2 (income/expenses arrays) or v3 (records array) shape.
+ * Returns tuple form so callers can consistently guard every helper call.
+ * @param {unknown} collectionsCandidate
+ * @returns {Result<boolean>}
+ */
+function probeSupportedBudgetCollectionsShapeWithTupleResult(collectionsCandidate) {
+  if (!collectionsCandidate || typeof collectionsCandidate !== 'object' || Array.isArray(collectionsCandidate)) {
+    return [false, null]
+  }
+  const hasV2Shape = Array.isArray(collectionsCandidate.income) && Array.isArray(collectionsCandidate.expenses)
+  const hasV3Shape = Array.isArray(collectionsCandidate.records)
+  return [hasV2Shape || hasV3Shape, null]
+}
+
+/**
+ * Validates supported collections shape and returns a tuple error with caller-provided message when invalid.
+ * @param {unknown} collectionsCandidate
+ * @param {string} invalidShapeMessage
+ * @param {Record<string, unknown>} [errorDetails]
+ * @returns {Result<true>}
+ */
+function requireSupportedBudgetCollectionsShapeWithTupleResult(collectionsCandidate, invalidShapeMessage, errorDetails) {
+  const [hasSupportedShape, probeError] = probeSupportedBudgetCollectionsShapeWithTupleResult(collectionsCandidate)
+  if (probeError) return [null, probeError]
+  if (hasSupportedShape !== true) {
+    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext(
+      'VALIDATION',
+      invalidShapeMessage,
+      true,
+      errorDetails
+    )
+    if (createErrorFailure) return [null, createErrorFailure]
+    return [null, errorValue]
+  }
+  return [true, null]
+}
 
 /**
  * Creates a normalized application error object for tuple-based error flow.
@@ -727,20 +767,15 @@ export async function exportBudgetCollectionsStateAsJsonTextSnapshot(budgetColle
     if (createErrorFailure) return [null, createErrorFailure]
     return [null, errorValue]
   }
-  const isV3Export = typeof budgetCollectionsState.schemaVersion === 'number' && budgetCollectionsState.schemaVersion >= 3
-  if (isV3Export && !Array.isArray(budgetCollectionsState.records)) {
+  const [hasSupportedCollectionsShape, supportedCollectionsShapeError] = requireSupportedBudgetCollectionsShapeWithTupleResult(
+    budgetCollectionsState,
+    'budgetCollectionsState must include v2 (income/expenses) or v3 (records) collections'
+  )
+  if (supportedCollectionsShapeError) return [null, supportedCollectionsShapeError]
+  if (!hasSupportedCollectionsShape) {
     const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext(
       'VALIDATION',
-      'v3 budgetCollectionsState must include a records array',
-      true
-    )
-    if (createErrorFailure) return [null, createErrorFailure]
-    return [null, errorValue]
-  }
-  if (!isV3Export && (!Array.isArray(budgetCollectionsState.income) || !Array.isArray(budgetCollectionsState.expenses))) {
-    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext(
-      'VALIDATION',
-      'budgetCollectionsState must include income and expenses arrays',
+      'supported collections shape validation did not return success unexpectedly',
       true
     )
     if (createErrorFailure) return [null, createErrorFailure]
@@ -789,11 +824,15 @@ export async function importBudgetCollectionsStateFromJsonTextSnapshot(budgetCol
     if (createErrorFailure) return [null, createErrorFailure]
     return [null, errorValue]
   }
-  const isV3Import = typeof parsedValue.schemaVersion === 'number' && parsedValue.schemaVersion >= 3
-  if (!isV3Import && (!Array.isArray(parsedValue.income) || !Array.isArray(parsedValue.expenses))) {
+  const [isSupportedImportedCollectionsShape, supportedImportedCollectionsShapeError] = requireSupportedBudgetCollectionsShapeWithTupleResult(
+    parsedValue,
+    'imported profile must include v2 (income/expenses) or v3 (records) collections'
+  )
+  if (supportedImportedCollectionsShapeError) return [null, supportedImportedCollectionsShapeError]
+  if (!isSupportedImportedCollectionsShape) {
     const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext(
       'VALIDATION',
-      'imported profile is missing income or expenses arrays',
+      'supported imported collections validation did not return success unexpectedly',
       true
     )
     if (createErrorFailure) return [null, createErrorFailure]
@@ -879,7 +918,9 @@ export async function importCompleteFinancialProfileFromJsonTextSnapshot(profile
   }
 
   // Backward compatibility: treat direct collections payload as legacy export.
-  if (Array.isArray(parsedValue.income) && Array.isArray(parsedValue.expenses)) {
+  const [isDirectCollectionsPayload, directCollectionsPayloadProbeError] = probeSupportedBudgetCollectionsShapeWithTupleResult(parsedValue)
+  if (directCollectionsPayloadProbeError) return [null, directCollectionsPayloadProbeError]
+  if (isDirectCollectionsPayload) {
     return [{
       collections: parsedValue,
       uiPreferences: null,
@@ -908,10 +949,15 @@ export async function importCompleteFinancialProfileFromJsonTextSnapshot(profile
     if (createErrorFailure) return [null, createErrorFailure]
     return [null, errorValue]
   }
-  if (!Array.isArray(collections.income) || !Array.isArray(collections.expenses)) {
+  const [hasSupportedNestedCollectionsShape, supportedNestedCollectionsShapeError] = requireSupportedBudgetCollectionsShapeWithTupleResult(
+    collections,
+    'imported profile collections must include v2 (income/expenses) or v3 (records) shape'
+  )
+  if (supportedNestedCollectionsShapeError) return [null, supportedNestedCollectionsShapeError]
+  if (!hasSupportedNestedCollectionsShape) {
     const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext(
       'VALIDATION',
-      'imported profile collections are missing income or expenses arrays',
+      'supported nested collections validation did not return success unexpectedly',
       true
     )
     if (createErrorFailure) return [null, createErrorFailure]
@@ -1357,6 +1403,42 @@ function joinApiUrl(base, path) {
   return `${normalizedBase.replace(/\/+$/, '')}${path}`
 }
 
+/**
+ * Builds a readable API error message from status and response payload.
+ * @param {number} status
+ * @param {unknown} responsePayload
+ * @returns {string}
+ */
+function buildReadableApiErrorMessage(status, responsePayload) {
+  const fallbackMessage = `API request failed (status ${status})`
+  if (!responsePayload || typeof responsePayload !== 'object' || Array.isArray(responsePayload)) {
+    return fallbackMessage
+  }
+  const apiMessage = typeof responsePayload.message === 'string' ? responsePayload.message.trim() : ''
+  if (apiMessage.length === 0) return fallbackMessage
+  return `${apiMessage} (status ${status})`
+}
+
+/**
+ * Normalizes unknown error values into small diagnostic-safe objects.
+ * @param {unknown} errorValue
+ * @returns {{name?: string, message: string, code?: string, kind?: string, status?: number}}
+ */
+function summarizeErrorForDiagnostics(errorValue) {
+  if (!errorValue || typeof errorValue !== 'object') {
+    return { message: String(errorValue || '') }
+  }
+  const safeError = errorValue
+  const details = safeError.details && typeof safeError.details === 'object' ? safeError.details : {}
+  return {
+    name: typeof safeError.name === 'string' ? safeError.name : undefined,
+    kind: typeof safeError.kind === 'string' ? safeError.kind : undefined,
+    message: typeof safeError.message === 'string' ? safeError.message : 'unexpected error',
+    code: typeof safeError.code === 'string' ? safeError.code : (typeof details.code === 'string' ? details.code : undefined),
+    status: Number.isFinite(Number(safeError.status)) ? Number(safeError.status) : (Number.isFinite(Number(details.status)) ? Number(details.status) : undefined)
+  }
+}
+
 async function requestBudgetApiJson(url, requestInit = {}) {
   const [response, responseError] = await Promise.resolve()
     .then(() => fetch(url, {
@@ -1389,7 +1471,13 @@ async function requestBudgetApiJson(url, requestInit = {}) {
     : [null, null]
   if (jsonError) return [null, jsonError]
   if (!response.ok) {
-    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext(API_KIND_NETWORK, `api status ${response.status}`, true, { url, status: response.status, responseBody: jsonValue })
+    const readableErrorMessage = buildReadableApiErrorMessage(response.status, jsonValue)
+    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext(
+      API_KIND_NETWORK,
+      readableErrorMessage,
+      true,
+      { url, status: response.status, responseBody: jsonValue }
+    )
     if (createErrorFailure) return [null, createErrorFailure]
     return [null, errorValue]
   }
@@ -1435,8 +1523,22 @@ export async function readSupabaseAuthenticatedUserSummary(supabaseWebConfig) {
   if (clientBundleError) return [null, clientBundleError]
   if (!clientBundle) return [null, null]
   const [dashboardResponse, dashboardError] = await requestBudgetApiJson(joinApiUrl(clientBundle.apiBaseUrl, API_BLOG_DASHBOARD_PATH))
-  if (dashboardError) return [null, null]
-  if (!dashboardResponse || typeof dashboardResponse !== 'object') return [null, null]
+  if (dashboardError) {
+    const statusCode = Number(dashboardError?.details?.status || 0)
+    // No active admin cookie should map to no-session, not a hard failure.
+    if (statusCode === 401) return [null, null]
+    return [null, dashboardError]
+  }
+  if (!dashboardResponse || typeof dashboardResponse !== 'object' || Array.isArray(dashboardResponse)) {
+    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext(
+      API_KIND_NETWORK,
+      'API returned an unexpected session payload',
+      true,
+      { dashboardResponseType: typeof dashboardResponse }
+    )
+    if (createErrorFailure) return [null, createErrorFailure]
+    return [null, errorValue]
+  }
   return [{ id: API_DEFAULT_ADMIN_USER, email: '' }, null]
 }
 
@@ -1470,6 +1572,29 @@ export async function pushCompleteFinancialProfileIntoSupabaseForAuthenticatedUs
   }
   const [profilePayload, profilePayloadError] = await safelyParseJsonTextIntoObjectUsingPromiseBoundary(profileJsonText)
   if (profilePayloadError) return [null, profilePayloadError]
+  if (!profilePayload || typeof profilePayload !== 'object' || Array.isArray(profilePayload)) {
+    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext(API_KIND_VALIDATION, API_ERR_PROFILE_PAYLOAD_INVALID, true)
+    if (createErrorFailure) return [null, createErrorFailure]
+    return [null, errorValue]
+  }
+  const profileCandidate = profilePayload.profile
+  const collectionsCandidate = profileCandidate && typeof profileCandidate === 'object' && !Array.isArray(profileCandidate)
+    ? profileCandidate.collections
+    : null
+  const [hasSupportedCollectionsShape, supportedCollectionsShapeError] = requireSupportedBudgetCollectionsShapeWithTupleResult(
+    collectionsCandidate,
+    API_ERR_PROFILE_COLLECTIONS_MISSING
+  )
+  if (supportedCollectionsShapeError) return [null, supportedCollectionsShapeError]
+  if (!hasSupportedCollectionsShape) {
+    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext(
+      API_KIND_VALIDATION,
+      'profile collections validation did not return success unexpectedly',
+      true
+    )
+    if (createErrorFailure) return [null, createErrorFailure]
+    return [null, errorValue]
+  }
   const [pushResponse, pushError] = await requestBudgetApiJson(joinApiUrl(clientBundle.apiBaseUrl, API_BUDGET_PROFILE_PATH), {
     method: API_HTTP_METHOD_PUT,
     headers: { [API_HTTP_HEADER_CONTENT_TYPE]: API_HTTP_CONTENT_TYPE_JSON },
@@ -1489,7 +1614,9 @@ export async function pullCompleteFinancialProfileFromSupabaseForAuthenticatedUs
   }
   const [pullResponse, pullError] = await requestBudgetApiJson(joinApiUrl(clientBundle.apiBaseUrl, API_BUDGET_PROFILE_PATH))
   if (pullError) return [null, pullError]
-  const profilePayload = pullResponse && typeof pullResponse.profilePayload === 'object' ? pullResponse.profilePayload : null
+  const profilePayload = pullResponse && typeof pullResponse.profilePayload === 'object' && !Array.isArray(pullResponse.profilePayload)
+    ? pullResponse.profilePayload
+    : null
   if (!profilePayload) {
     const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext(API_KIND_NOT_FOUND, API_ERR_PROFILE_NOT_FOUND, true)
     if (createErrorFailure) return [null, createErrorFailure]
@@ -1660,10 +1787,15 @@ export async function persistBudgetCollectionsStateIntoLocalStorageCache(budgetC
     return [null, errorValue]
   }
 
-  if (!Array.isArray(budgetCollectionsState.income) || !Array.isArray(budgetCollectionsState.expenses)) {
+  const [hasSupportedPersistCollectionsShape, supportedPersistCollectionsShapeError] = requireSupportedBudgetCollectionsShapeWithTupleResult(
+    budgetCollectionsState,
+    'budgetCollectionsState must include v2 (income/expenses) or v3 (records) collections'
+  )
+  if (supportedPersistCollectionsShapeError) return [null, supportedPersistCollectionsShapeError]
+  if (!hasSupportedPersistCollectionsShape) {
     const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext(
       'VALIDATION',
-      'budgetCollectionsState must include income and expenses arrays',
+      'supported persist collections validation did not return success unexpectedly',
       true
     )
     if (createErrorFailure) return [null, createErrorFailure]
@@ -1725,10 +1857,15 @@ export async function loadBudgetCollectionsStateFromLocalStorageCache() {
     return [null, errorValue]
   }
 
-  if (!Array.isArray(cachedSnapshotValue.income) || !Array.isArray(cachedSnapshotValue.expenses)) {
+  const [hasSupportedCachedCollectionsShape, supportedCachedCollectionsShapeError] = requireSupportedBudgetCollectionsShapeWithTupleResult(
+    cachedSnapshotValue,
+    'cached budgeting state must include v2 (income/expenses) or v3 (records) collections'
+  )
+  if (supportedCachedCollectionsShapeError) return [null, supportedCachedCollectionsShapeError]
+  if (!hasSupportedCachedCollectionsShape) {
     const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext(
       'VALIDATION',
-      'cached budgeting state is missing income or expenses arrays',
+      'supported cached collections validation did not return success unexpectedly',
       true
     )
     if (createErrorFailure) return [null, createErrorFailure]
@@ -2096,7 +2233,9 @@ export async function computeFinancialRiskFindingsUsingBackgroundWorkerWhenAvail
     try {
       workerHandle = new Worker(new URL('../workers/risk-worker.js', import.meta.url), { type: 'module' })
     } catch (workerConstructionFailure) {
-      console.warn('[risk] Worker construction failed; falling back to main-thread risk checks.', workerConstructionFailure)
+      console.warn('[risk] Worker construction failed; falling back to main-thread risk checks.', {
+        error: summarizeErrorForDiagnostics(workerConstructionFailure)
+      })
       const [fallbackValue, fallbackError] = extractFinancialRiskFindingsFromCurrentCollectionsState(/** @type {any} */ (currentCollectionsState))
       if (fallbackError) {
         resolve([null, fallbackError])
@@ -2161,7 +2300,12 @@ export async function computeFinancialRiskFindingsUsingBackgroundWorkerWhenAvail
 
     workerHandle.onerror = (workerFailureEvent) => {
       // Critical path: worker failure must degrade to deterministic in-process pure computation.
-      console.warn('[risk] Worker runtime error; falling back to main-thread risk checks.', workerFailureEvent)
+      console.warn('[risk] Worker runtime error; falling back to main-thread risk checks.', {
+        message: workerFailureEvent?.message || 'worker runtime error',
+        filename: workerFailureEvent?.filename || '',
+        lineno: workerFailureEvent?.lineno || 0,
+        colno: workerFailureEvent?.colno || 0
+      })
       const [fallbackValue, fallbackError] = extractFinancialRiskFindingsFromCurrentCollectionsState(/** @type {any} */ (currentCollectionsState))
       if (fallbackError) {
         cleanupAndResolve(null, fallbackError)
