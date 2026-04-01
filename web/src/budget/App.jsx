@@ -995,10 +995,15 @@ export default function App() {
 
   React.useEffect(() => {
     function handleScrollVisibilityUpdate() {
-      setIsScrolledPastThreshold(window.scrollY > 320)
+      const scrollY = window.scrollY ?? document.documentElement.scrollTop ?? 0
+      setIsScrolledPastThreshold(scrollY > 320)
     }
     window.addEventListener('scroll', handleScrollVisibilityUpdate, { passive: true })
-    return () => window.removeEventListener('scroll', handleScrollVisibilityUpdate)
+    document.addEventListener('scroll', handleScrollVisibilityUpdate, { passive: true })
+    return () => {
+      window.removeEventListener('scroll', handleScrollVisibilityUpdate)
+      document.removeEventListener('scroll', handleScrollVisibilityUpdate)
+    }
   }, [])
 
   React.useEffect(() => {
@@ -4642,8 +4647,8 @@ export default function App() {
 
       {isScrolledPastThreshold && (
         <button
-          className="fixed bottom-5 right-5 z-50 flex h-10 w-10 items-center justify-center rounded-full border border-amber-500/40 bg-amber-500/90 text-black shadow-lg backdrop-blur transition-opacity hover:bg-amber-400 focus:outline-none"
-          style={{ animation: 'fadeInUp 0.2s ease-out' }}
+          className="fixed bottom-5 right-5 flex h-10 w-10 items-center justify-center rounded-full border border-amber-500/40 bg-amber-500/90 text-black shadow-lg backdrop-blur transition-opacity hover:bg-amber-400 focus:outline-none"
+          style={{ animation: 'fadeInUp 0.2s ease-out', zIndex: 9999 }}
           onClick={scrollViewportToTopFromUtilityButton}
           type="button"
           aria-label="Scroll to top"
