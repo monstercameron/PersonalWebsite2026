@@ -10,8 +10,7 @@
   --accent-soft: #fef08a;
   --glow: rgba(234, 179, 8, 0.15);
   --site-header-offset: 96px;
-  --budget-nav-link-item-offset: 3px;
-  --budget-anchor-scroll-offset: 260px;
+  --budget-anchor-scroll-offset: 200px;
 }
 * { box-sizing: border-box; }
 body { 
@@ -88,12 +87,102 @@ body {
 /* Main */
 .main-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 24px; padding: 40px 0 60px; flex: 1; align-content: start; }
 .budget-route-shell { margin-top: 24px; }
-.budget-sticky-toolbar { top: calc(var(--site-header-offset) + 4px); z-index: 3300; }
-.budget-nav-link-item { position: relative; top: var(--budget-nav-link-item-offset); }
+.budget-sticky-toolbar { top: calc(var(--site-header-offset) + 4px); z-index: 3300; backdrop-filter: blur(14px) saturate(1.6); -webkit-backdrop-filter: blur(14px) saturate(1.6); }
+.budget-nav-util-btn { display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; border-radius: 5px; color: #64748b; transition: background-color 120ms ease, color 120ms ease; flex-shrink: 0; }
+.budget-nav-util-btn:hover { background-color: rgba(100, 116, 139, 0.12); color: #1e293b; }
+.budget-nav-action-btn { display: inline-flex; align-items: center; gap: 5px; padding: 5px 10px; border-radius: 7px; font-size: 11px; font-weight: 600; white-space: nowrap; border: 1px solid transparent; cursor: pointer; line-height: 1; transition: background-color 120ms ease; }
+.budget-nav-jump-link { white-space: nowrap; text-decoration: none; }
 /* Budget in-page anchor targets should land lower to clear stacked sticky navs. */
 .app-shell section[id] { scroll-margin-top: var(--budget-anchor-scroll-offset) !important; }
 .app-shell { overflow-x: clip; }
 .meta-hover-box { max-width: min(20rem, calc(100vw - 2rem)); overflow-wrap: anywhere; }
+
+/* When any meta-hover is active, lift the entire section above the sticky nav (z-index: 3300) */
+.z-layer-section:has(.meta-hover:hover),
+.z-layer-section:has(.meta-hover:focus-within) {
+  z-index: 3400 !important;
+}
+
+/* Redesigned hover popup (used by renderHoverMetadataBoxForElement) */
+.meta-hover-popup {
+  position: absolute;
+  left: 0;
+  bottom: calc(100% + 8px);
+  z-index: 3400;
+  width: 18rem;
+  max-width: min(20rem, calc(100vw - 2rem));
+  overflow: hidden;
+  border-radius: 16px;
+  border: 1px solid rgba(51, 65, 85, 0.75);
+  background: #0f172a;
+  box-shadow: 0 16px 40px rgba(2, 6, 23, 0.7), 0 0 0 1px rgba(148, 163, 184, 0.06);
+  opacity: 0;
+  pointer-events: none;
+  overflow-wrap: anywhere;
+  transition: opacity 0.15s ease, transform 0.15s ease;
+  transform: translateY(-4px);
+}
+.meta-hover:hover .meta-hover-popup,
+.meta-hover:focus-within .meta-hover-popup {
+  opacity: 1;
+  transform: translateY(0);
+}
+.meta-hover-popup-header {
+  padding: 8px 12px;
+  border-bottom: 1px solid rgba(51, 65, 85, 0.55);
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.17em;
+  color: #475569;
+  margin: 0;
+}
+.meta-hover-popup-status {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px 12px;
+}
+.meta-hover-popup-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  margin-top: 3px;
+}
+.meta-hover-popup-status-text {
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.5;
+  margin: 0;
+}
+.meta-hover-popup-details {
+  padding: 8px 12px 10px;
+  border-top: 1px solid rgba(51, 65, 85, 0.55);
+  list-style: none;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.meta-hover-popup-detail-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+}
+.meta-hover-popup-detail-dot {
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: #475569;
+  flex-shrink: 0;
+  margin-top: 6px;
+}
+.meta-hover-popup-detail-text {
+  font-size: 11px;
+  line-height: 1.5;
+  color: #94a3b8;
+}
 
 /* Panels */
 .panel { background: var(--panel); backdrop-filter: blur(16px); border: 1px solid var(--line); padding: 32px; border-radius: 16px; box-shadow: 0 8px 32px -12px rgba(0,0,0,0.5); transition: transform 100ms ease, border-color 100ms ease; }

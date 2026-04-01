@@ -567,16 +567,36 @@ function buildRowsSortedByKeyAndDirection(rowCollection, keyName, direction) {
 
 function renderHoverMetadataBoxForElement(props) {
   const { label, lines, children, className = '', boxClassName = '' } = props
+  const displayLabel = label.endsWith(' Metadata') ? label.slice(0, -9) : label
+  const firstLine = Array.isArray(lines) && lines.length > 0 ? String(lines[0]) : ''
+  const detailLines = Array.isArray(lines) ? lines.slice(1) : []
+  const statusTone = firstLine.startsWith('Good') ? 'good'
+    : firstLine.startsWith('Watch') ? 'watch'
+    : (firstLine.startsWith('Risk') || firstLine.startsWith('Gap')) ? 'risk'
+    : null
+  const dotColor = statusTone === 'good' ? '#34d399' : statusTone === 'watch' ? '#fbbf24' : statusTone === 'risk' ? '#f87171' : '#64748b'
+  const statusTextColor = statusTone === 'good' ? '#6ee7b7' : statusTone === 'watch' ? '#fcd34d' : statusTone === 'risk' ? '#fca5a5' : '#cbd5e1'
   return (
     <div className={`meta-hover group relative ${className}`}>
       {children}
-      <aside className={`meta-hover-box squircle-sm pointer-events-none absolute left-0 top-full z-40 mt-2 w-72 border border-white/70 bg-slate-950/90 p-3 text-xs text-slate-100 opacity-0 shadow-2xl transition duration-150 group-hover:opacity-100 group-focus-within:opacity-100 ${boxClassName}`}>
-        <p className="mb-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-teal-200">{label}</p>
-        <ul className="space-y-1 text-slate-200">
-          {lines.map((lineItem, lineIndex) => (
-            <li key={`${label}-${lineIndex}-${lineItem}`}>{lineItem}</li>
-          ))}
-        </ul>
+      <aside className={`meta-hover-popup ${boxClassName}`}>
+        <p className="meta-hover-popup-header">{displayLabel}</p>
+        {firstLine ? (
+          <div className="meta-hover-popup-status">
+            <span className="meta-hover-popup-dot" style={{ background: dotColor }} />
+            <p className="meta-hover-popup-status-text" style={{ color: statusTextColor }}>{firstLine}</p>
+          </div>
+        ) : null}
+        {detailLines.length > 0 ? (
+          <ul className="meta-hover-popup-details">
+            {detailLines.map((lineItem, lineIndex) => (
+              <li key={`${label}-${lineIndex}-${lineItem}`} className="meta-hover-popup-detail-item">
+                <span className="meta-hover-popup-detail-dot" />
+                <span className="meta-hover-popup-detail-text">{lineItem}</span>
+              </li>
+            ))}
+          </ul>
+        ) : null}
       </aside>
     </div>
   )
@@ -584,17 +604,37 @@ function renderHoverMetadataBoxForElement(props) {
 
 function renderMetadataTableHeaderCell(props) {
   const { label, lines, columnLabel, isRightAligned = false } = props
+  const displayLabel = label.endsWith(' Metadata') ? label.slice(0, -9) : label
+  const firstLine = Array.isArray(lines) && lines.length > 0 ? String(lines[0]) : ''
+  const detailLines = Array.isArray(lines) ? lines.slice(1) : []
+  const statusTone = firstLine.startsWith('Good') ? 'good'
+    : firstLine.startsWith('Watch') ? 'watch'
+    : (firstLine.startsWith('Risk') || firstLine.startsWith('Gap')) ? 'risk'
+    : null
+  const dotColor = statusTone === 'good' ? '#34d399' : statusTone === 'watch' ? '#fbbf24' : statusTone === 'risk' ? '#f87171' : '#64748b'
+  const statusTextColor = statusTone === 'good' ? '#6ee7b7' : statusTone === 'watch' ? '#fcd34d' : statusTone === 'risk' ? '#fca5a5' : '#cbd5e1'
   return (
     <th className={`px-3 py-2 font-semibold ${isRightAligned ? 'text-right' : 'text-left'}`}>
       <span className="meta-hover group relative inline-flex">
         <span>{columnLabel}</span>
-        <aside className="meta-hover-box squircle-sm pointer-events-none absolute left-0 top-full mt-2 w-72 border border-white/70 bg-slate-950/90 p-3 text-xs text-slate-100 opacity-0 shadow-2xl transition duration-150 group-hover:opacity-100 group-focus-within:opacity-100">
-          <p className="mb-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-teal-200">{label}</p>
-          <ul className="space-y-1 text-slate-200">
-            {lines.map((lineItem, lineIndex) => (
-              <li key={`${label}-${lineIndex}-${lineItem}`}>{lineItem}</li>
-            ))}
-          </ul>
+        <aside className="meta-hover-popup">
+          <p className="meta-hover-popup-header">{displayLabel}</p>
+          {firstLine ? (
+            <div className="meta-hover-popup-status">
+              <span className="meta-hover-popup-dot" style={{ background: dotColor }} />
+              <p className="meta-hover-popup-status-text" style={{ color: statusTextColor }}>{firstLine}</p>
+            </div>
+          ) : null}
+          {detailLines.length > 0 ? (
+            <ul className="meta-hover-popup-details">
+              {detailLines.map((lineItem, lineIndex) => (
+                <li key={`${label}-${lineIndex}-${lineItem}`} className="meta-hover-popup-detail-item">
+                  <span className="meta-hover-popup-detail-dot" />
+                  <span className="meta-hover-popup-detail-text">{lineItem}</span>
+                </li>
+              ))}
+            </ul>
+          ) : null}
         </aside>
       </span>
     </th>
@@ -885,6 +925,7 @@ export default function App() {
   const [loginStatusMessage, setLoginStatusMessage] = React.useState('')
   const [isLoginOperationInFlight, setIsLoginOperationInFlight] = React.useState(false)
   const [isLoginPasswordVisible, setIsLoginPasswordVisible] = React.useState(false)
+  const [activeSectionId, setActiveSectionId] = React.useState('overview')
 
   function showSyncNotice(tone, message) {
     if (syncNoticeTimeoutRef.current) {
@@ -1013,6 +1054,27 @@ export default function App() {
   }, [textScaleMultiplier])
 
   React.useEffect(() => {
+    const sectionIds = ['overview', 'records', 'debts', 'credit', 'savings', 'assets', 'details', 'loan-calculator', 'risks', 'goals', 'net-worth-trajectory', 'emergency-fund']
+    const visibleSet = new Set()
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) visibleSet.add(entry.target.id)
+          else visibleSet.delete(entry.target.id)
+        })
+        const firstVisible = sectionIds.find((id) => visibleSet.has(id))
+        if (firstVisible) setActiveSectionId(firstVisible)
+      },
+      { threshold: 0, rootMargin: '-10% 0px -70% 0px' }
+    )
+    sectionIds.forEach((id) => {
+      const el = document.getElementById(id)
+      if (el) observer.observe(el)
+    })
+    return () => observer.disconnect()
+  }, [])
+
+  React.useEffect(() => {
     if (!isAddRecordModalOpen && !isAddGoalModalOpen && !isAddPersonaModalOpen && !isAddAssetModalOpen && !isProfileTransferModalOpen && !isEditRecordModalOpen && !isRecordNotesModalOpen && !selectedRiskFinding && !isLoginModalOpen) return
     function closeOnEscape(keyboardEvent) {
       if (keyboardEvent.key === 'Escape') {
@@ -1084,7 +1146,7 @@ export default function App() {
         emergencyFundSummary: { emergencyFundGoal: 0, monthlyExpenses: 0, totalRecordedExpenses: 0, monthlyDebtMinimums: 0, monthlyObligations: 0, liquidAmount: 0, investedAmount: 0, missingLiquidAmount: 0, investedTarget: 0, totalCoverageMonths: 0, recurringExpenseRows: [], debtMinimumRows: [] },
         creditCardInformationCollection: [],
         creditCardSummary: { totalCurrent: 0, totalMonthly: 0, totalUtilizationPercent: 0, remainingCapacity: 0, maxCapacity: 0 },
-        creditCardRecommendations: { weightedPayoffMonthsCurrent: 0, weightedPayoffMonthsRecommended: 0, rows: [] },
+        creditCardRecommendations: { strategy: '', currentTotalMonthlyPayment: 0, recommendedTotalMonthlyPayment: 0, weightedPayoffMonthsCurrent: 0, weightedPayoffMonthsRecommended: 0, rows: [] },
         planningInsights: {
           forecast: { committed: 0, planned: 0, optional: 0, projectedRiskLevel: 'low' },
           budgetVsActualRows: [],
@@ -2720,6 +2782,30 @@ export default function App() {
   function scrollViewportToTopFromUtilityButton() {
     scrollViewportToTopWithSmoothBehavior()
   }
+  function scrollToSectionAnchorWithFastEasing(clickEvent) {
+    const href = clickEvent.currentTarget.getAttribute('href')
+    if (!href || !href.startsWith('#')) return
+    const targetEl = document.getElementById(href.slice(1))
+    if (!targetEl) return
+    clickEvent.preventDefault()
+    const navBar = document.querySelector('.budget-sticky-toolbar')
+    const navHeight = navBar ? navBar.getBoundingClientRect().height : 0
+    const siteHeaderOffset = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--site-header-offset') || '96', 10)
+    const targetTop = targetEl.getBoundingClientRect().top + window.scrollY - navHeight - siteHeaderOffset - 12
+    const startY = window.scrollY
+    const distance = targetTop - startY
+    const duration = 100
+    const startTime = performance.now()
+    function step(now) {
+      const elapsed = now - startTime
+      const progress = Math.min(elapsed / duration, 1)
+      // ease-out cubic
+      const eased = 1 - Math.pow(1 - progress, 3)
+      window.scrollTo(0, startY + distance * eased)
+      if (progress < 1) requestAnimationFrame(step)
+    }
+    requestAnimationFrame(step)
+  }
   function updateEditRecordFormFieldValue(fieldName, nextFieldValue) {
     setEditRecordFormState((previousFormState) => ({ ...previousFormState, [fieldName]: nextFieldValue }))
   }
@@ -3019,55 +3105,69 @@ export default function App() {
 
   return (
     <main className={`app-shell theme-${themeName} mx-auto min-h-screen w-full max-w-7xl p-4 pb-16 md:p-8`}>
-      <section className="sticky z-[110] budget-sticky-toolbar mb-4 rounded-2xl border border-white/40 bg-white/85 p-2 shadow-lg backdrop-blur">
-        <div className="mb-2 flex items-center justify-between gap-2">
-          <h1 className="truncate text-sm font-bold text-slate-900 md:text-base">Financial Flight Deck</h1>
-          <div className="flex items-center gap-1">
-            <button className="inline-flex items-center gap-1 rounded-lg border border-white/30 bg-white/85 px-2 py-1 text-[11px] font-semibold text-slate-700" onClick={toggleThemeNameBetweenLightAndDark} type="button">{themeName === 'dark' ? <><IconMoon /> Dark</> : <><IconSun /> Light</>}</button>
-            <button className="inline-flex items-center gap-1 rounded-lg border border-white/30 bg-white/85 px-2 py-1 text-[11px] font-semibold text-slate-700" onClick={() => void updateGlobalTextScaleByDelta(0.05)} type="button"><IconZoomIn /> A+</button>
-            <button className="inline-flex items-center gap-1 rounded-lg border border-white/30 bg-white/85 px-2 py-1 text-[11px] font-semibold text-slate-700" onClick={() => void updateGlobalTextScaleByDelta(-0.05)} type="button"><IconZoomOut /> A-</button>
-            <button className="inline-flex items-center gap-1 rounded-lg border border-white/30 bg-white/85 px-2 py-1 text-[11px] font-semibold text-slate-700" onClick={resetGlobalTextScaleToDefault} type="button"><IconRefresh /> Reset</button>
+      <section className="budget-sticky-toolbar sticky z-[110] mb-4 overflow-hidden rounded-2xl border border-slate-200/70 bg-white/75 shadow-md">
+        {/* Row 1: title + utility controls + action buttons */}
+        <div className="flex min-w-0 items-center gap-2 px-3 py-2">
+          <h1 className="shrink-0 text-sm font-bold text-slate-900 md:text-base">Financial Flight Deck</h1>
+          <div className="ml-1 flex shrink-0 items-center rounded-lg border border-slate-200/80 bg-slate-50/80 p-0.5">
+            <button title={themeName === 'dark' ? 'Switch to light' : 'Switch to dark'} className="budget-nav-util-btn" onClick={toggleThemeNameBetweenLightAndDark} type="button">{themeName === 'dark' ? <IconMoon /> : <IconSun />}</button>
+            <button title="Larger text" className="budget-nav-util-btn" onClick={() => void updateGlobalTextScaleByDelta(0.05)} type="button"><IconZoomIn /></button>
+            <button title="Smaller text" className="budget-nav-util-btn" onClick={() => void updateGlobalTextScaleByDelta(-0.05)} type="button"><IconZoomOut /></button>
+            <button title="Reset text size" className="budget-nav-util-btn" onClick={resetGlobalTextScaleToDefault} type="button"><IconRefresh /></button>
+          </div>
+          <div className="flex-1" />
+          <div className="no-scrollbar flex flex-nowrap items-center gap-1 overflow-x-auto">
+            <button className="budget-nav-action-btn bg-teal-600 text-white hover:bg-teal-700" onClick={() => setIsAddRecordModalOpen(true)} type="button"><IconPlus /> Record</button>
+            <button className="budget-nav-action-btn bg-sky-600 text-white hover:bg-sky-700" onClick={() => setIsAddGoalModalOpen(true)} type="button"><IconPlus /> Goal</button>
+            <span className="mx-0.5 h-4 w-px shrink-0 bg-slate-200" aria-hidden="true" />
+            <button className="budget-nav-action-btn border border-slate-200 text-slate-700 hover:bg-slate-100" onClick={openManagePersonasModal} type="button"><IconUsers /> Personas</button>
+            <button className="budget-nav-action-btn border border-slate-200 text-slate-700 hover:bg-slate-100" onClick={() => void openProfileTransferModalForMode('import')} type="button"><IconDownload /> Import</button>
+            <button className="budget-nav-action-btn border border-slate-200 text-slate-700 hover:bg-slate-100" onClick={() => void openProfileTransferModalForMode('export')} type="button"><IconUpload /> Export</button>
+            <span className="mx-0.5 h-4 w-px shrink-0 bg-slate-200" aria-hidden="true" />
+            {supabaseAuthUserSummary ? (
+              <button className="budget-nav-action-btn bg-emerald-600 text-white hover:bg-emerald-700" onClick={openLoginModal} type="button"><IconLogOut /> Admin</button>
+            ) : (
+              <button className="budget-nav-action-btn bg-slate-800 text-white hover:bg-slate-900" onClick={openLoginModal} type="button"><IconLogIn /> Login</button>
+            )}
           </div>
         </div>
-        <div className="no-scrollbar mb-2 flex flex-nowrap items-center gap-1.5 overflow-x-auto pb-1">
-          {primaryJumpLinks.map((linkItem, linkIndex) => (
+        {/* Row 2: section jump links with active scrollspy */}
+        <div className="no-scrollbar flex flex-nowrap items-center gap-0.5 overflow-x-auto border-t border-slate-200/60 px-2 py-1.5">
+          {primaryJumpLinks.map((linkItem) => (
             <a
               key={linkItem.href}
-              className={linkIndex === 0
-                ? 'budget-nav-link-item rounded-lg bg-slate-900 px-2.5 py-1.5 text-[11px] font-semibold text-white'
-                : 'budget-nav-link-item rounded-lg border border-slate-200/90 bg-slate-100/90 px-2.5 py-1.5 text-[11px] font-semibold text-slate-700'}
+              className={`budget-nav-jump-link shrink-0 rounded-md px-2.5 py-1 text-[11px] font-medium transition-colors ${activeSectionId === linkItem.href.slice(1) ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-800'}`}
               href={linkItem.href}
+              onClick={scrollToSectionAnchorWithFastEasing}
             >
               {linkItem.label}
             </a>
           ))}
+          <span className="mx-1.5 h-3 w-px shrink-0 bg-slate-300" aria-hidden="true" />
           {secondaryJumpLinks.map((linkItem) => (
-            <a key={linkItem.href} className="budget-nav-link-item rounded-lg border border-slate-200/90 bg-white/90 px-2.5 py-1.5 text-[11px] font-semibold text-slate-600" href={linkItem.href}>{linkItem.label}</a>
+            <a
+              key={linkItem.href}
+              className={`budget-nav-jump-link shrink-0 rounded-md px-2.5 py-1 text-[11px] font-medium transition-colors ${activeSectionId === linkItem.href.slice(1) ? 'bg-slate-900 text-white' : 'text-slate-500 hover:bg-slate-100 hover:text-slate-700'}`}
+              href={linkItem.href}
+              onClick={scrollToSectionAnchorWithFastEasing}
+            >
+              {linkItem.label}
+            </a>
           ))}
-        </div>
-        <div className="no-scrollbar flex flex-nowrap items-center gap-1.5 overflow-x-auto pb-1">
-          <button className="inline-flex items-center gap-1.5 rounded-lg border border-white/30 bg-teal-600 px-2.5 py-1.5 text-[11px] font-semibold text-white" onClick={() => setIsAddRecordModalOpen(true)} type="button"><IconPlus /> Record</button>
-          <button className="inline-flex items-center gap-1.5 rounded-lg border border-white/30 bg-sky-600 px-2.5 py-1.5 text-[11px] font-semibold text-white" onClick={() => setIsAddGoalModalOpen(true)} type="button"><IconPlus /> Goal</button>
-          <button className="inline-flex items-center gap-1.5 rounded-lg border border-white/30 bg-violet-600 px-2.5 py-1.5 text-[11px] font-semibold text-white" onClick={openManagePersonasModal} type="button"><IconUsers /> Personas</button>
-          <button className="inline-flex items-center gap-1.5 rounded-lg border border-white/30 bg-indigo-600 px-2.5 py-1.5 text-[11px] font-semibold text-white" onClick={() => void openProfileTransferModalForMode('import')} type="button"><IconDownload /> Import</button>
-          <button className="inline-flex items-center gap-1.5 rounded-lg border border-white/30 bg-indigo-700 px-2.5 py-1.5 text-[11px] font-semibold text-white" onClick={() => void openProfileTransferModalForMode('export')} type="button"><IconUpload /> Export</button>
-          {supabaseAuthUserSummary ? (
-            <button className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-300/60 bg-emerald-600 px-2.5 py-1.5 text-[11px] font-semibold text-white" onClick={openLoginModal} type="button"><IconLogOut /> Admin</button>
-          ) : (
-            <button className="inline-flex items-center gap-1.5 rounded-lg border border-white/30 bg-slate-700 px-2.5 py-1.5 text-[11px] font-semibold text-white" onClick={openLoginModal} type="button"><IconLogIn /> Login</button>
-          )}
         </div>
       </section>
 
       <section id="overview" className="z-layer-section mb-4 scroll-mt-40 grid grid-cols-1 gap-3 md:mb-6 md:gap-4 md:grid-cols-2 xl:grid-cols-4">
         {topMetrics.map((metricRow, metricIndex) => {
           const label = metricRow.metric
+          const isNetWorth = label === 'Net Worth'
           const formattedValue = formatDashboardDatapointValueByFormat(metricRow.value, metricRow.valueFormat)
           const metadataLines = buildOverviewHoverContextLinesForMetric(metricRow, sourceBreakdown, emergencyFundSummary)
-          const trendSignalValue = label === 'Net Worth'
+          const statusBlurb = Array.isArray(metadataLines) && metadataLines.length > 0 ? String(metadataLines[0]) : ''
+          const trendSignalValue = isNetWorth
             ? sourceBreakdown.netWorth.delta
             : metricRow.value
-          const trendLabel = trendSignalValue > 0 ? 'Up' : (trendSignalValue < 0 ? 'Down' : 'Flat')
+          const trendDir = trendSignalValue > 0 ? 'up' : (trendSignalValue < 0 ? 'down' : 'flat')
           const savingsRateToneClasses = label === 'Savings Rate'
             ? resolveSavingsRateToneClasses(metricRow.value)
             : null
@@ -3079,22 +3179,45 @@ export default function App() {
               )
             : null
           const toneClasses = savingsRateToneClasses ?? emergencyFundGapToneClasses
-          const trendClassName = toneClasses
+          const trendBadgeClassName = toneClasses
             ? toneClasses.badgeClassName
-            : (trendSignalValue > 0 ? 'bg-emerald-100 text-emerald-700' : (trendSignalValue < 0 ? 'bg-rose-100 text-rose-700' : 'bg-slate-100 text-slate-600'))
+            : (trendDir === 'up' ? 'bg-emerald-100 text-emerald-700' : (trendDir === 'down' ? 'bg-rose-100 text-rose-700' : 'bg-slate-100 text-slate-500'))
           const valueClassName = toneClasses
             ? toneClasses.valueClassName
             : 'text-slate-900'
+          const accentBorderColor = toneClasses
+            ? (toneClasses.valueClassName.includes('emerald') ? '#10b981' : (toneClasses.valueClassName.includes('amber') ? '#f59e0b' : '#f43f5e'))
+            : (trendDir === 'up' ? '#10b981' : (trendDir === 'down' ? '#f43f5e' : '#94a3b8'))
+          const trendIcon = trendDir === 'up' ? '↑' : (trendDir === 'down' ? '↓' : '–')
+          const trendLabel = trendDir === 'up' ? 'Up' : (trendDir === 'down' ? 'Down' : 'Flat')
           return (
             <React.Fragment key={label}>
               {renderHoverMetadataBoxForElement({
                 label: `${label} Metadata`,
                 lines: metadataLines,
+                className: isNetWorth ? 'md:col-span-2 xl:col-span-2 h-full' : 'h-full',
                 children: (
-                  <article className="glass-panel-soft squircle-md metric-card-enter p-5" style={{ animationDelay: `${metricIndex * 70}ms` }}>
-                    <h2 className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">{label}</h2>
-                    <p className={`mt-3 text-3xl font-bold ${valueClassName}`}>{formattedValue}</p>
-                    <p className={`mt-2 inline-flex rounded-full px-2 py-1 text-xs font-semibold ${trendClassName}`}>{trendLabel} vs recent updates</p>
+                  <article
+                    className={`glass-panel-soft squircle-md metric-card-enter flex h-full flex-col justify-between ${isNetWorth ? 'p-5' : 'p-4'}`}
+                    style={{ animationDelay: `${metricIndex * 70}ms`, borderTopWidth: '3px', borderTopColor: accentBorderColor, borderTopStyle: 'solid' }}
+                  >
+                    <div>
+                      <h2 className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400">{label}</h2>
+                      <p className={`mt-2 ${isNetWorth ? 'text-3xl' : 'text-2xl'} font-bold leading-none ${valueClassName}`}>{formattedValue}</p>
+                      {isNetWorth && sourceBreakdown.netWorth.delta !== 0 && (
+                        <p className="mt-1.5 text-xs font-medium text-slate-400">
+                          {sourceBreakdown.netWorth.delta > 0 ? '+' : ''}{formatCurrencyValueForDashboard(sourceBreakdown.netWorth.delta)} vs last month
+                        </p>
+                      )}
+                    </div>
+                    <div className="mt-3 space-y-1.5">
+                      <span className={`inline-flex items-center gap-0.5 rounded-full px-2 py-0.5 text-[11px] font-semibold ${trendBadgeClassName}`}>
+                        {trendIcon} {trendLabel}
+                      </span>
+                      {statusBlurb ? (
+                        <p className="text-[11px] leading-snug text-slate-400">{statusBlurb}</p>
+                      ) : null}
+                    </div>
                   </article>
                 )
               })}
@@ -3437,123 +3560,157 @@ export default function App() {
       </section>
 
       <section id="debts" className="section-tight glass-panel-soft squircle-md z-layer-section mb-4 scroll-mt-40 p-4 md:mb-6 md:p-6" style={{ order: 2 }}>
-          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-            <h2 className="text-lg font-bold text-slate-900">Debts / Loans</h2>
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-slate-500">Add Debts here</span>
-              <button className="inline-flex items-center gap-1.5 rounded-xl border border-white/30 bg-amber-600 px-3 py-2 text-xs font-semibold text-white" onClick={() => openAddRecordModalWithPresetTypeAndCategory('debt', 'Debt Payment')} type="button"><IconPlus /> Quick Add</button>
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <h2 className="text-lg font-bold text-slate-900">Debts / Loans</h2>
+          <div className="flex items-center gap-3">
+            <span className="text-sm font-semibold text-rose-700">{formatCurrencyValueForDashboard(debtRows.reduce((t, d) => t + (typeof d.amount === 'number' ? d.amount : 0), 0))}</span>
+            <button className="inline-flex items-center gap-1.5 rounded-xl border border-white/30 bg-amber-600 px-3 py-2 text-xs font-semibold text-white" onClick={() => openAddRecordModalWithPresetTypeAndCategory('debt', 'Debt Payment')} type="button"><IconPlus /> Add Debt</button>
+          </div>
+        </div>
+        <div className="table-scroll-region rounded-2xl border border-slate-200/90 bg-white/75 backdrop-blur">
+          <table className="w-full min-w-[640px] border-collapse text-sm">
+            <thead className="bg-slate-100 text-slate-600">
+              <tr>
+                {renderSortableHeaderCell('debts', 'person', 'Person')}
+                {renderSortableHeaderCell('debts', 'item', 'Item')}
+                {renderSortableHeaderCell('debts', 'amount', 'Balance', true)}
+                {renderSortableHeaderCell('debts', 'minimumPayment', 'Per Month', true)}
+                {renderSortableHeaderCell('debts', 'interestRatePercent', 'Rate', true)}
+                <th className="px-3 py-2 text-right font-semibold">Payoff Date</th>
+                <th className="px-3 py-2 text-right font-semibold">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {debtRows.length === 0 ? (
+                <tr><td colSpan={7} className="px-4 py-8 text-center text-slate-400">No debts recorded yet</td></tr>
+              ) : debtRowsSorted.map((debtItem, debtIndex) => {
+                const stableKey = typeof debtItem.id === 'string' ? debtItem.id : `debt-row-${debtIndex}`
+                const person = typeof debtItem.person === 'string' ? debtItem.person : DEFAULT_PERSONA_NAME
+                const item = typeof debtItem.item === 'string' ? debtItem.item : (typeof debtItem.category === 'string' ? debtItem.category : '')
+                const value = typeof debtItem.amount === 'number' ? debtItem.amount : 0
+                const perMonth = typeof debtItem.minimumPayment === 'number' ? debtItem.minimumPayment : 0
+                const interestRatePercent = typeof debtItem.interestRatePercent === 'number' ? debtItem.interestRatePercent : 0
+                const remainingPayments = typeof debtItem.remainingPayments === 'number' ? debtItem.remainingPayments : 0
+                const [calculatedPaybackMonths] = calculateEstimatedPayoffMonthsFromBalancePaymentAndInterestRate(value, perMonth, interestRatePercent)
+                const payoffMonthsForProjection = remainingPayments > 0 ? remainingPayments : Number(calculatedPaybackMonths ?? 0)
+                const projectedPayoffDate = formatProjectedPayoffDateFromMonthsOffset(payoffMonthsForProjection)
+                return (
+                  <tr key={stableKey} className="group border-t border-slate-200 bg-white">
+                    <td className="px-3 py-2 text-slate-700">{formatPersonaLabelWithEmoji(person, personaEmojiByName)}</td>
+                    <td className="px-3 py-2 text-slate-700">{item}</td>
+                    <td className="px-3 py-2 text-right font-semibold text-rose-700"><span className="inline-flex items-center gap-1">{formatCurrencyValueForDashboard(value)}{renderStaleUpdateIconIfNeeded(debtItem)}</span></td>
+                    <td className="px-3 py-2 text-right font-semibold text-slate-700">{formatCurrencyValueForDashboard(perMonth)}</td>
+                    <td className="px-3 py-2 text-right font-semibold text-slate-700">{interestRatePercent.toFixed(2)}%</td>
+                    <td className="px-3 py-2 text-right font-semibold text-slate-700">{projectedPayoffDate}</td>
+                    <td className="px-3 py-2 text-right">{renderRecordActionsWithIconButtons(String(debtItem.__collectionName), debtItem)}</td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="credit" className="section-tight glass-panel-soft squircle-md z-layer-section mb-4 scroll-mt-40 p-4 md:mb-6 md:p-6" style={{ order: 3 }}>
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <h2 className="text-lg font-bold text-slate-900">Credit Accounts</h2>
+          <div className="flex items-center gap-3">
+            <span className="text-sm font-semibold text-rose-700">{formatCurrencyValueForDashboard(creditCardSummary.totalCurrent)}</span>
+            <span className="text-sm font-semibold text-violet-700">{creditCardSummary.totalUtilizationPercent.toFixed(1)}% util.</span>
+            <button className="inline-flex items-center gap-1.5 rounded-xl border border-white/30 bg-rose-600 px-3 py-2 text-xs font-semibold text-white" onClick={() => openAddRecordModalWithPresetTypeAndCategory('credit_card', 'Credit Card')} type="button"><IconPlus /> Add Card</button>
+          </div>
+        </div>
+        <div className="table-scroll-region mb-4 rounded-2xl border border-slate-200/90 bg-white/75 backdrop-blur">
+          <table className="w-full min-w-[760px] border-collapse text-sm">
+            <thead className="bg-slate-100 text-slate-600">
+              <tr>
+                {renderSortableHeaderCell('credit', 'person', 'Person')}
+                {renderSortableHeaderCell('credit', 'item', 'Account')}
+                {renderSortableHeaderCell('credit', 'currentBalance', 'Balance', true)}
+                {renderSortableHeaderCell('credit', 'maxCapacity', 'Limit', true)}
+                {renderSortableHeaderCell('credit', 'interestRatePercent', 'APR', true)}
+                <th className="px-3 py-2 text-right font-semibold">Util%</th>
+                {renderSortableHeaderCell('credit', 'monthlyPayment', 'Monthly Pmt', true)}
+                <th className="px-3 py-2 text-right font-semibold">Payoff Date</th>
+                <th className="px-3 py-2 text-right font-semibold">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {creditCardInformationCollection.length === 0 ? (
+                <tr><td colSpan={9} className="px-4 py-8 text-center text-slate-400">No credit accounts recorded yet</td></tr>
+              ) : creditRowsSorted.map((creditCardItem, creditIndex) => {
+                const stableKey = typeof creditCardItem.id === 'string' ? creditCardItem.id : `credit-info-row-${creditIndex}`
+                const person = typeof creditCardItem.person === 'string' ? creditCardItem.person : DEFAULT_PERSONA_NAME
+                const item = typeof creditCardItem.item === 'string' ? creditCardItem.item : ''
+                const maxCapacity = typeof creditCardItem.maxCapacity === 'number' ? creditCardItem.maxCapacity : 0
+                const currentBalance = typeof creditCardItem.currentBalance === 'number' ? creditCardItem.currentBalance : 0
+                const monthlyPayment = typeof creditCardItem.monthlyPayment === 'number' ? creditCardItem.monthlyPayment : 0
+                const interestRatePercent = typeof creditCardItem.interestRatePercent === 'number' ? creditCardItem.interestRatePercent : 0
+                const utilizationPercent = maxCapacity > 0 ? (currentBalance / maxCapacity) * 100 : 0
+                const utilColor = utilizationPercent <= 30 ? '#15803d' : utilizationPercent <= 70 ? '#b45309' : '#be123c'
+                const [paybackMonths] = calculateEstimatedPayoffMonthsFromBalancePaymentAndInterestRate(currentBalance, monthlyPayment, interestRatePercent)
+                const projectedPayoffDate = formatProjectedPayoffDateFromMonthsOffset(Number(paybackMonths ?? 0))
+                return (
+                  <tr key={stableKey} className="group border-t border-slate-200 bg-white">
+                    <td className="px-3 py-2 text-slate-700">{formatPersonaLabelWithEmoji(person, personaEmojiByName)}</td>
+                    <td className="px-3 py-2 text-slate-700">{item}</td>
+                    <td className="px-3 py-2 text-right font-semibold text-rose-700"><span className="inline-flex items-center gap-1">{formatCurrencyValueForDashboard(currentBalance)}{renderStaleUpdateIconIfNeeded(creditCardItem)}</span></td>
+                    <td className="px-3 py-2 text-right font-semibold text-slate-700">{formatCurrencyValueForDashboard(maxCapacity)}</td>
+                    <td className="px-3 py-2 text-right font-semibold text-slate-700">{interestRatePercent.toFixed(2)}%</td>
+                    <td className="px-3 py-2 text-right font-semibold" style={{ color: utilColor }}>{utilizationPercent.toFixed(1)}%</td>
+                    <td className="px-3 py-2 text-right font-semibold text-slate-700">{formatCurrencyValueForDashboard(monthlyPayment)}</td>
+                    <td className="px-3 py-2 text-right font-semibold text-slate-700">{projectedPayoffDate}</td>
+                    <td className="px-3 py-2 text-right">{renderRecordActionsWithIconButtons('creditCards', creditCardItem)}</td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
+        <div className="rounded-2xl border border-slate-200/90 bg-white/75 backdrop-blur">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200/90 px-4 py-3">
+            <h3 className="text-sm font-bold text-slate-800">Payment Recommendation</h3>
+            <div className="flex items-center gap-4">
+              <span className="text-xs text-slate-500">{creditCardRecommendations.strategy}</span>
+              <span className="text-xs font-semibold text-slate-600">Now: <span className="text-slate-800">{formatCurrencyValueForDashboard(creditCardRecommendations.currentTotalMonthlyPayment)}</span></span>
+              <span className="text-xs font-semibold text-slate-600">Recommended: <span className="text-teal-700">{formatCurrencyValueForDashboard(creditCardRecommendations.recommendedTotalMonthlyPayment)}</span></span>
+              {Math.max(0, creditCardRecommendations.weightedPayoffMonthsCurrent - creditCardRecommendations.weightedPayoffMonthsRecommended) > 0 ? (
+                <span className="text-xs font-semibold text-sky-700">{Math.max(0, creditCardRecommendations.weightedPayoffMonthsCurrent - creditCardRecommendations.weightedPayoffMonthsRecommended).toFixed(1)} mo. faster</span>
+              ) : null}
             </div>
           </div>
-          <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
-            <article className="squircle-sm border border-slate-200/90 bg-white/90 p-3">
-              <p className="text-xs uppercase tracking-[0.12em] text-slate-500">Total Debts + Loans</p>
-              <p className="text-2xl font-bold text-rose-700">{formatCurrencyValueForDashboard(debtRows.reduce((runningTotal, debtItem) => runningTotal + (typeof debtItem.amount === 'number' ? debtItem.amount : 0), 0))}</p>
-            </article>
-            <article className="squircle-sm border border-slate-200/90 bg-white/90 p-3">
-              <p className="text-xs uppercase tracking-[0.12em] text-slate-500">Monthly</p>
-              <p className="text-2xl font-bold text-amber-700">{formatCurrencyValueForDashboard(totalMonthlyDebtPayment)}</p>
-            </article>
-            <article className="squircle-sm border border-slate-200/90 bg-white/90 p-3">
-              <p className="text-xs uppercase tracking-[0.12em] text-slate-500">Mortgage</p>
-              <p className="text-2xl font-bold text-sky-700">{formatCurrencyValueForDashboard(totalMortgageBalance)}</p>
-            </article>
-          </div>
-          <div className="table-scroll-region mb-6 rounded-2xl border border-slate-200/90 bg-white/75 backdrop-blur">
-            <table className="w-full min-w-[860px] border-collapse text-sm">
+          <div className="table-scroll-region rounded-b-2xl">
+            <table className="w-full min-w-[760px] border-collapse text-sm">
               <thead className="bg-slate-100 text-slate-600">
                 <tr>
-                  {renderSortableHeaderCell('debts', 'person', 'Person')}
-                  {renderSortableHeaderCell('debts', 'item', 'Item')}
-                  {renderSortableHeaderCell('debts', 'amount', 'Value', true)}
-                  {renderSortableHeaderCell('debts', 'minimumPayment', 'Per Month', true)}
-                  {renderSortableHeaderCell('debts', 'interestRatePercent', 'Rate', true)}
-                  {renderSortableHeaderCell('debts', 'loanStartDate', 'Loan Start')}
-                  {renderSortableHeaderCell('debts', 'remainingPayments', 'Remaining Pmts', true)}
+                  <th className="px-3 py-2 text-left font-semibold">Account</th>
+                  <th className="px-3 py-2 text-right font-semibold">APR</th>
+                  <th className="px-3 py-2 text-right font-semibold">Util%</th>
+                  <th className="px-3 py-2 text-right font-semibold">Current Pmt</th>
+                  <th className="px-3 py-2 text-right font-semibold">Recommended</th>
                   <th className="px-3 py-2 text-right font-semibold">Payoff Date</th>
-                  {renderSortableHeaderCell('debts', 'collateralAssetName', 'Collateral')}
-                  {renderSortableHeaderCell('debts', 'collateralAssetMarketValue', 'Market Value', true)}
-                  {renderSortableHeaderCell('debts', 'description', 'Description')}
-                  <th className="px-3 py-2 text-right font-semibold">Actions</th>
+                  <th className="px-3 py-2 text-left font-semibold">Reason</th>
                 </tr>
               </thead>
               <tbody>
-                {debtRowsSorted.map((debtItem, debtIndex) => {
-                  const stableKey = typeof debtItem.id === 'string' ? debtItem.id : `debt-row-${debtIndex}`
-                  const person = typeof debtItem.person === 'string' ? debtItem.person : DEFAULT_PERSONA_NAME
-                  const item = typeof debtItem.item === 'string'
-                    ? debtItem.item
-                    : (typeof debtItem.category === 'string' ? debtItem.category : '')
-                  const value = typeof debtItem.amount === 'number' ? debtItem.amount : 0
-                  const perMonth = typeof debtItem.minimumPayment === 'number' ? debtItem.minimumPayment : 0
-                  const interestRatePercent = typeof debtItem.interestRatePercent === 'number' ? debtItem.interestRatePercent : 0
-                  const loanStartDate = typeof debtItem.loanStartDate === 'string' ? debtItem.loanStartDate : ''
-                  const remainingPayments = typeof debtItem.remainingPayments === 'number' ? debtItem.remainingPayments : 0
-                  const [calculatedPaybackMonths] = calculateEstimatedPayoffMonthsFromBalancePaymentAndInterestRate(value, perMonth, interestRatePercent)
-                  const payoffMonthsForProjection = remainingPayments > 0 ? remainingPayments : Number(calculatedPaybackMonths ?? 0)
-                  const projectedPayoffDate = formatProjectedPayoffDateFromMonthsOffset(payoffMonthsForProjection)
-                  const collateralAssetName = typeof debtItem.collateralAssetName === 'string' ? debtItem.collateralAssetName : ''
-                  const collateralAssetMarketValue = typeof debtItem.collateralAssetMarketValue === 'number' ? debtItem.collateralAssetMarketValue : 0
-                  const description = typeof debtItem.description === 'string' ? debtItem.description : ''
+                {creditCardRecommendations.rows.map((rowItem) => {
+                  const recoPayoffDate = formatProjectedPayoffDateFromMonthsOffset(Number(rowItem.estimatedMonthsRecommended ?? 0))
                   return (
-                    <tr key={stableKey} className="group border-t border-slate-200 bg-white">
-                      <td className="px-3 py-2 text-slate-700">{formatPersonaLabelWithEmoji(person, personaEmojiByName)}</td>
-                      <td className="px-3 py-2 text-slate-700">{item}</td>
-                      <td className="px-3 py-2 text-right font-semibold text-slate-700"><span className="inline-flex items-center">{formatCurrencyValueForDashboard(value)}{renderStaleUpdateIconIfNeeded(debtItem)}</span></td>
-                      <td className="px-3 py-2 text-right font-semibold text-slate-700">{formatCurrencyValueForDashboard(perMonth)}</td>
-                      <td className="px-3 py-2 text-right font-semibold text-slate-700">{interestRatePercent.toFixed(2)}%</td>
-                      <td className="px-3 py-2 text-slate-700">{loanStartDate}</td>
-                      <td className="px-3 py-2 text-right font-semibold text-slate-700">{remainingPayments}</td>
-                      <td className="px-3 py-2 text-right font-semibold text-slate-700">{projectedPayoffDate}</td>
-                      <td className="px-3 py-2 text-slate-700">{collateralAssetName}</td>
-                      <td className="px-3 py-2 text-right font-semibold text-slate-700">{formatCurrencyValueForDashboard(collateralAssetMarketValue)}</td>
-                      <td className="px-3 py-2 text-slate-500">{description}</td>
-                      <td className="px-3 py-2 text-right">{renderRecordActionsWithIconButtons(String(debtItem.__collectionName), debtItem)}</td>
+                    <tr key={rowItem.id} className="border-t border-slate-200 bg-white">
+                      <td className="px-3 py-2 text-slate-700">{rowItem.item}</td>
+                      <td className="px-3 py-2 text-right font-semibold text-slate-700">{rowItem.interestRatePercent.toFixed(2)}%</td>
+                      <td className="px-3 py-2 text-right font-semibold text-slate-700">{rowItem.utilizationPercent.toFixed(1)}%</td>
+                      <td className="px-3 py-2 text-right font-semibold text-slate-700">{formatCurrencyValueForDashboard(rowItem.currentMonthlyPayment)}</td>
+                      <td className="px-3 py-2 text-right font-semibold text-teal-700">{formatCurrencyValueForDashboard(rowItem.recommendedMonthlyPayment)}</td>
+                      <td className="px-3 py-2 text-right font-semibold text-sky-700">{recoPayoffDate}</td>
+                      <td className="px-3 py-2 text-slate-500">{rowItem.recommendationReason}</td>
                     </tr>
                   )
                 })}
               </tbody>
             </table>
           </div>
-      </section>
-
-      <section id="credit" className="section-tight glass-panel-soft squircle-md z-layer-section mb-4 scroll-mt-40 p-4 md:mb-6 md:p-6" style={{ order: 3 }}>
-          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-            <h2 className="text-lg font-bold text-slate-900">Credit Accounts</h2>
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-slate-500">Utilization and payoff planning</span>
-              <button className="inline-flex items-center gap-1.5 rounded-xl border border-white/30 bg-rose-600 px-3 py-2 text-xs font-semibold text-white" onClick={() => openAddRecordModalWithPresetTypeAndCategory('credit_card', 'Credit Card')} type="button"><IconPlus /> Quick Add</button>
-            </div>
-          </div>
-          <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
-            <article className="squircle-sm border border-slate-200/90 bg-white/90 p-3"><p className="text-xs uppercase tracking-[0.12em] text-slate-500">Total</p><p className="text-xl font-bold text-rose-700">{formatCurrencyValueForDashboard(creditCardSummary.totalCurrent)}</p></article>
-            <article className="squircle-sm border border-slate-200/90 bg-white/90 p-3"><p className="text-xs uppercase tracking-[0.12em] text-slate-500">Monthly</p><p className="text-xl font-bold text-amber-700">{formatCurrencyValueForDashboard(creditCardSummary.totalMonthly)}</p></article>
-            <article className="squircle-sm border border-slate-200/90 bg-white/90 p-3"><p className="text-xs uppercase tracking-[0.12em] text-slate-500">Utilization</p><p className="text-xl font-bold text-violet-700">{creditCardSummary.totalUtilizationPercent.toFixed(2)}%</p></article>
-            <article className="squircle-sm border border-slate-200/90 bg-white/90 p-3"><p className="text-xs uppercase tracking-[0.12em] text-slate-500">Remaining</p><p className="text-xl font-bold text-slate-700">{formatCurrencyValueForDashboard(creditCardSummary.remainingCapacity)}</p></article>
-            <article className="squircle-sm border border-slate-200/90 bg-white/90 p-3"><p className="text-xs uppercase tracking-[0.12em] text-slate-500">Max Capacity</p><p className="text-xl font-bold text-sky-700">{formatCurrencyValueForDashboard(creditCardSummary.maxCapacity)}</p></article>
-          </div>
-          <div className="table-scroll-region mb-6 rounded-2xl border border-slate-200/90 bg-white/75 backdrop-blur">
-            <table className="w-full min-w-[980px] border-collapse text-sm">
-              <thead className="bg-slate-100 text-slate-600"><tr>{renderSortableHeaderCell('credit', 'person', 'Person')}{renderSortableHeaderCell('credit', 'item', 'Account')}{renderSortableHeaderCell('credit', 'maxCapacity', 'Max', true)}{renderSortableHeaderCell('credit', 'currentBalance', 'Current', true)}{renderSortableHeaderCell('credit', 'minimumPayment', 'Minimum', true)}{renderSortableHeaderCell('credit', 'monthlyPayment', 'Monthly', true)}{renderSortableHeaderCell('credit', 'interestRatePercent', 'Rate', true)}<th className="px-3 py-2 text-right font-semibold">Utilization</th><th className="px-3 py-2 text-right font-semibold">Remaining</th><th className="px-3 py-2 text-right font-semibold">Payback(months)</th><th className="px-3 py-2 text-right font-semibold">Payoff Date</th><th className="px-3 py-2 text-right font-semibold">Actions</th></tr></thead>
-              <tbody>{creditRowsSorted.map((creditCardItem, creditIndex) => { const stableKey = typeof creditCardItem.id === 'string' ? creditCardItem.id : `credit-info-row-${creditIndex}`; const person = typeof creditCardItem.person === 'string' ? creditCardItem.person : DEFAULT_PERSONA_NAME; const item = typeof creditCardItem.item === 'string' ? creditCardItem.item : ''; const maxCapacity = typeof creditCardItem.maxCapacity === 'number' ? creditCardItem.maxCapacity : 0; const currentBalance = typeof creditCardItem.currentBalance === 'number' ? creditCardItem.currentBalance : 0; const minimumPayment = typeof creditCardItem.minimumPayment === 'number' ? creditCardItem.minimumPayment : 0; const monthlyPayment = typeof creditCardItem.monthlyPayment === 'number' ? creditCardItem.monthlyPayment : 0; const interestRatePercent = typeof creditCardItem.interestRatePercent === 'number' ? creditCardItem.interestRatePercent : 0; const utilizationPercent = maxCapacity > 0 ? (currentBalance / maxCapacity) * 100 : 0; const remainingCapacity = maxCapacity - currentBalance; const [paybackMonths] = calculateEstimatedPayoffMonthsFromBalancePaymentAndInterestRate(currentBalance, monthlyPayment, interestRatePercent); const projectedPayoffDate = formatProjectedPayoffDateFromMonthsOffset(Number(paybackMonths ?? 0)); return <tr key={stableKey} className="group border-t border-slate-200 bg-white"><td className="px-3 py-2 text-slate-700">{formatPersonaLabelWithEmoji(person, personaEmojiByName)}</td><td className="px-3 py-2 text-slate-700">{item}</td><td className="px-3 py-2 text-right font-semibold text-slate-700">{formatCurrencyValueForDashboard(maxCapacity)}</td><td className="px-3 py-2 text-right font-semibold text-slate-700"><span className="inline-flex items-center">{formatCurrencyValueForDashboard(currentBalance)}{renderStaleUpdateIconIfNeeded(creditCardItem)}</span></td><td className="px-3 py-2 text-right font-semibold text-slate-700">{formatCurrencyValueForDashboard(minimumPayment)}</td><td className="px-3 py-2 text-right font-semibold text-slate-700">{formatCurrencyValueForDashboard(monthlyPayment)}</td><td className="px-3 py-2 text-right font-semibold text-slate-700">{interestRatePercent.toFixed(2)}%</td><td className="px-3 py-2 text-right font-semibold text-slate-700">{utilizationPercent.toFixed(2)}%</td><td className="px-3 py-2 text-right font-semibold text-slate-700">{formatCurrencyValueForDashboard(remainingCapacity)}</td><td className="px-3 py-2 text-right font-semibold text-slate-700">{Number(paybackMonths ?? 0).toFixed(1)}</td><td className="px-3 py-2 text-right font-semibold text-slate-700">{projectedPayoffDate}</td><td className="px-3 py-2 text-right">{renderRecordActionsWithIconButtons('creditCards', creditCardItem)}</td></tr> })}</tbody>
-            </table>
-          </div>
-          <div className="rounded-2xl border border-slate-200/90 bg-white/75 p-4 backdrop-blur">
-            <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-              <h3 className="text-base font-bold text-slate-900">Payment Recommendation</h3>
-              <span className="text-xs text-slate-500">{creditCardRecommendations.strategy}</span>
-            </div>
-            <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
-              <article className="squircle-sm border border-slate-200/90 bg-white/90 p-3"><p className="text-xs uppercase tracking-[0.12em] text-slate-500">Current Monthly</p><p className="text-xl font-bold text-slate-700">{formatCurrencyValueForDashboard(creditCardRecommendations.currentTotalMonthlyPayment)}</p></article>
-              <article className="squircle-sm border border-slate-200/90 bg-white/90 p-3"><p className="text-xs uppercase tracking-[0.12em] text-slate-500">Recommended Monthly</p><p className="text-xl font-bold text-teal-700">{formatCurrencyValueForDashboard(creditCardRecommendations.recommendedTotalMonthlyPayment)}</p></article>
-              <article className="squircle-sm border border-slate-200/90 bg-white/90 p-3"><p className="text-xs uppercase tracking-[0.12em] text-slate-500">Payoff Improvement</p><p className="text-xl font-bold text-sky-700">{Math.max(0, creditCardRecommendations.weightedPayoffMonthsCurrent - creditCardRecommendations.weightedPayoffMonthsRecommended).toFixed(1)} months faster</p></article>
-            </div>
-            <div className="table-scroll-region rounded-2xl border border-slate-200/90 bg-white/75 backdrop-blur">
-              <table className="w-full min-w-[980px] border-collapse text-sm">
-                <thead className="bg-slate-100 text-slate-600"><tr><th className="px-3 py-2 text-left font-semibold">Person</th><th className="px-3 py-2 text-left font-semibold">Card</th><th className="px-3 py-2 text-right font-semibold">APR</th><th className="px-3 py-2 text-right font-semibold">Utilization</th><th className="px-3 py-2 text-right font-semibold">Current</th><th className="px-3 py-2 text-right font-semibold">Recommended</th><th className="px-3 py-2 text-right font-semibold">Months Now</th><th className="px-3 py-2 text-right font-semibold">Months Reco</th><th className="px-3 py-2 text-left font-semibold">Reason</th></tr></thead>
-                <tbody>{creditCardRecommendations.rows.map((rowItem) => <tr key={rowItem.id} className="border-t border-slate-200 bg-white"><td className="px-3 py-2 text-slate-700">{formatPersonaLabelWithEmoji(rowItem.person, personaEmojiByName)}</td><td className="px-3 py-2 text-slate-700">{rowItem.item}</td><td className="px-3 py-2 text-right font-semibold text-slate-700">{rowItem.interestRatePercent.toFixed(2)}%</td><td className="px-3 py-2 text-right font-semibold text-slate-700">{rowItem.utilizationPercent.toFixed(2)}%</td><td className="px-3 py-2 text-right font-semibold text-slate-700">{formatCurrencyValueForDashboard(rowItem.currentMonthlyPayment)}</td><td className="px-3 py-2 text-right font-semibold text-teal-700">{formatCurrencyValueForDashboard(rowItem.recommendedMonthlyPayment)}</td><td className="px-3 py-2 text-right font-semibold text-slate-700">{rowItem.estimatedMonthsCurrent.toFixed(1)}</td><td className="px-3 py-2 text-right font-semibold text-sky-700">{rowItem.estimatedMonthsRecommended.toFixed(1)}</td><td className="px-3 py-2 text-slate-500">{rowItem.recommendationReason}</td></tr>)}</tbody>
-              </table>
-            </div>
-          </div>
+        </div>
       </section>
 
       <section id="savings" className="section-tight glass-panel-soft squircle-md z-layer-section mb-4 scroll-mt-40 p-4 md:mb-6 md:p-6" style={{ order: 4 }}>
@@ -3588,20 +3745,49 @@ export default function App() {
       </section>
 
       <section id="assets" className="section-tight glass-panel-soft squircle-md z-layer-section mb-4 scroll-mt-40 p-4 md:mb-6 md:p-6" style={{ order: 1 }}>
-        <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
           <h2 className="text-lg font-bold text-slate-900">Assets</h2>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3">
+            <span className={`text-sm font-semibold ${totalAssetHoldingsValue >= 0 ? 'text-emerald-700' : 'text-rose-700'}`}>{formatCurrencyValueForDashboard(totalAssetHoldingsValue)}</span>
             <button className="inline-flex items-center gap-1.5 rounded-xl border border-white/30 bg-cyan-600 px-3 py-2 text-xs font-semibold text-white" onClick={() => setIsAddAssetModalOpen(true)} type="button"><IconPlus /> Add Asset</button>
           </div>
         </div>
-        <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <article className="squircle-sm border border-slate-200/90 bg-white/90 p-3"><p className="text-xs uppercase tracking-[0.12em] text-slate-500">Total</p><p className="text-2xl font-bold text-cyan-700">{formatCurrencyValueForDashboard(totalAssetHoldingsValue)}</p></article>
-          <article className="squircle-sm border border-slate-200/90 bg-white/90 p-3"><p className="text-xs uppercase tracking-[0.12em] text-slate-500">Records</p><p className="text-2xl font-bold text-slate-700">{assetHoldingRows.length}</p></article>
-        </div>
         <div className="table-scroll-region rounded-2xl border border-slate-200/90 bg-white/75 backdrop-blur">
-          <table className="w-full min-w-[980px] border-collapse text-sm">
-            <thead className="bg-slate-100 text-slate-600"><tr>{renderSortableHeaderCell('assets', 'person', 'Person')}{renderSortableHeaderCell('assets', 'item', 'Item')}{renderSortableHeaderCell('assets', 'assetValueOwed', 'Asset Value Owed', true)}{renderSortableHeaderCell('assets', 'assetMarketValue', 'Asset Market Value', true)}{renderSortableHeaderCell('assets', 'value', 'Value', true)}{renderSortableHeaderCell('assets', 'description', 'Description')}<th className="px-3 py-2 text-right font-semibold">Actions</th></tr></thead>
-            <tbody>{assetHoldingRowsSorted.map((rowItem) => <tr key={String(rowItem.id)} className="group border-t border-slate-200 bg-white"><td className="px-3 py-2 text-slate-700">{formatPersonaLabelWithEmoji(String(rowItem.person ?? ''), personaEmojiByName)}</td><td className="px-3 py-2 text-slate-700">{String(rowItem.item ?? '')}</td><td className="px-3 py-2 text-right font-semibold text-slate-700">{formatCurrencyValueForDashboard(typeof rowItem.assetValueOwed === 'number' ? rowItem.assetValueOwed : 0)}</td><td className="px-3 py-2 text-right font-semibold text-slate-700">{formatCurrencyValueForDashboard(typeof rowItem.assetMarketValue === 'number' ? rowItem.assetMarketValue : 0)}</td><td className={`px-3 py-2 text-right font-semibold ${(typeof rowItem.value === 'number' ? rowItem.value : 0) >= 0 ? 'text-emerald-700' : 'text-rose-700'}`}>{formatCurrencyValueForDashboard(typeof rowItem.value === 'number' ? rowItem.value : 0)}</td><td className="px-3 py-2 text-slate-500">{String(rowItem.description ?? '')}</td><td className="px-3 py-2 text-right">{renderRecordActionsWithIconButtons('assetHoldings', rowItem)}</td></tr>)}</tbody>
+          <table className="w-full min-w-[620px] border-collapse text-sm">
+            <thead className="bg-slate-100 text-slate-600">
+              <tr>
+                {renderSortableHeaderCell('assets', 'person', 'Person')}
+                {renderSortableHeaderCell('assets', 'item', 'Item')}
+                {renderSortableHeaderCell('assets', 'assetMarketValue', 'Market Value', true)}
+                {renderSortableHeaderCell('assets', 'assetValueOwed', 'Owed', true)}
+                {renderSortableHeaderCell('assets', 'value', 'Equity', true)}
+                <th className="px-3 py-2 text-right font-semibold">LTV</th>
+                <th className="px-3 py-2 text-right font-semibold">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {assetHoldingRows.length === 0 ? (
+                <tr><td colSpan={7} className="px-4 py-8 text-center text-slate-400">No assets recorded yet</td></tr>
+              ) : assetHoldingRowsSorted.map((rowItem, rowIndex) => {
+                const stableKey = typeof rowItem.id === 'string' ? rowItem.id : `asset-row-${rowIndex}`
+                const marketValue = typeof rowItem.assetMarketValue === 'number' ? rowItem.assetMarketValue : 0
+                const owed = typeof rowItem.assetValueOwed === 'number' ? rowItem.assetValueOwed : 0
+                const equity = typeof rowItem.value === 'number' ? rowItem.value : (marketValue - owed)
+                const ltvPercent = marketValue > 0 ? Math.min(100, Math.round((owed / marketValue) * 100)) : 0
+                const ltvColor = ltvPercent <= 50 ? '#10b981' : ltvPercent <= 80 ? '#f59e0b' : '#f43f5e'
+                return (
+                  <tr key={stableKey} className="group border-t border-slate-200 bg-white">
+                    <td className="px-3 py-2 text-slate-700">{formatPersonaLabelWithEmoji(String(rowItem.person ?? ''), personaEmojiByName)}</td>
+                    <td className="px-3 py-2 text-slate-700"><span className="inline-flex items-center gap-1">{String(rowItem.item ?? '—')}{renderStaleUpdateIconIfNeeded(rowItem)}</span></td>
+                    <td className="px-3 py-2 text-right font-semibold text-slate-700">{formatCurrencyValueForDashboard(marketValue)}</td>
+                    <td className="px-3 py-2 text-right font-semibold text-slate-700">{owed > 0 ? formatCurrencyValueForDashboard(owed) : '—'}</td>
+                    <td className="px-3 py-2 text-right font-semibold" style={{ color: equity >= 0 ? '#15803d' : '#be123c' }}>{formatCurrencyValueForDashboard(equity)}</td>
+                    <td className="px-3 py-2 text-right font-semibold" style={{ color: ltvColor }}>{owed > 0 ? `${ltvPercent}%` : '—'}</td>
+                    <td className="px-3 py-2 text-right">{renderRecordActionsWithIconButtons('assetHoldings', rowItem)}</td>
+                  </tr>
+                )
+              })}
+            </tbody>
           </table>
         </div>
       </section>
