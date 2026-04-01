@@ -2895,7 +2895,7 @@ export default function App() {
   function scrollViewportToTopFromUtilityButton() {
     scrollViewportToTopWithSmoothBehavior()
   }
-  function scrollToSectionAnchorWithFastEasing(clickEvent) {
+  function scrollToSectionAnchorWithSmoothBehavior(clickEvent) {
     const href = clickEvent.currentTarget.getAttribute('href')
     if (!href || !href.startsWith('#')) return
     const targetEl = document.getElementById(href.slice(1))
@@ -2905,19 +2905,7 @@ export default function App() {
     const navHeight = navBar ? navBar.getBoundingClientRect().height : 0
     const siteHeaderOffset = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--site-header-offset') || '96', 10)
     const targetTop = targetEl.getBoundingClientRect().top + window.scrollY - navHeight - siteHeaderOffset - 12
-    const startY = window.scrollY
-    const distance = targetTop - startY
-    const duration = 100
-    const startTime = performance.now()
-    function step(now) {
-      const elapsed = now - startTime
-      const progress = Math.min(elapsed / duration, 1)
-      // ease-out cubic
-      const eased = 1 - Math.pow(1 - progress, 3)
-      window.scrollTo(0, startY + distance * eased)
-      if (progress < 1) requestAnimationFrame(step)
-    }
-    requestAnimationFrame(step)
+    window.scrollTo({ top: targetTop, behavior: 'smooth' })
   }
   function updateEditRecordFormFieldValue(fieldName, nextFieldValue) {
     setEditRecordFormState((previousFormState) => ({ ...previousFormState, [fieldName]: nextFieldValue }))
@@ -3260,7 +3248,7 @@ export default function App() {
                 className="budget-nav-jump-link"
                 style={{ flexShrink: 0, borderRadius: '7px', padding: '4px 10px', fontSize: '11px', fontWeight: isActive ? 700 : 500, background: isActive ? '#f59e0b' : 'transparent', color: isActive ? '#000' : '#a1a1aa', transition: 'background 120ms, color 120ms' }}
                 href={linkItem.href}
-                onClick={scrollToSectionAnchorWithFastEasing}
+                onClick={scrollToSectionAnchorWithSmoothBehavior}
               >
                 {linkItem.label}
               </a>
@@ -3275,7 +3263,7 @@ export default function App() {
                 className="budget-nav-jump-link"
                 style={{ flexShrink: 0, borderRadius: '7px', padding: '4px 10px', fontSize: '11px', fontWeight: isActive ? 700 : 500, background: isActive ? '#f59e0b' : 'transparent', color: isActive ? '#000' : '#71717a', transition: 'background 120ms, color 120ms' }}
                 href={linkItem.href}
-                onClick={scrollToSectionAnchorWithFastEasing}
+                onClick={scrollToSectionAnchorWithSmoothBehavior}
               >
                 {linkItem.label}
               </a>
