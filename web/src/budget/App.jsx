@@ -973,6 +973,8 @@ export default function App() {
   const transactionUndoStackRef = React.useRef([])
   const syncNoticeTimeoutRef = React.useRef(/** @type {ReturnType<typeof setTimeout>|null} */ (null))
   const sessionExpiryTimersRef = React.useRef(/** @type {ReturnType<typeof setTimeout>[]} */ ([]))
+  const isProgrammaticScrollActiveRef = React.useRef(false)
+  const programmaticScrollTimeoutRef = React.useRef(/** @type {ReturnType<typeof setTimeout>|null} */ (null))
   const [transactionUndoDepth, setTransactionUndoDepth] = React.useState(0)
   const [isLoginModalOpen, setIsLoginModalOpen] = React.useState(false)
   const [loginPasswordInputValue, setLoginPasswordInputValue] = React.useState('')
@@ -1122,8 +1124,9 @@ export default function App() {
   }, [textScaleMultiplier])
 
   React.useEffect(() => {
-    const sectionIds = ['overview', 'net-worth-trajectory', 'emergency-fund', 'risks', 'goals', 'debts', 'credit', 'savings', 'assets', 'loan-calculator', 'details', 'records']
+    const sectionIds = ['overview', 'assets', 'debts', 'credit', 'savings', 'records', 'details', 'loan-calculator', 'risks', 'goals', 'net-worth-trajectory', 'emergency-fund']
     function resolveActiveSectionFromScrollPosition() {
+      if (isProgrammaticScrollActiveRef.current) return
       const navEl = document.querySelector('.budget-sticky-toolbar')
       const navHeight = navEl ? navEl.getBoundingClientRect().height : 80
       const siteHeaderOffset = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--site-header-offset') || '0', 10)
@@ -2905,6 +2908,13 @@ export default function App() {
     const navHeight = navBar ? navBar.getBoundingClientRect().height : 0
     const siteHeaderOffset = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--site-header-offset') || '96', 10)
     const targetTop = targetEl.getBoundingClientRect().top + window.scrollY - navHeight - siteHeaderOffset - 12
+    const targetSectionId = href.slice(1)
+    isProgrammaticScrollActiveRef.current = true
+    if (programmaticScrollTimeoutRef.current !== null) clearTimeout(programmaticScrollTimeoutRef.current)
+    programmaticScrollTimeoutRef.current = setTimeout(() => {
+      isProgrammaticScrollActiveRef.current = false
+      setActiveSectionId(targetSectionId)
+    }, 800)
     window.scrollTo({ top: targetTop, behavior: 'smooth' })
   }
   function updateEditRecordFormFieldValue(fieldName, nextFieldValue) {
