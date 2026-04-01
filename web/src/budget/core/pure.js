@@ -2349,23 +2349,28 @@ export function calculateDetailedDashboardDatapointRowsFromCurrentCollectionsSta
       return runningTotal + numericValue
     }, 0)
 
+  // Normalize collections so raw v3 state (records/instruments schema) is safe to access by name.
+  const { debts: derivedDebts, loans: derivedLoans, credit: derivedCredit } = deriveNamedCollectionsFromState(currentCollectionsState)
+  // goals are top-level on both v2 and v3 state (not inside records/instruments)
+  const derivedGoals = Array.isArray(currentCollectionsState.goals) ? currentCollectionsState.goals : []
+
   const creditCardInformationCollection = Array.isArray(currentCollectionsState.creditCards) ? currentCollectionsState.creditCards : []
   const hasCreditCardInformationRows = creditCardInformationCollection.length > 0
   const totalCreditCapacity = hasCreditCardInformationRows
     ? sumNumericFieldFromCollectionItems(creditCardInformationCollection, 'maxCapacity')
-    : sumNumericFieldFromCollectionItems(currentCollectionsState.credit, 'creditLimit')
+    : sumNumericFieldFromCollectionItems(derivedCredit, 'creditLimit')
   const totalCreditCardDebt = hasCreditCardInformationRows
     ? sumNumericFieldFromCollectionItems(creditCardInformationCollection, 'currentBalance')
-    : sumNumericFieldFromCollectionItems(currentCollectionsState.credit, 'amount')
+    : sumNumericFieldFromCollectionItems(derivedCredit, 'amount')
   const totalCreditMonthlyPayment = hasCreditCardInformationRows
     ? sumNumericFieldFromCollectionItems(creditCardInformationCollection, 'monthlyPayment')
-    : sumNumericFieldFromCollectionItems(currentCollectionsState.credit, 'minimumPayment')
+    : sumNumericFieldFromCollectionItems(derivedCredit, 'minimumPayment')
   // Critical path: missing limits should degrade to 0% utilization, not invalid numeric state.
   const creditUtilizationPercent = totalCreditCapacity > 0 ? (totalCreditCardDebt / totalCreditCapacity) * 100 : 0
 
-  const totalMonthlyDebtPayback = sumNumericFieldFromCollectionItems(currentCollectionsState.debts, 'minimumPayment') +
+  const totalMonthlyDebtPayback = sumNumericFieldFromCollectionItems(derivedDebts, 'minimumPayment') +
     totalCreditMonthlyPayment +
-    sumNumericFieldFromCollectionItems(currentCollectionsState.loans, 'minimumPayment')
+    sumNumericFieldFromCollectionItems(derivedLoans, 'minimumPayment')
 
   const debtToIncomeRatioPercent = monthlySummary.totalIncome > 0
     ? (totalMonthlyDebtPayback / monthlySummary.totalIncome) * 100
@@ -2388,7 +2393,7 @@ export function calculateDetailedDashboardDatapointRowsFromCurrentCollectionsSta
     ? (emergencyFundsCurrent / emergencyFundGoal) * 100
     : 0
 
-  const [goalStatusSummary, goalStatusSummaryError] = calculatePowerGoalsStatusFormulaSummaryFromGoalCollection(currentCollectionsState.goals)
+  const [goalStatusSummary, goalStatusSummaryError] = calculatePowerGoalsStatusFormulaSummaryFromGoalCollection(derivedGoals)
   if (goalStatusSummaryError) return [null, goalStatusSummaryError]
   if (!goalStatusSummary) {
     const [errorValue, createErrorFailure] = createApplicationErrorWithKindMessageAndRecoverability(
@@ -2400,7 +2405,7 @@ export function calculateDetailedDashboardDatapointRowsFromCurrentCollectionsSta
     return [null, errorValue]
   }
 
-  const travelGoals = currentCollectionsState.goals.filter((goalItem) => {
+  const travelGoals = derivedGoals.filter((goalItem) => {
     const goalText = `${goalItem.title ?? ''} ${goalItem.name ?? ''} ${goalItem.category ?? ''}`.toLowerCase()
     return goalText.includes('travel') || goalText.includes('trip') || goalText.includes('vacation')
   })
@@ -2411,44 +2416,33 @@ export function calculateDetailedDashboardDatapointRowsFromCurrentCollectionsSta
   }).length
   const travelGoalsOnBucketList = travelGoals.length
 
-  const totalDebtBalance = sumNumericFieldFromCollectionItems(currentCollectionsState.debts, 'amount') +
+  const totalDebtBalance = sumNumericFieldFromCollectionItems(derivedDebts, 'amount') +
     totalCreditCardDebt +
-    sumNumericFieldFromCollectionItems(currentCollectionsState.loans, 'amount')
-  const weightedCreditInterestRatePercent = hasCreditCardInformationRows
-    ? (
-        creditCardInformationCollection.reduce((runningTotal, creditCardItem) => {
-          const balance = typeof creditCardItem.currentBalance === 'number' ? creditCardItem.currentBalance : 0
-          const rate = typeof creditCardItem.interestRatePercent === 'number' ? creditCardItem.interestRatePercent : 0
-          return runningTotal + (balance * rate)
-        }, 0) / Math.max(totalCreditCardDebt, 1)
-      )
-    : (
-        currentCollectionsState.credit.reduce((runningTotal, creditItem) => {
-          const amount = typeof creditItem.amount === 'number' ? creditItem.amount : 0
-          const rate = typeof creditItem.interestRatePercent === 'number' ? creditItem.interestRatePercent : 0
-          return runningTotal + (amount * rate)
-        }, 0) / Math.max(sumNumericFieldFromCollectionItems(currentCollectionsState.credit, 'amount'), 1)
-      )
+    sumNumericFieldFromCollectionItems(derivedLoans, 'amount')
+  // Weighted APR: sum(balance * rate) across all debt categories, divided by total debt balance.
+  const weightedCreditInterestRateNumerator = hasCreditCardInformationRows
+    ? creditCardInformationCollection.reduce((runningTotal, creditCardItem) => {
+        const balance = typeof creditCardItem.currentBalance === 'number' ? creditCardItem.currentBalance : 0
+        const rate = typeof creditCardItem.interestRatePercent === 'number' ? creditCardItem.interestRatePercent : 0
+        return runningTotal + (balance * rate)
+      }, 0)
+    : derivedCredit.reduce((runningTotal, creditItem) => {
+        const amount = typeof creditItem.amount === 'number' ? creditItem.amount : 0
+        const rate = typeof creditItem.interestRatePercent === 'number' ? creditItem.interestRatePercent : 0
+        return runningTotal + (amount * rate)
+      }, 0)
+  const weightedDebtInterestRateNumerator = derivedDebts.reduce((runningTotal, debtItem) => {
+    const amount = typeof debtItem.amount === 'number' ? debtItem.amount : 0
+    const rate = typeof debtItem.interestRatePercent === 'number' ? debtItem.interestRatePercent : 0
+    return runningTotal + (amount * rate)
+  }, 0)
+  const weightedLoanInterestRateNumerator = derivedLoans.reduce((runningTotal, loanItem) => {
+    const amount = typeof loanItem.amount === 'number' ? loanItem.amount : 0
+    const rate = typeof loanItem.interestRatePercent === 'number' ? loanItem.interestRatePercent : 0
+    return runningTotal + (amount * rate)
+  }, 0)
   const weightedAverageInterestRatePercent = totalDebtBalance > 0
-    ? (
-        sumNumericFieldFromCollectionItems(currentCollectionsState.debts, 'amount') *
-          (sumNumericFieldFromCollectionItems(currentCollectionsState.debts, 'amount') > 0
-            ? currentCollectionsState.debts.reduce((runningTotal, debtItem) => {
-              const amount = typeof debtItem.amount === 'number' ? debtItem.amount : 0
-              const rate = typeof debtItem.interestRatePercent === 'number' ? debtItem.interestRatePercent : 0
-              return runningTotal + (amount * rate)
-            }, 0) / Math.max(sumNumericFieldFromCollectionItems(currentCollectionsState.debts, 'amount'), 1)
-            : 0) +
-        totalCreditCardDebt * weightedCreditInterestRatePercent +
-        sumNumericFieldFromCollectionItems(currentCollectionsState.loans, 'amount') *
-          (sumNumericFieldFromCollectionItems(currentCollectionsState.loans, 'amount') > 0
-            ? currentCollectionsState.loans.reduce((runningTotal, loanItem) => {
-              const amount = typeof loanItem.amount === 'number' ? loanItem.amount : 0
-              const rate = typeof loanItem.interestRatePercent === 'number' ? loanItem.interestRatePercent : 0
-              return runningTotal + (amount * rate)
-            }, 0) / Math.max(sumNumericFieldFromCollectionItems(currentCollectionsState.loans, 'amount'), 1)
-            : 0)
-      ) / totalDebtBalance
+    ? (weightedDebtInterestRateNumerator + weightedCreditInterestRateNumerator + weightedLoanInterestRateNumerator) / totalDebtBalance
     : 0
   const [monthsUntilDebtFree, monthsUntilDebtFreeError] = calculateEstimatedPayoffMonthsFromBalancePaymentAndInterestRate(
     totalDebtBalance,
@@ -2465,13 +2459,12 @@ export function calculateDetailedDashboardDatapointRowsFromCurrentCollectionsSta
   const emergencyFundMonthsCovered = emergencyFundSummary.totalCoverageMonths
   const debtCoverageByAssetsPercent = totalDebtBalance > 0 ? (healthMetrics.totalAssets / totalDebtBalance) * 100 : 0
   const liabilitiesAsPercentOfAssets = healthMetrics.totalAssets > 0 ? (totalDebtBalance / healthMetrics.totalAssets) * 100 : 0
-  const debtBalanceWithoutMortgage = Math.max(0, totalDebtBalance - currentCollectionsState.debts.reduce((runningTotal, debtItem) => {
+  const debtBalanceWithoutMortgage = Math.max(0, totalDebtBalance - derivedDebts.reduce((runningTotal, debtItem) => {
     const isMortgage = typeof debtItem.item === 'string' && debtItem.item.toLowerCase().includes('mortgage')
     return runningTotal + (isMortgage && typeof debtItem.amount === 'number' ? debtItem.amount : 0)
   }, 0))
   const mortgageBalance = totalDebtBalance - debtBalanceWithoutMortgage
   const mortgageShareOfLiabilitiesPercent = totalDebtBalance > 0 ? (mortgageBalance / totalDebtBalance) * 100 : 0
-  const nonMortgageDebtSharePercent = totalDebtBalance > 0 ? (debtBalanceWithoutMortgage / totalDebtBalance) * 100 : 0
   const debtMinimumsAsPercentOfExpenses = monthlySummary.totalExpenses > 0 ? (totalMonthlyDebtPayback / monthlySummary.totalExpenses) * 100 : 0
   const discretionaryAfterEssentialsAndDebt = monthlySummary.totalIncome - monthlySummary.totalExpenses - totalMonthlyDebtPayback
   const monthlyBurnAfterDebt = monthlySummary.totalExpenses + totalMonthlyDebtPayback
@@ -2480,10 +2473,9 @@ export function calculateDetailedDashboardDatapointRowsFromCurrentCollectionsSta
   const expenseChangeMonthOverMonth = sourceBreakdown.expenses.delta
   const liabilitiesChangeMonthOverMonth = sourceBreakdown.liabilities.delta
   const netWorthChangeMonthOverMonth = sourceBreakdown.netWorth.delta
-  const expensesToIncomeSpread = monthlySummary.totalIncome - monthlySummary.totalExpenses
   const debtPaydownVelocityPercent = totalDebtBalance > 0 ? (totalMonthlyDebtPayback / totalDebtBalance) * 100 : 0
   const annualDebtService = totalMonthlyDebtPayback * 12
-  const securedDebtRows = [...currentCollectionsState.debts, ...currentCollectionsState.loans].filter((rowItem) => {
+  const securedDebtRows = [...derivedDebts, ...derivedLoans].filter((rowItem) => {
     const collateralAssetMarketValue = typeof rowItem.collateralAssetMarketValue === 'number' ? rowItem.collateralAssetMarketValue : 0
     return collateralAssetMarketValue > 0
   })
@@ -2527,7 +2519,7 @@ export function calculateDetailedDashboardDatapointRowsFromCurrentCollectionsSta
       metric: 'Emergency Funds',
       value: emergencyFundsCurrent,
       valueFormat: /** @type {'currency'} */ ('currency'),
-      description: `Current emergency fund proxy from current-month assets. Progress: ${emergencyFundGoalProgressPercent.toFixed(2)}% of goal.`
+      description: 'Current emergency fund proxy from current-month assets. Compare to Emergency Funds Goal to see progress.'
     },
     {
       metric: 'Emergency Funds Goal',
@@ -2587,7 +2579,7 @@ export function calculateDetailedDashboardDatapointRowsFromCurrentCollectionsSta
       metric: 'Net Worth',
       value: healthMetrics.netWorth,
       valueFormat: /** @type {'currency'} */ ('currency'),
-      description: `Assets minus liabilities. Change vs previous month: ${sourceBreakdown.netWorth.delta.toFixed(2)}.`
+      description: 'Total assets minus total liabilities. See "Net Worth Change vs Last Month" for period-over-period movement.'
     },
     {
       metric: 'Savings Rate',
@@ -2686,12 +2678,6 @@ export function calculateDetailedDashboardDatapointRowsFromCurrentCollectionsSta
       description: 'Mortgage balance as a share of total liabilities.'
     },
     {
-      metric: 'Non-Mortgage Liability Share',
-      value: nonMortgageDebtSharePercent,
-      valueFormat: /** @type {'percent'} */ ('percent'),
-      description: 'All non-mortgage liabilities as a share of total liabilities.'
-    },
-    {
       metric: 'Debt Minimums As % Of Expenses',
       value: debtMinimumsAsPercentOfExpenses,
       valueFormat: /** @type {'percent'} */ ('percent'),
@@ -2707,7 +2693,7 @@ export function calculateDetailedDashboardDatapointRowsFromCurrentCollectionsSta
       metric: 'Cash Runway After Debt Service',
       value: cashRunwayAfterDebtMonths,
       valueFormat: /** @type {'duration'} */ ('duration'),
-      description: 'Months current emergency funds can cover recurring essential expenses plus non-credit-card debt minimums.'
+      description: 'Months current emergency funds can cover all recurring expenses and debt minimums at the current burn rate.'
     },
     {
       metric: 'Income Change vs Last Month',
@@ -2932,6 +2918,48 @@ export function extractFinancialRiskFindingsFromCurrentCollectionsState(currentC
     const threshold = isMortgage ? 90 : 100
     return ltvPercent > threshold ? runningCount + 1 : runningCount
   }, 0)
+  const housingExpenseTotal = currentCollectionsState.expenses.reduce((runningTotal, expenseItem) => {
+    const category = typeof expenseItem.category === 'string' ? expenseItem.category.toLowerCase() : ''
+    const amount = typeof expenseItem.amount === 'number' ? expenseItem.amount : 0
+    const isHousing = category === 'housing' || category === 'rent' || category === 'mortgage'
+    return isHousing ? runningTotal + amount : runningTotal
+  }, 0)
+  const housingCostRatioPercent = (housingExpenseTotal / safeIncomeDivisor) * 100
+  const discretionaryCategories = new Set(['dining', 'eating out', 'restaurants', 'entertainment', 'shopping', 'subscriptions', 'leisure', 'travel', 'recreation', 'fun', 'hobbies'])
+  const discretionaryExpenseTotal = currentCollectionsState.expenses.reduce((runningTotal, expenseItem) => {
+    const category = typeof expenseItem.category === 'string' ? expenseItem.category.toLowerCase() : ''
+    const amount = typeof expenseItem.amount === 'number' ? expenseItem.amount : 0
+    return discretionaryCategories.has(category) ? runningTotal + amount : runningTotal
+  }, 0)
+  const discretionaryExpenseRatioPercent = monthlySummary.totalExpenses > 0 ? (discretionaryExpenseTotal / monthlySummary.totalExpenses) * 100 : 0
+  const totalMonthlyInterestCost = [...currentCollectionsState.debts, ...creditPaymentRows, ...currentCollectionsState.loans].reduce((runningTotal, rowItem) => {
+    const balance = typeof rowItem.amount === 'number' ? rowItem.amount
+      : (typeof rowItem.currentBalance === 'number' ? rowItem.currentBalance : 0)
+    const apr = typeof rowItem.interestRatePercent === 'number' ? rowItem.interestRatePercent : 0
+    return runningTotal + (balance * apr / 100 / 12)
+  }, 0)
+  const monthlyInterestCostToIncomePercent = (totalMonthlyInterestCost / safeIncomeDivisor) * 100
+  const creditCardsWithNoLimitCount = creditCardRows.filter((creditItem) => {
+    const limit = typeof creditItem.maxCapacity === 'number' ? creditItem.maxCapacity : 0
+    return limit <= 0
+  }).length
+  const assetHoldingRows = Array.isArray(currentCollectionsState.assetHoldings) ? currentCollectionsState.assetHoldings : []
+  const totalPortfolioMarketValue = assetHoldingRows.reduce((runningTotal, assetItem) => {
+    const marketValue = typeof assetItem.assetMarketValue === 'number' ? assetItem.assetMarketValue : 0
+    return runningTotal + marketValue
+  }, 0)
+  const maxSingleHoldingConcentrationPercent = totalPortfolioMarketValue > 0 ? (() => {
+    const maxMarketValue = assetHoldingRows.reduce((runningMax, assetItem) => {
+      const marketValue = typeof assetItem.assetMarketValue === 'number' ? assetItem.assetMarketValue : 0
+      return Math.max(runningMax, marketValue)
+    }, 0)
+    return (maxMarketValue / totalPortfolioMarketValue) * 100
+  })() : 0
+  const goalsInProgressWithNoTimeframeCount = currentCollectionsState.goals.reduce((runningCount, goalItem) => {
+    const status = typeof goalItem.status === 'string' ? goalItem.status.toLowerCase() : ''
+    const timeframe = typeof goalItem.timeframeMonths === 'number' ? goalItem.timeframeMonths : 0
+    return status === 'in progress' && timeframe <= 0 ? runningCount + 1 : runningCount
+  }, 0)
   const findings = []
 
   /**
@@ -2947,46 +2975,50 @@ export function extractFinancialRiskFindingsFromCurrentCollectionsState(currentC
   }
 
   const thresholdChecks = [
-    { id: 'dti-gt-20', severity: 'low', title: 'Debt-to-income is above 20%', detail: 'Debt payments are above conservative comfort range.', value: debtToIncomePercent, threshold: 20 },
-    { id: 'dti-gt-30', severity: 'medium', title: 'Debt-to-income is above 30%', detail: 'Debt payments are approaching stressed affordability.', value: debtToIncomePercent, threshold: 30 },
-    { id: 'dti-gt-36', severity: 'high', title: 'Debt-to-income is above 36%', detail: 'Debt payments exceed a common underwriting ceiling.', value: debtToIncomePercent, threshold: 36 },
-    { id: 'dti-gt-43', severity: 'high', title: 'Debt-to-income is above 43%', detail: 'Debt payments indicate high leverage risk.', value: debtToIncomePercent, threshold: 43 },
-    { id: 'dti-gt-50', severity: 'high', title: 'Debt-to-income is above 50%', detail: 'Debt payments indicate severe affordability risk.', value: debtToIncomePercent, threshold: 50 },
-    { id: 'util-total-gt-30', severity: 'high', title: 'Total credit utilization is above 30%', detail: `Portfolio utilization is ${creditUtilizationPercent.toFixed(2)}% against a 30% threshold.`, value: creditUtilizationPercent, threshold: 30 },
-    { id: 'savings-lt-20', severity: 'low', title: 'Savings rate is below 20%', detail: 'Savings rate is below strong accumulation pace.', value: monthlySummary.savingsRatePercent, threshold: 20, lessThan: true },
-    { id: 'savings-lt-10', severity: 'medium', title: 'Savings rate is below 10%', detail: 'Savings rate may be insufficient for resilience goals.', value: monthlySummary.savingsRatePercent, threshold: 10, lessThan: true },
-    { id: 'savings-lt-0', severity: 'high', title: 'Savings rate is negative', detail: 'Expenses currently exceed income.', value: monthlySummary.savingsRatePercent, threshold: 0, lessThan: true },
-    { id: 'efund-lt-6', severity: 'low', title: 'Emergency fund below 6 months', detail: 'Coverage is below the ideal resilience target.', value: emergencyFundMonths, threshold: 6, lessThan: true },
-    { id: 'efund-lt-3', severity: 'medium', title: 'Emergency fund below 3 months', detail: 'Coverage is below baseline safety target.', value: emergencyFundMonths, threshold: 3, lessThan: true },
-    { id: 'efund-lt-1', severity: 'high', title: 'Emergency fund below 1 month', detail: 'Coverage is critically low for disruptions.', value: emergencyFundMonths, threshold: 1, lessThan: true },
-    { id: 'runway-debt-lt-3', severity: 'high', title: 'Cash runway including debt is below 3 months', detail: 'Liquid savings coverage against expenses plus debt minimums is low.', value: cashRunwayWithDebtMonths, threshold: 3, lessThan: true },
-    { id: 'runway-debt-lt-1', severity: 'high', title: 'Cash runway including debt is below 1 month', detail: 'Any disruption can force borrowing or missed obligations.', value: cashRunwayWithDebtMonths, threshold: 1, lessThan: true },
-    { id: 'runway-expense-lt-1', severity: 'high', title: 'Liquid cash runway is below 1 month of expenses', detail: 'Cash-equivalent holdings cover less than one month of expenses.', value: cashRunwayExpensesOnlyMonths, threshold: 1, lessThan: true },
-    { id: 'cash-equivalents-lt-1000', severity: 'high', title: 'Cash equivalents are below $1,000', detail: 'Low immediate liquidity increases disruption risk.', value: totalLiquidCashEquivalents, threshold: 1000, lessThan: true },
-    { id: 'dsc-lt-2', severity: 'low', title: 'Debt service coverage below 2.0', detail: 'Income buffer over debt minimums is thinning.', value: debtServiceCoverageRatio, threshold: 2, lessThan: true },
-    { id: 'dsc-lt-1.5', severity: 'medium', title: 'Debt service coverage below 1.5', detail: 'Debt minimums absorb substantial income.', value: debtServiceCoverageRatio, threshold: 1.5, lessThan: true },
-    { id: 'dsc-lt-1.2', severity: 'high', title: 'Debt service coverage below 1.2', detail: 'Income has little room over mandatory debt payments.', value: debtServiceCoverageRatio, threshold: 1.2, lessThan: true },
-    { id: 'liq-lt-1', severity: 'medium', title: 'Liquidity ratio below 1.0', detail: 'Assets are below total liabilities.', value: liquidityRatio, threshold: 1, lessThan: true },
-    { id: 'liq-lt-0.5', severity: 'high', title: 'Liquidity ratio below 0.5', detail: 'Assets cover less than half of liabilities.', value: liquidityRatio, threshold: 0.5, lessThan: true },
-    { id: 'expense-ratio-gt-80', severity: 'medium', title: 'Expense ratio above 80%', detail: 'Most income is consumed by expenses before debt.', value: (monthlySummary.totalExpenses / safeIncomeDivisor) * 100, threshold: 80 },
-    { id: 'expense-ratio-gt-100', severity: 'high', title: 'Expense ratio above 100%', detail: 'Expenses exceed income before debt obligations.', value: (monthlySummary.totalExpenses / safeIncomeDivisor) * 100, threshold: 100 },
-    { id: 'liability-ratio-gt-2x-income', severity: 'medium', title: 'Liabilities exceed 2x yearly income', detail: 'Leverage relative to income is elevated.', value: liabilitiesTotal / (monthlySummary.totalIncome * 12 || 1), threshold: 2 },
-    { id: 'liability-ratio-gt-3x-income', severity: 'high', title: 'Liabilities exceed 3x yearly income', detail: 'Leverage relative to income is high risk.', value: liabilitiesTotal / (monthlySummary.totalIncome * 12 || 1), threshold: 3 },
-    { id: 'liability-ratio-gt-4x-income', severity: 'high', title: 'Liabilities exceed 4x yearly income', detail: 'Leverage relative to income is severe.', value: liabilitiesTotal / (monthlySummary.totalIncome * 12 || 1), threshold: 4 },
-    { id: 'payment-burden-gt-15', severity: 'low', title: 'Debt payment burden above 15%', detail: 'Mandatory debt payments reduce flexibility.', value: debtToIncomePercent, threshold: 15 },
-    { id: 'payment-burden-gt-25', severity: 'medium', title: 'Debt payment burden above 25%', detail: 'Debt payments materially compress monthly cash flow.', value: debtToIncomePercent, threshold: 25 },
-    { id: 'payment-burden-gt-40', severity: 'high', title: 'Debt payment burden above 40%', detail: 'Debt payments are in stressed range.', value: debtToIncomePercent, threshold: 40 },
+    { id: 'dti-gt-20', severity: 'low', title: 'Debt-to-income is above 20%', detail: `DTI is ${debtToIncomePercent.toFixed(1)}% — above 20% starts to compress cash flow.`, value: debtToIncomePercent, threshold: 20 },
+    { id: 'dti-gt-30', severity: 'medium', title: 'Debt-to-income is above 30%', detail: `DTI is ${debtToIncomePercent.toFixed(1)}% — lenders tighten qualification above 30%.`, value: debtToIncomePercent, threshold: 30 },
+    { id: 'dti-gt-36', severity: 'high', title: 'Debt-to-income is above 36%', detail: `DTI is ${debtToIncomePercent.toFixed(1)}% — above the 36% conventional underwriting ceiling.`, value: debtToIncomePercent, threshold: 36 },
+    { id: 'dti-gt-43', severity: 'high', title: 'Debt-to-income is above 43%', detail: `DTI is ${debtToIncomePercent.toFixed(1)}% — exceeds the 43% qualified mortgage maximum.`, value: debtToIncomePercent, threshold: 43 },
+    { id: 'dti-gt-50', severity: 'high', title: 'Debt-to-income is above 50%', detail: `DTI is ${debtToIncomePercent.toFixed(1)}% — more than half of income goes to debt payments.`, value: debtToIncomePercent, threshold: 50 },
+    { id: 'util-total-gt-30', severity: 'medium', title: 'Total credit utilization is above 30%', detail: `Portfolio utilization is ${creditUtilizationPercent.toFixed(2)}% — target below 30% to protect credit score.`, value: creditUtilizationPercent, threshold: 30 },
+    { id: 'util-total-gt-70', severity: 'high', title: 'Total credit utilization is above 70%', detail: `Portfolio utilization is ${creditUtilizationPercent.toFixed(2)}% — severely elevated and likely damaging credit score.`, value: creditUtilizationPercent, threshold: 70 },
+    { id: 'savings-lt-20', severity: 'low', title: 'Savings rate is below 20%', detail: `Saving ${monthlySummary.savingsRatePercent.toFixed(1)}% — below the 20% strong accumulation pace.`, value: monthlySummary.savingsRatePercent, threshold: 20, lessThan: true },
+    { id: 'savings-lt-10', severity: 'medium', title: 'Savings rate is below 10%', detail: `Saving only ${monthlySummary.savingsRatePercent.toFixed(1)}% — below minimum threshold for financial resilience.`, value: monthlySummary.savingsRatePercent, threshold: 10, lessThan: true },
+    { id: 'savings-lt-0', severity: 'high', title: 'Savings rate is negative', detail: 'Monthly spending exceeds income — currently in deficit-spending mode.', value: monthlySummary.savingsRatePercent, threshold: 0, lessThan: true },
+    { id: 'efund-lt-6', severity: 'low', title: 'Emergency fund below 6 months', detail: `${emergencyFundMonths.toFixed(1)} months of coverage — build to 6 months for full resilience.`, value: emergencyFundMonths, threshold: 6, lessThan: true },
+    { id: 'efund-lt-3', severity: 'medium', title: 'Emergency fund below 3 months', detail: `${emergencyFundMonths.toFixed(1)} months of coverage — below the 3-month baseline.`, value: emergencyFundMonths, threshold: 3, lessThan: true },
+    { id: 'efund-lt-1', severity: 'high', title: 'Emergency fund below 1 month', detail: `${emergencyFundMonths.toFixed(1)} months of coverage — critically low; any disruption requires borrowing.`, value: emergencyFundMonths, threshold: 1, lessThan: true },
+    { id: 'runway-debt-lt-3', severity: 'high', title: 'Cash runway including debt is below 3 months', detail: `Cash covers ${cashRunwayWithDebtMonths.toFixed(1)} months including debt minimums — below the 3-month safe threshold.`, value: cashRunwayWithDebtMonths, threshold: 3, lessThan: true },
+    { id: 'runway-debt-lt-1', severity: 'high', title: 'Cash runway including debt is below 1 month', detail: `Only ${cashRunwayWithDebtMonths.toFixed(1)} months against full obligations — one missed paycheck risks default.`, value: cashRunwayWithDebtMonths, threshold: 1, lessThan: true },
+    { id: 'runway-expense-lt-1', severity: 'high', title: 'Liquid cash runway is below 1 month of expenses', detail: `Cash covers ${cashRunwayExpensesOnlyMonths.toFixed(1)} months of expenses — refill reserves before discretionary spend.`, value: cashRunwayExpensesOnlyMonths, threshold: 1, lessThan: true },
+    { id: 'cash-equivalents-lt-1000', severity: 'high', title: 'Cash equivalents are below $1,000', detail: `Only $${Math.round(totalLiquidCashEquivalents).toLocaleString()} in liquid cash — insufficient for even minor disruptions.`, value: totalLiquidCashEquivalents, threshold: 1000, lessThan: true },
+    { id: 'dsc-lt-2', severity: 'low', title: 'Debt service coverage below 2.0', detail: `Coverage ratio is ${debtServiceCoverageRatio.toFixed(2)} — income is less than 2× debt service minimums.`, value: debtServiceCoverageRatio, threshold: 2, lessThan: true },
+    { id: 'dsc-lt-1.5', severity: 'medium', title: 'Debt service coverage below 1.5', detail: `Coverage ratio is ${debtServiceCoverageRatio.toFixed(2)} — under 50% spare capacity over minimums.`, value: debtServiceCoverageRatio, threshold: 1.5, lessThan: true },
+    { id: 'dsc-lt-1.2', severity: 'high', title: 'Debt service coverage below 1.2', detail: `Coverage ratio is ${debtServiceCoverageRatio.toFixed(2)} — barely above minimums; any income dip risks missed payments.`, value: debtServiceCoverageRatio, threshold: 1.2, lessThan: true },
+    { id: 'liq-lt-1', severity: 'medium', title: 'Liquidity ratio below 1.0', detail: 'Net worth is negative — total liabilities exceed total assets.', value: liquidityRatio, threshold: 1, lessThan: true },
+    { id: 'liq-lt-0.5', severity: 'high', title: 'Liquidity ratio below 0.5', detail: `Liquidity ratio is ${liquidityRatio.toFixed(2)} — liabilities exceed 2× total assets.`, value: liquidityRatio, threshold: 0.5, lessThan: true },
+    { id: 'expense-ratio-gt-80', severity: 'medium', title: 'Expense ratio above 80%', detail: `Expenses are ${((monthlySummary.totalExpenses / safeIncomeDivisor) * 100).toFixed(1)}% of income — little room before adding debt payments.`, value: (monthlySummary.totalExpenses / safeIncomeDivisor) * 100, threshold: 80 },
+    { id: 'expense-ratio-gt-100', severity: 'high', title: 'Expense ratio above 100%', detail: `Expenses are ${((monthlySummary.totalExpenses / safeIncomeDivisor) * 100).toFixed(1)}% of income — spending exceeds income before debt.`, value: (monthlySummary.totalExpenses / safeIncomeDivisor) * 100, threshold: 100 },
+    { id: 'liability-ratio-gt-2x-income', severity: 'medium', title: 'Liabilities exceed 2x yearly income', detail: `Liabilities are ${(liabilitiesTotal / (monthlySummary.totalIncome * 12 || 1)).toFixed(1)}× yearly income — elevated leverage.`, value: liabilitiesTotal / (monthlySummary.totalIncome * 12 || 1), threshold: 2 },
+    { id: 'liability-ratio-gt-3x-income', severity: 'high', title: 'Liabilities exceed 3x yearly income', detail: `Liabilities are ${(liabilitiesTotal / (monthlySummary.totalIncome * 12 || 1)).toFixed(1)}× yearly income — high leverage risk.`, value: liabilitiesTotal / (monthlySummary.totalIncome * 12 || 1), threshold: 3 },
+    { id: 'liability-ratio-gt-4x-income', severity: 'high', title: 'Liabilities exceed 4x yearly income', detail: `Liabilities are ${(liabilitiesTotal / (monthlySummary.totalIncome * 12 || 1)).toFixed(1)}× yearly income — severe leverage.`, value: liabilitiesTotal / (monthlySummary.totalIncome * 12 || 1), threshold: 4 },
+
     { id: 'debt-minimums-vs-expenses-gt-100', severity: 'high', title: 'Debt minimums exceed monthly expenses', detail: 'Debt minimum payments are larger than monthly expenses.', value: debtMinimumsToExpensesPercent, threshold: 100 },
-    { id: 'single-payment-concentration-gt-25', severity: 'medium', title: 'A single debt payment exceeds 25% of income', detail: 'One recurring payment is highly concentrated against income.', value: maxSingleDebtPaymentSharePercent, threshold: 25 },
-    { id: 'fixed-cost-ratio-gt-60', severity: 'high', title: 'Fixed-cost ratio is above 60%', detail: 'High fixed obligations reduce flexibility during shocks.', value: fixedCostRatioPercent, threshold: 60 },
-    { id: 'income-concentration-gt-80', severity: 'medium', title: 'Income is concentrated above 80% in one source', detail: 'A single source dominates total income.', value: topIncomeSourceSharePercent, threshold: 80 },
-    { id: 'income-concentration-gt-90', severity: 'high', title: 'Income is highly concentrated in one source', detail: 'A single-source income disruption would materially impact the plan.', value: topIncomeSourceSharePercent, threshold: 90 },
-    { id: 'secured-ltv-gt-80', severity: 'medium', title: 'Secured debt LTV is above 80%', detail: 'Collateral cushion is thinning on secured balances.', value: securedDebtLoanToValuePercent, threshold: 80 },
-    { id: 'secured-ltv-gt-100', severity: 'high', title: 'Secured debt LTV is above 100%', detail: 'Secured balances exceed tracked collateral market value.', value: securedDebtLoanToValuePercent, threshold: 100 },
-    { id: 'income-volatility-gt-20', severity: 'low', title: 'Cash-flow swing proxy above 20%', detail: 'Surplus/deficit swing indicates unstable cash profile.', value: incomeVolatilityProxyPercent, threshold: 20 },
-    { id: 'income-volatility-gt-40', severity: 'medium', title: 'Cash-flow swing proxy above 40%', detail: 'Cash profile variability may disrupt planning.', value: incomeVolatilityProxyPercent, threshold: 40 },
-    { id: 'income-volatility-gt-60', severity: 'high', title: 'Cash-profile variability is severe', detail: 'Cash profile variability is severe.', value: incomeVolatilityProxyPercent, threshold: 60 },
+    { id: 'single-payment-concentration-gt-25', severity: 'medium', title: 'A single debt payment exceeds 25% of income', detail: `One payment alone takes ${maxSingleDebtPaymentSharePercent.toFixed(1)}% of gross income — highly concentrated single obligation.`, value: maxSingleDebtPaymentSharePercent, threshold: 25 },
+    { id: 'fixed-cost-ratio-gt-60', severity: 'high', title: 'Fixed-cost ratio is above 60%', detail: `Fixed costs consume ${fixedCostRatioPercent.toFixed(1)}% of income — minimal shock absorption capacity.`, value: fixedCostRatioPercent, threshold: 60 },
+    { id: 'income-concentration-gt-80', severity: 'medium', title: 'Income is concentrated above 80% in one source', detail: `${topIncomeSourceSharePercent.toFixed(1)}% of income comes from one source — any disruption has outsized impact.`, value: topIncomeSourceSharePercent, threshold: 80 },
+    { id: 'income-concentration-gt-90', severity: 'high', title: 'Income is highly concentrated in one source', detail: `${topIncomeSourceSharePercent.toFixed(1)}% of income from one source — no diversification; one disruption is catastrophic.`, value: topIncomeSourceSharePercent, threshold: 90 },
+    { id: 'secured-ltv-gt-80', severity: 'medium', title: 'Secured debt LTV is above 80%', detail: `Secured LTV is ${securedDebtLoanToValuePercent.toFixed(1)}% — collateral buffer under 20%; value drops risk going underwater.`, value: securedDebtLoanToValuePercent, threshold: 80 },
+    { id: 'secured-ltv-gt-100', severity: 'high', title: 'Secured debt LTV is above 100%', detail: `Secured LTV is ${securedDebtLoanToValuePercent.toFixed(1)}% — debt exceeds collateral value; selling wouldn't clear the balance.`, value: securedDebtLoanToValuePercent, threshold: 100 },
     { id: 'util-mismatch-gt-5', severity: 'high', title: 'Utilization mismatch across sections', detail: 'Credit utilization inputs disagree between credit and card sources.', value: creditUtilizationMismatchPercent, threshold: 5 },
+    { id: 'housing-gt-30', severity: 'medium', title: 'Housing cost is above 30% of income', detail: `Housing costs are ${housingCostRatioPercent.toFixed(1)}% of income — above the 30% affordability guideline.`, value: housingCostRatioPercent, threshold: 30 },
+    { id: 'housing-gt-40', severity: 'high', title: 'Housing cost is above 40% of income', detail: `Housing costs are ${housingCostRatioPercent.toFixed(1)}% of income — critically elevated; consider restructuring or income growth.`, value: housingCostRatioPercent, threshold: 40 },
+    { id: 'interest-cost-gt-10', severity: 'medium', title: 'Monthly interest cost exceeds 10% of income', detail: `${monthlyInterestCostToIncomePercent.toFixed(1)}% of income goes to interest alone (not principal) — target high-APR balances first.`, value: monthlyInterestCostToIncomePercent, threshold: 10 },
+    { id: 'interest-cost-gt-20', severity: 'high', title: 'Monthly interest cost exceeds 20% of income', detail: `${monthlyInterestCostToIncomePercent.toFixed(1)}% of income consumed by interest charges — eliminate high-APR balances urgently.`, value: monthlyInterestCostToIncomePercent, threshold: 20 },
+    { id: 'discretionary-gt-35', severity: 'low', title: 'Discretionary spending above 35% of expenses', detail: `${discretionaryExpenseRatioPercent.toFixed(1)}% of expenses are discretionary (dining, entertainment, shopping, subscriptions).`, value: discretionaryExpenseRatioPercent, threshold: 35 },
+    { id: 'discretionary-gt-55', severity: 'medium', title: 'Discretionary spending above 55% of expenses', detail: `${discretionaryExpenseRatioPercent.toFixed(1)}% of expenses are flexible categories — significant reduction potential exists.`, value: discretionaryExpenseRatioPercent, threshold: 55 },
+    { id: 'portfolio-concentration-gt-70', severity: 'medium', title: 'Single asset holding exceeds 70% of portfolio', detail: `One position is ${maxSingleHoldingConcentrationPercent.toFixed(1)}% of the portfolio — a value drop would have outsized impact.`, value: maxSingleHoldingConcentrationPercent, threshold: 70 },
+    { id: 'portfolio-concentration-gt-90', severity: 'high', title: 'Single asset holding exceeds 90% of portfolio', detail: `One position is ${maxSingleHoldingConcentrationPercent.toFixed(1)}% of the portfolio — diversification is critically low.`, value: maxSingleHoldingConcentrationPercent, threshold: 90 },
     { id: 'stale-balance-gt-0', severity: 'medium', title: 'Some liability balances are stale', detail: 'At least one liability balance is older than 45 days or missing timestamps.', value: staleBalanceCountOver45Days, threshold: 0 },
     { id: 'stale-balance-gt-3', severity: 'high', title: 'Multiple liability balances are stale', detail: 'Several liabilities are stale; forecast confidence is low.', value: staleBalanceCountOver45Days, threshold: 3 },
     { id: 'forecast-fields-missing-gt-0', severity: 'medium', title: 'Missing debt fields for forecasting', detail: 'One or more liabilities are missing amount, minimum payment, or APR.', value: forecastingFieldMissingCount, threshold: 0 }
@@ -3023,13 +3055,13 @@ export function extractFinancialRiskFindingsFromCurrentCollectionsState(currentC
       const itemName = typeof debtItem.item === 'string' ? debtItem.item : `Debt ${debtIndex + 1}`
       const amount = typeof debtItem.amount === 'number' ? debtItem.amount : 0
       const shareOfTotalLiabilitiesPercent = (amount / safeLiabilitiesDivisor) * 100
-      return { id: `debt-concentration-${debtIndex}`, severity: shareOfTotalLiabilitiesPercent > 60 ? 'high' : (shareOfTotalLiabilitiesPercent > 35 ? 'medium' : 'low'), title: `${itemName} concentration is high`, detail: `${itemName} is a concentrated share of liabilities.`, value: shareOfTotalLiabilitiesPercent, threshold: 35 }
+      return { id: `debt-concentration-${debtIndex}`, severity: shareOfTotalLiabilitiesPercent > 60 ? 'high' : (shareOfTotalLiabilitiesPercent > 35 ? 'medium' : 'low'), title: `${itemName} concentration is high`, detail: `${itemName} is ${shareOfTotalLiabilitiesPercent.toFixed(1)}% of total liabilities — highest paydown leverage target.`, value: shareOfTotalLiabilitiesPercent, threshold: 35 }
     }),
     ...currentCollectionsState.loans.map((loanItem, loanIndex) => {
       const itemName = typeof loanItem.item === 'string' ? loanItem.item : `Loan ${loanIndex + 1}`
       const minimumPayment = typeof loanItem.minimumPayment === 'number' ? loanItem.minimumPayment : 0
       const paymentShareOfIncomePercent = (minimumPayment / safeIncomeDivisor) * 100
-      return { id: `loan-payment-share-${loanIndex}`, severity: paymentShareOfIncomePercent > 20 ? 'high' : (paymentShareOfIncomePercent > 10 ? 'medium' : 'low'), title: `${itemName} payment share is high`, detail: `${itemName} minimum payment is elevated relative to income.`, value: paymentShareOfIncomePercent, threshold: 10 }
+      return { id: `loan-payment-share-${loanIndex}`, severity: paymentShareOfIncomePercent > 20 ? 'high' : (paymentShareOfIncomePercent > 10 ? 'medium' : 'low'), title: `${itemName} payment share is high`, detail: `${itemName} takes ${paymentShareOfIncomePercent.toFixed(1)}% of income in minimums — consider refinancing for a lower monthly payment.`, value: paymentShareOfIncomePercent, threshold: 10 }
     })
   ]
 
@@ -3037,21 +3069,12 @@ export function extractFinancialRiskFindingsFromCurrentCollectionsState(currentC
     if (check.value > check.threshold) pushFinding(check.id, check.severity, check.title, check.detail, check.value)
   }
 
-  if (operatingCashFlow < 0) {
-    pushFinding(
-      'negative-operating-cashflow',
-      'high',
-      'Negative operating cash flow',
-      'Monthly income is below expenses plus debt minimums.',
-      operatingCashFlow
-    )
-  }
   if (discretionaryBuffer < 0) {
     pushFinding(
       'discretionary-buffer-lt-0',
       'high',
       'Discretionary buffer is negative',
-      'There is no discretionary capacity after expenses and debt minimums.',
+      `No discretionary capacity after expenses and debt minimums — $${Math.abs(Math.round(discretionaryBuffer)).toLocaleString()} in the red.`,
       discretionaryBuffer
     )
   } else if (discretionaryBuffer < 500) {
@@ -3059,7 +3082,7 @@ export function extractFinancialRiskFindingsFromCurrentCollectionsState(currentC
       'discretionary-buffer-lt-500',
       'medium',
       'Discretionary buffer is below $500',
-      'Small surprise expenses can still destabilize the month.',
+      `Only $${Math.round(discretionaryBuffer).toLocaleString()} left after expenses and debt — one surprise expense destabilizes the month.`,
       discretionaryBuffer
     )
   }
@@ -3068,7 +3091,7 @@ export function extractFinancialRiskFindingsFromCurrentCollectionsState(currentC
       'apr-exposure-gt-25',
       'high',
       'High APR exposure on revolving debt',
-      'At least one revolving balance above $1,000 has APR above 25%.',
+      `A revolving balance above $1,000 carries ${maxRevolvingAprExposure.toFixed(1)}% APR — generating expensive recurring interest charges.`,
       maxRevolvingAprExposure
     )
   }
@@ -3079,15 +3102,6 @@ export function extractFinancialRiskFindingsFromCurrentCollectionsState(currentC
       'One or more secured debts are near/above risk LTV thresholds',
       'Mortgage above 90% LTV or non-mortgage secured debt above 100% LTV detected.',
       unsecuredOrUnderwaterSecuredCount
-    )
-  }
-  if (projectedMonthEndCashflow < 0) {
-    pushFinding(
-      'forecast-month-end-cash-lt-0',
-      'high',
-      'Projected month-end cash is negative',
-      'Projected month-end cashflow falls below zero with current obligations.',
-      projectedMonthEndCashflow
     )
   }
   const unrealizedIncomePlaceholderCount = currentCollectionsState.income.reduce((runningCount, incomeItem) => {
@@ -3104,6 +3118,72 @@ export function extractFinancialRiskFindingsFromCurrentCollectionsState(currentC
       'Income assumptions include one or more $0 rows that may not be active.',
       unrealizedIncomePlaceholderCount
     )
+  }
+  if (monthlySummary.totalIncome === 0) {
+    pushFinding(
+      'total-income-zero',
+      'high',
+      'No income recorded',
+      'All income-driven ratios (DTI, savings rate, coverage) are unreliable without income data.',
+      0
+    )
+  }
+  if (creditCardsWithNoLimitCount > 0) {
+    pushFinding(
+      'credit-card-no-limit',
+      'medium',
+      `${creditCardsWithNoLimitCount} credit card${creditCardsWithNoLimitCount > 1 ? 's are' : ' is'} missing a credit limit`,
+      'Cards without a recorded limit cannot contribute to utilization calculations — real utilization may be higher.',
+      creditCardsWithNoLimitCount
+    )
+  }
+  if (goalsInProgressWithNoTimeframeCount > 0) {
+    pushFinding(
+      'goal-no-timeframe',
+      'low',
+      'In-progress goals have no timeframe set',
+      'Goals marked in-progress without a target month cannot be tracked for urgency or monthly contribution needs.',
+      goalsInProgressWithNoTimeframeCount
+    )
+  }
+  const installmentAprRows = [
+    ...currentCollectionsState.debts.map((debtItem, debtIndex) => ({
+      id: `installment-apr-debt-${debtIndex}`,
+      itemName: typeof debtItem.item === 'string' ? debtItem.item : `Debt ${debtIndex + 1}`,
+      apr: typeof debtItem.interestRatePercent === 'number' ? debtItem.interestRatePercent : 0,
+      balance: typeof debtItem.amount === 'number' ? debtItem.amount : 0
+    })),
+    ...currentCollectionsState.loans.map((loanItem, loanIndex) => ({
+      id: `installment-apr-loan-${loanIndex}`,
+      itemName: typeof loanItem.item === 'string' ? loanItem.item : `Loan ${loanIndex + 1}`,
+      apr: typeof loanItem.interestRatePercent === 'number' ? loanItem.interestRatePercent : 0,
+      balance: typeof loanItem.amount === 'number' ? loanItem.amount : 0
+    }))
+  ]
+  for (const installmentItem of installmentAprRows) {
+    if (installmentItem.balance > 500 && installmentItem.apr > 20) {
+      pushFinding(
+        installmentItem.id,
+        installmentItem.apr > 28 ? 'high' : 'medium',
+        `${installmentItem.itemName} has a high APR (${installmentItem.apr.toFixed(2)}%)`,
+        `High-rate installment debt at ${installmentItem.apr.toFixed(2)}% APR is expensive to hold — prioritize paydown or refinance.`,
+        installmentItem.apr
+      )
+    }
+  }
+  for (const [assetIndex, assetItem] of assetHoldingRows.entries()) {
+    const marketValue = typeof assetItem.assetMarketValue === 'number' ? assetItem.assetMarketValue : 0
+    const owedValue = typeof assetItem.assetValueOwed === 'number' ? assetItem.assetValueOwed : 0
+    if (marketValue > 0 && owedValue > marketValue) {
+      const holdingName = typeof assetItem.item === 'string' ? assetItem.item : `Asset Holding ${assetIndex + 1}`
+      pushFinding(
+        `underwater-holding-${assetIndex}`,
+        'high',
+        `${holdingName} is underwater`,
+        `${holdingName} has more owed ($${Math.round(owedValue).toLocaleString()}) than its current market value ($${Math.round(marketValue).toLocaleString()}).`,
+        owedValue - marketValue
+      )
+    }
   }
   const activeGoalsCount = currentCollectionsState.goals.reduce((runningTotal, goalItem) => {
     const status = typeof goalItem.status === 'string' ? goalItem.status.toLowerCase() : ''

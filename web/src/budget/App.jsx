@@ -3413,48 +3413,118 @@ export default function App() {
       </section>
 
       <section id="emergency-fund" className="section-tight section-allows-popovers glass-panel-soft squircle-md z-layer-section mb-4 scroll-mt-40 p-4 md:mb-6 md:p-6" style={{ order: 14 }}>
-        <div className="mb-4">
-          <h2 className="text-lg font-bold text-slate-900">Emergency Fund Tracker (6 Months)</h2>
-          <p className="text-xs text-slate-500">Goal is based on recurring essential expenses plus non-credit-card debt minimums. Funds are grouped from liquid cash-style assets and longer-term invested assets.</p>
-        </div>
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          {renderHoverMetadataBoxForElement({
-            label: 'Emergency Goal Expense Breakdown',
-            lines: emergencyGoalExpenseLines,
-            boxClassName: 'meta-hover-box-wide',
-            children: (
-              <article className="squircle-sm border border-slate-200/90 bg-white/90 p-3">
-                <p className="text-xs uppercase tracking-[0.12em] text-slate-500">Goal (6 months)</p>
-                <p className="text-xl font-bold text-slate-800">{formatCurrencyValueForDashboard(emergencyFundSummary.emergencyFundGoal)}</p>
-                <p className="text-xs text-slate-500">Liquid target: {formatCurrencyValueForDashboard(emergencyFundSummary.liquidTarget)}</p>
-              </article>
-            )
-          })}
-          <article className="squircle-sm border border-slate-200/90 bg-white/90 p-3">
-            <p className="text-xs uppercase tracking-[0.12em] text-slate-500">Funds Available</p>
-            <p className="text-xl font-bold text-teal-700">{formatCurrencyValueForDashboard(emergencyFundSummary.totalEmergencyFundAmount)}</p>
-            <p className="text-xs text-slate-500">Liquid: {formatCurrencyValueForDashboard(emergencyFundSummary.liquidAmount)} | Invested: {formatCurrencyValueForDashboard(emergencyFundSummary.investedAmount)}</p>
-            <p className="mt-1 text-xs text-slate-500">Cash assets: {emergencyFundSourceLabels.liquidText}</p>
-            <p className="text-xs text-slate-500">Invested assets: {emergencyFundSourceLabels.investedText}</p>
-          </article>
-          <article className="squircle-sm border border-rose-200/90 bg-rose-50/85 p-3">
-            <p className="text-xs uppercase tracking-[0.12em] text-rose-600">Liquid Gap</p>
-            <p className={`text-xl font-bold ${emergencyFundSummary.missingLiquidAmount > 0 ? 'text-rose-700' : 'text-emerald-700'}`}>{formatCurrencyValueForDashboard(emergencyFundSummary.missingLiquidAmount)}</p>
-            <p className="text-xs text-rose-600">Needed to hit liquid target: {formatCurrencyValueForDashboard(emergencyFundSummary.missingLiquidAmount)}</p>
-            <p className="mt-1 text-xs text-rose-600">Target: {formatCurrencyValueForDashboard(emergencyFundSummary.liquidTarget)}</p>
-          </article>
-          <article className="squircle-sm border border-rose-200/90 bg-rose-50/85 p-3">
-            <p className="text-xs uppercase tracking-[0.12em] text-rose-600">Invested Gap</p>
-            <p className={`text-xl font-bold ${Math.max(0, emergencyFundSummary.investedTarget - emergencyFundSummary.investedAmount) > 0 ? 'text-rose-700' : 'text-emerald-700'}`}>{formatCurrencyValueForDashboard(Math.max(0, emergencyFundSummary.investedTarget - emergencyFundSummary.investedAmount))}</p>
-            <p className="text-xs text-rose-600">Needed to hit invested target: {formatCurrencyValueForDashboard(Math.max(0, emergencyFundSummary.investedTarget - emergencyFundSummary.investedAmount))}</p>
-            <p className="mt-1 text-xs text-rose-600">Target: {formatCurrencyValueForDashboard(emergencyFundSummary.investedTarget)}</p>
-          </article>
-        </div>
+        {(() => {
+          const coverageMonths = typeof emergencyFundSummary.totalCoverageMonths === 'number' ? emergencyFundSummary.totalCoverageMonths : 0
+          const goal = typeof emergencyFundSummary.emergencyFundGoal === 'number' ? emergencyFundSummary.emergencyFundGoal : 0
+          const liquidAmount = typeof emergencyFundSummary.liquidAmount === 'number' ? emergencyFundSummary.liquidAmount : 0
+          const investedAmount = typeof emergencyFundSummary.investedAmount === 'number' ? emergencyFundSummary.investedAmount : 0
+          const liquidTarget = typeof emergencyFundSummary.liquidTarget === 'number' ? emergencyFundSummary.liquidTarget : 0
+          const investedTarget = typeof emergencyFundSummary.investedTarget === 'number' ? emergencyFundSummary.investedTarget : 0
+          const monthlyObligation = typeof emergencyFundSummary.monthlyObligations === 'number' ? emergencyFundSummary.monthlyObligations : 0
+          const monthlyExpenses = typeof emergencyFundSummary.monthlyExpenses === 'number' ? emergencyFundSummary.monthlyExpenses : 0
+          const monthlyDebtMins = typeof emergencyFundSummary.monthlyDebtMinimums === 'number' ? emergencyFundSummary.monthlyDebtMinimums : 0
+          const totalFunds = liquidAmount + investedAmount
+          const overallFillPct = goal > 0 ? Math.min(100, (totalFunds / goal) * 100) : 0
+          const liquidFillPct = liquidTarget > 0 ? Math.min(100, (liquidAmount / liquidTarget) * 100) : 0
+          const investedFillPct = investedTarget > 0 ? Math.min(100, (investedAmount / investedTarget) * 100) : 0
+          const liquidGap = Math.max(0, liquidTarget - liquidAmount)
+          const investedGap = Math.max(0, investedTarget - investedAmount)
+          const coverageStatus = coverageMonths >= 6 ? 'good' : coverageMonths >= 3 ? 'watch' : 'risk'
+          const coverageBadgeClass = coverageStatus === 'good' ? 'border-emerald-300 bg-emerald-50 text-emerald-700' : coverageStatus === 'watch' ? 'border-amber-300/80 bg-amber-50 text-amber-800' : 'border-rose-300 bg-rose-50 text-rose-700'
+          const barFillColor = coverageStatus === 'good' ? '#10b981' : coverageStatus === 'watch' ? '#f59e0b' : '#f43f5e'
+          const liquidFillColor = liquidGap > 0 ? '#0ea5e9' : '#10b981'
+          const investedFillColor = investedGap > 0 ? '#8b5cf6' : '#10b981'
+          const milestone1Pct = goal > 0 ? Math.min(100, (monthlyObligation / goal) * 100) : 16.67
+          const milestone3Pct = 50
+          return (
+            <React.Fragment>
+              <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  <h2 className="text-lg font-bold text-slate-900">Emergency Fund</h2>
+                  <span className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold ${coverageBadgeClass}`}>{coverageMonths.toFixed(1)} mo. covered</span>
+                  <span className="rounded-full border border-slate-200 bg-white/80 px-2.5 py-0.5 text-xs font-semibold text-slate-500">Goal: 6 months</span>
+                </div>
+                <span className="text-sm font-bold text-slate-700">{formatCurrencyValueForDashboard(totalFunds)} <span className="font-normal text-slate-400">of</span> {formatCurrencyValueForDashboard(goal)}</span>
+              </div>
+
+              <div className="mb-5">
+                <div className="relative h-3 overflow-hidden rounded-full bg-slate-200/80">
+                  <div className="h-full rounded-full transition-all duration-700" style={{ width: `${overallFillPct}%`, backgroundColor: barFillColor }} />
+                  <div className="absolute inset-y-0 border-l border-slate-400/60" style={{ left: `${milestone1Pct}%` }} />
+                  <div className="absolute inset-y-0 border-l border-slate-400/60" style={{ left: `${milestone3Pct}%` }} />
+                </div>
+                <div className="relative mt-1 h-4">
+                  <span className="absolute -translate-x-1/2 text-[10px] text-slate-400" style={{ left: `${milestone1Pct}%` }}>1 mo</span>
+                  <span className="absolute -translate-x-1/2 text-[10px] text-slate-400" style={{ left: `${milestone3Pct}%` }}>3 mo</span>
+                  <span className="absolute right-0 text-[10px] text-slate-400">6 mo</span>
+                </div>
+              </div>
+
+              <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <article className={`rounded-2xl border p-3 ${liquidGap > 0 ? 'border-sky-300/70 bg-sky-50/90' : 'border-emerald-200/90 bg-emerald-50/90'}`}>
+                  <div className="mb-2 flex items-center justify-between gap-2">
+                    <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Liquid Cash</p>
+                    {liquidGap > 0 ? <span className="text-xs font-semibold text-rose-600">−{formatCurrencyValueForDashboard(liquidGap)} gap</span> : <span className="text-xs font-semibold text-emerald-600">✓ Funded</span>}
+                  </div>
+                  <div className="flex items-end justify-between gap-2">
+                    <p className="text-xl font-bold text-slate-800">{formatCurrencyValueForDashboard(liquidAmount)}</p>
+                    <p className="text-xs text-slate-500">target {formatCurrencyValueForDashboard(liquidTarget)}</p>
+                  </div>
+                  <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-200/80">
+                    <div className="h-full rounded-full" style={{ width: `${liquidFillPct}%`, backgroundColor: liquidFillColor }} />
+                  </div>
+                  {emergencyFundSourceLabels.liquidText !== 'None classified' && <p className="mt-2 text-[10px] text-slate-400 truncate">Sources: {emergencyFundSourceLabels.liquidText}</p>}
+                </article>
+                <article className={`rounded-2xl border p-3 ${investedGap > 0 ? 'border-violet-300 bg-violet-50/90' : 'border-emerald-200/90 bg-emerald-50/90'}`}>
+                  <div className="mb-2 flex items-center justify-between gap-2">
+                    <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Invested Assets</p>
+                    {investedGap > 0 ? <span className="text-xs font-semibold text-rose-600">−{formatCurrencyValueForDashboard(investedGap)} gap</span> : <span className="text-xs font-semibold text-emerald-600">✓ Funded</span>}
+                  </div>
+                  <div className="flex items-end justify-between gap-2">
+                    <p className="text-xl font-bold text-slate-800">{formatCurrencyValueForDashboard(investedAmount)}</p>
+                    <p className="text-xs text-slate-500">target {formatCurrencyValueForDashboard(investedTarget)}</p>
+                  </div>
+                  <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-200/80">
+                    <div className="h-full rounded-full" style={{ width: `${investedFillPct}%`, backgroundColor: investedFillColor }} />
+                  </div>
+                  {emergencyFundSourceLabels.investedText !== 'None classified' && <p className="mt-2 text-[10px] text-slate-400 truncate">Sources: {emergencyFundSourceLabels.investedText}</p>}
+                </article>
+              </div>
+
+              {renderHoverMetadataBoxForElement({
+                label: 'Emergency Goal Expense Breakdown',
+                lines: emergencyGoalExpenseLines,
+                boxClassName: 'meta-hover-box-wide',
+                children: (
+                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1 rounded-2xl border border-slate-200/80 bg-white/70 px-3 py-2">
+                    <p className="text-xs text-slate-500">Monthly obligation: <span className="font-semibold text-slate-700">{formatCurrencyValueForDashboard(monthlyObligation)}</span></p>
+                    <span className="hidden text-slate-300 sm:inline">|</span>
+                    <p className="text-xs text-slate-500">Expenses: <span className="font-semibold text-slate-700">{formatCurrencyValueForDashboard(monthlyExpenses)}</span></p>
+                    <span className="hidden text-slate-300 sm:inline">+</span>
+                    <p className="text-xs text-slate-500">Debt minimums: <span className="font-semibold text-slate-700">{formatCurrencyValueForDashboard(monthlyDebtMins)}</span></p>
+                    <span className="hidden text-slate-300 sm:inline">→</span>
+                    <p className="text-xs text-slate-500">6× goal: <span className="font-semibold text-slate-700">{formatCurrencyValueForDashboard(goal)}</span></p>
+                    <span className="ml-auto text-[10px] text-slate-400">hover for breakdown</span>
+                  </div>
+                )
+              })}
+            </React.Fragment>
+          )
+        })()}
       </section>
 
       <section id="risks" className="section-tight glass-panel-soft squircle-md z-layer-section mb-4 scroll-mt-40 p-4 md:mb-6 md:p-6" style={{ order: 11 }}>
-        <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-lg font-bold text-slate-900">Financial Risk Flags</h2>
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center gap-3">
+            <h2 className="text-lg font-bold text-slate-900">Financial Risk Flags</h2>
+            {!isRiskLoading && riskFindings.length > 0 && (
+              <span className="flex items-center gap-1.5 text-xs font-semibold">
+                {riskFindings.filter((f) => f.severity === 'high').length > 0 && <span className="rounded-full bg-rose-100 px-2 py-0.5 text-rose-700">{riskFindings.filter((f) => f.severity === 'high').length} high</span>}
+                {riskFindings.filter((f) => f.severity === 'medium').length > 0 && <span className="rounded-full bg-amber-100 px-2 py-0.5 text-amber-700">{riskFindings.filter((f) => f.severity === 'medium').length} medium</span>}
+                {riskFindings.filter((f) => f.severity === 'low').length > 0 && <span className="rounded-full bg-sky-100 px-2 py-0.5 text-sky-700">{riskFindings.filter((f) => f.severity === 'low').length} low</span>}
+              </span>
+            )}
+          </div>
           <div className="flex items-center gap-2">
             <button
               className="rounded-xl border border-slate-300 bg-white/85 p-2 text-slate-700 transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-40"
@@ -3466,7 +3536,7 @@ export default function App() {
             >
               <IconRefresh className={isRiskLoading ? 'animate-spin' : ''} />
             </button>
-            <span className="text-xs text-slate-500">{isRiskLoading ? 'running checks...' : `${riskFindings.length} active checks`}</span>
+            <span className="text-xs text-slate-500">{isRiskLoading ? 'running checks...' : `${riskFindings.length} active`}</span>
           </div>
         </div>
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
@@ -3486,9 +3556,11 @@ export default function App() {
               onClick={() => setSelectedRiskFinding(findingItem)}
               type="button"
             >
-              <p className={`risk-flag-severity text-xs font-semibold uppercase tracking-[0.14em] ${severityBadgeClassName}`}>{findingItem.severity}</p>
-              <p className="mt-1 font-semibold text-slate-900">{findingItem.title}</p>
-              <p className="text-sm text-slate-600">{findingItem.detail}</p>
+              <div className="flex items-start justify-between gap-2">
+                <p className="font-semibold leading-snug text-slate-900">{findingItem.title}</p>
+                <p className={`risk-flag-severity shrink-0 text-xs font-semibold uppercase tracking-[0.14em] ${severityBadgeClassName}`}>{findingItem.severity}</p>
+              </div>
+              <p className="mt-1 text-sm text-slate-600">{findingItem.detail}</p>
             </button>
             )
           })}
@@ -3496,67 +3568,81 @@ export default function App() {
       </section>
 
       <section id="goals" className="section-tight glass-panel-soft squircle-md z-layer-section mb-4 scroll-mt-40 p-4 md:mb-6 md:p-6" style={{ order: 12 }}>
-        <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-          <h2 className="text-lg font-bold text-slate-900">Goals</h2>
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <h2 className="text-lg font-bold text-slate-900">Goals</h2>
+            {powerGoalsFormulaSummary.completionRatePercent > 0 && (
+              <span className="rounded-full border border-emerald-300 bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold text-emerald-700">{powerGoalsFormulaSummary.completionRatePercent.toFixed(0)}% complete</span>
+            )}
+          </div>
           <button className="inline-flex items-center gap-2 rounded-2xl bg-sky-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-sky-700" onClick={() => { setGoalEntryFormState(buildInitialGoalEntryFormState()); setEditingGoalId(''); setIsAddGoalModalOpen(true) }} type="button"><IconPlus /> Add Goal</button>
         </div>
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          <article className="squircle-sm border border-slate-200/90 bg-white/90 p-3"><p className="text-xs uppercase tracking-[0.12em] text-slate-500">Completed</p><p className="text-2xl font-bold text-emerald-700">{powerGoalsFormulaSummary.completedCount}</p><p className="text-xs text-slate-500">Status is marked completed.</p></article>
-          <article className="squircle-sm border border-slate-200/90 bg-white/90 p-3"><p className="text-xs uppercase tracking-[0.12em] text-slate-500">In Progress</p><p className="text-2xl font-bold text-amber-700">{powerGoalsFormulaSummary.inProgressCount}</p><p className="text-xs text-slate-500">Status is marked in progress.</p></article>
-          <article className="squircle-sm border border-slate-200/90 bg-white/90 p-3"><p className="text-xs uppercase tracking-[0.12em] text-slate-500">Not Started</p><p className="text-2xl font-bold text-rose-700">{powerGoalsFormulaSummary.notStartedCount}</p><p className="text-xs text-slate-500">Status is marked not started.</p></article>
+        <div className="mb-4 flex flex-wrap items-center gap-2">
+          <span className="inline-flex items-center gap-1 rounded-full border border-emerald-300 bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold text-emerald-700">✓ {powerGoalsFormulaSummary.completedCount} Completed</span>
+          <span className="inline-flex items-center gap-1 rounded-full border border-amber-300/80 bg-amber-50 px-2.5 py-0.5 text-xs font-semibold text-amber-800">● {powerGoalsFormulaSummary.inProgressCount} In Progress</span>
+          <span className="inline-flex items-center gap-1 rounded-full border border-slate-300 bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-slate-600">○ {powerGoalsFormulaSummary.notStartedCount} Not Started</span>
+          {powerGoalsFormulaSummary.averageTimeframeMonths > 0 && (
+            <span className="inline-flex items-center gap-1 rounded-full border border-sky-300/70 bg-sky-50 px-2.5 py-0.5 text-xs font-semibold text-sky-700">⏱ {powerGoalsFormulaSummary.averageTimeframeMonths.toFixed(0)} mo. avg</span>
+          )}
         </div>
-        <div className="table-scroll-region mt-4 rounded-2xl border border-slate-200/90 bg-white/75 backdrop-blur">
-          <table className="w-full min-w-[860px] border-collapse text-sm">
-            <thead className="bg-slate-100 text-slate-600">
-              <tr>
-                {renderSortableHeaderCell('goals', 'title', 'Item')}
-                {renderSortableHeaderCell('goals', 'status', 'Status')}
-                {renderSortableHeaderCell('goals', 'timeframeMonths', 'Timeframe(months)', true)}
-                {renderSortableHeaderCell('goals', 'description', 'Description')}
-                <th className="px-3 py-2 text-right font-semibold">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {goalRowsSortedByTimeframeAndStatus.map((goalItem, goalIndex) => {
-                const title = typeof goalItem.title === 'string' ? goalItem.title : `Goal ${goalIndex + 1}`
-                const stableKey = typeof goalItem.id === 'string' ? goalItem.id : `${title}-${goalIndex}`
-                const status = typeof goalItem.status === 'string' ? goalItem.status : 'not started'
-                const timeframeMonths = typeof goalItem.timeframeMonths === 'number' ? goalItem.timeframeMonths : Number(goalItem.timeframeMonths ?? 0)
-                const description = typeof goalItem.description === 'string' ? goalItem.description : ''
-                return (
-                  <tr key={stableKey} className="group border-t border-slate-200 bg-white">
-                    <td className="px-3 py-2 font-semibold text-slate-800">{title}</td>
-                    <td className="px-3 py-2 text-slate-700">{status}</td>
-                    <td className="px-3 py-2 text-right font-semibold text-slate-700">{Number.isFinite(timeframeMonths) ? timeframeMonths : 0}</td>
-                    <td className="px-3 py-2 text-slate-500">{description}</td>
-                    <td className="px-3 py-2 text-right">
-                      <div className="flex w-full items-center justify-end gap-1 opacity-0 pointer-events-none transition-opacity duration-150 group-hover:opacity-100 group-hover:pointer-events-auto group-focus-within:opacity-100 group-focus-within:pointer-events-auto">
-                        <button
-                          aria-label="Edit goal"
-                          className="rounded-lg border border-slate-300 px-2 py-1 text-xs font-semibold text-slate-700"
-                          onClick={() => openEditGoalModal(goalItem)}
-                          title="Edit"
-                          type="button"
-                        >
-                          <span aria-hidden="true"><IconEdit /></span>
-                        </button>
-                        <button
-                          aria-label="Delete goal"
-                          className="rounded-lg border border-rose-300 bg-rose-50 px-2 py-1 text-xs font-semibold text-rose-700"
-                          onClick={() => { void deleteGoalRecordById(String(goalItem.id ?? '')) }}
-                          title="Delete"
-                          type="button"
-                        >
-                          <span aria-hidden="true"><IconTrash /></span>
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
+        <div className="mb-3 flex flex-wrap items-center gap-1.5">
+          <span className="mr-1 text-[11px] font-semibold uppercase tracking-[0.1em] text-slate-400">Sort</span>
+          {[{ key: 'timeframeMonths', label: 'Timeframe' }, { key: 'status', label: 'Status' }, { key: 'title', label: 'Title' }].map(({ key, label }) => {
+            const isActive = tableSortState.goals.key === key
+            return (
+              <button key={key} type="button" onClick={() => updateTableSortingForTableName('goals', key)} className={`rounded-full border px-2.5 py-0.5 text-xs font-semibold transition ${isActive ? 'border-sky-500 bg-sky-600 text-white' : 'border-slate-200 bg-white/80 text-slate-600 hover:border-slate-300'}`}>
+                {label}{isActive ? (tableSortState.goals.direction === 'asc' ? ' ↑' : ' ↓') : ''}
+              </button>
+            )
+          })}
         </div>
+        {goalRowsSortedByTimeframeAndStatus.length === 0 ? (
+          <div className="rounded-2xl border border-slate-200/90 bg-white/75 py-10 text-center">
+            <p className="text-slate-400">No goals recorded yet</p>
+            <button className="mt-3 inline-flex items-center gap-1.5 rounded-2xl bg-sky-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-sky-700" onClick={() => { setGoalEntryFormState(buildInitialGoalEntryFormState()); setEditingGoalId(''); setIsAddGoalModalOpen(true) }} type="button"><IconPlus /> Add your first goal</button>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {goalRowsSortedByTimeframeAndStatus.map((goalItem, goalIndex) => {
+              const title = typeof goalItem.title === 'string' ? goalItem.title : `Goal ${goalIndex + 1}`
+              const stableKey = typeof goalItem.id === 'string' ? goalItem.id : `${title}-${goalIndex}`
+              const status = typeof goalItem.status === 'string' ? goalItem.status.trim().toLowerCase() : 'not started'
+              const timeframeMonths = typeof goalItem.timeframeMonths === 'number' ? goalItem.timeframeMonths : Number(goalItem.timeframeMonths ?? 0)
+              const description = typeof goalItem.description === 'string' ? goalItem.description : ''
+              const isCompleted = status === 'completed'
+              const isInProgress = status === 'in progress'
+              const isUrgent = isInProgress && Number.isFinite(timeframeMonths) && timeframeMonths > 0 && timeframeMonths <= 3
+              const cardBg = isCompleted
+                ? 'border-emerald-200/90 bg-emerald-50/90'
+                : isInProgress
+                  ? 'border-amber-200/90 bg-amber-50/90'
+                  : 'border-slate-200/90 bg-slate-50/80'
+              const statusBadgeClass = isCompleted
+                ? 'border-emerald-300 bg-emerald-100 text-emerald-700'
+                : isInProgress
+                  ? 'border-amber-300/80 bg-amber-100 text-amber-800'
+                  : 'border-slate-300 bg-slate-100 text-slate-600'
+              const statusLabel = isCompleted ? 'Completed' : isInProgress ? 'In Progress' : 'Not Started'
+              return (
+                <article key={stableKey} className={`group relative rounded-2xl border p-3 transition duration-150 ${cardBg}`}>
+                  <div className="mb-2 flex items-center justify-between gap-2">
+                    <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] ${statusBadgeClass}`}>{statusLabel}</span>
+                    {isUrgent && <span className="inline-flex items-center rounded-full border border-rose-300 bg-rose-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-rose-700">Urgent</span>}
+                  </div>
+                  <p className="text-sm font-bold text-slate-800">{title}</p>
+                  {description ? <p className="mt-1 text-xs text-slate-500">{description}</p> : null}
+                  <div className="mt-3 flex items-center justify-between gap-2">
+                    <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold ${Number.isFinite(timeframeMonths) && timeframeMonths > 0 ? 'border-sky-300/70 bg-sky-50 text-sky-700' : 'border-slate-200 bg-white/60 text-slate-400'}`}>{Number.isFinite(timeframeMonths) && timeframeMonths > 0 ? `${timeframeMonths} mo.` : 'No timeframe'}</span>
+                    <div className="flex items-center gap-1 pointer-events-none opacity-0 transition-opacity duration-150 group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100">
+                      <button aria-label="Edit goal" className="rounded-lg border border-slate-300 bg-white/80 px-2 py-1 text-xs font-semibold text-slate-700" onClick={() => openEditGoalModal(goalItem)} title="Edit" type="button"><IconEdit /></button>
+                      <button aria-label="Delete goal" className="rounded-lg border border-rose-300 bg-rose-50 px-2 py-1 text-xs font-semibold text-rose-700" onClick={() => { void deleteGoalRecordById(String(goalItem.id ?? '')) }} title="Delete" type="button"><IconTrash /></button>
+                    </div>
+                  </div>
+                </article>
+              )
+            })}
+          </div>
+        )}
       </section>
 
       <section id="debts" className="section-tight glass-panel-soft squircle-md z-layer-section mb-4 scroll-mt-40 p-4 md:mb-6 md:p-6" style={{ order: 2 }}>
@@ -3574,7 +3660,7 @@ export default function App() {
                 {renderSortableHeaderCell('debts', 'person', 'Person')}
                 {renderSortableHeaderCell('debts', 'item', 'Item')}
                 {renderSortableHeaderCell('debts', 'amount', 'Balance', true)}
-                {renderSortableHeaderCell('debts', 'minimumPayment', 'Per Month', true)}
+                {renderSortableHeaderCell('debts', 'minimumPayment', 'Min. Payment', true)}
                 {renderSortableHeaderCell('debts', 'interestRatePercent', 'Rate', true)}
                 <th className="px-3 py-2 text-right font-semibold">Payoff Date</th>
                 <th className="px-3 py-2 text-right font-semibold">Actions</th>
@@ -3680,15 +3766,14 @@ export default function App() {
             </div>
           </div>
           <div className="table-scroll-region rounded-b-2xl">
-            <table className="w-full min-w-[760px] border-collapse text-sm">
+            <table className="w-full min-w-[480px] border-collapse text-sm">
               <thead className="bg-slate-100 text-slate-600">
                 <tr>
                   <th className="px-3 py-2 text-left font-semibold">Account</th>
-                  <th className="px-3 py-2 text-right font-semibold">APR</th>
-                  <th className="px-3 py-2 text-right font-semibold">Util%</th>
                   <th className="px-3 py-2 text-right font-semibold">Current Pmt</th>
                   <th className="px-3 py-2 text-right font-semibold">Recommended</th>
                   <th className="px-3 py-2 text-right font-semibold">Payoff Date</th>
+                  <th className="px-3 py-2 text-right font-semibold">Now vs. Reco</th>
                   <th className="px-3 py-2 text-left font-semibold">Reason</th>
                 </tr>
               </thead>
@@ -3698,11 +3783,14 @@ export default function App() {
                   return (
                     <tr key={rowItem.id} className="border-t border-slate-200 bg-white">
                       <td className="px-3 py-2 text-slate-700">{rowItem.item}</td>
-                      <td className="px-3 py-2 text-right font-semibold text-slate-700">{rowItem.interestRatePercent.toFixed(2)}%</td>
-                      <td className="px-3 py-2 text-right font-semibold text-slate-700">{rowItem.utilizationPercent.toFixed(1)}%</td>
                       <td className="px-3 py-2 text-right font-semibold text-slate-700">{formatCurrencyValueForDashboard(rowItem.currentMonthlyPayment)}</td>
                       <td className="px-3 py-2 text-right font-semibold text-teal-700">{formatCurrencyValueForDashboard(rowItem.recommendedMonthlyPayment)}</td>
                       <td className="px-3 py-2 text-right font-semibold text-sky-700">{recoPayoffDate}</td>
+                      <td className="px-3 py-2 text-right font-semibold text-slate-700">
+                        <span className="text-slate-400">{Math.round(rowItem.estimatedMonthsCurrent)}mo</span>
+                        <span className="mx-1 text-slate-300">→</span>
+                        <span className="text-sky-700">{Math.round(rowItem.estimatedMonthsRecommended)}mo</span>
+                      </td>
                       <td className="px-3 py-2 text-slate-500">{rowItem.recommendationReason}</td>
                     </tr>
                   )
@@ -3714,34 +3802,53 @@ export default function App() {
       </section>
 
       <section id="savings" className="section-tight glass-panel-soft squircle-md z-layer-section mb-4 scroll-mt-40 p-4 md:mb-6 md:p-6" style={{ order: 4 }}>
-          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-            <h2 className="text-lg font-bold text-slate-900">Monthly Savings Storage</h2>
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-slate-500">Where monthly savings are being held</span>
-              <button className="inline-flex items-center gap-1.5 rounded-xl border border-white/30 bg-emerald-600 px-3 py-2 text-xs font-semibold text-white" onClick={() => openAddRecordModalWithPresetTypeAndCategory('savings', 'Savings')} type="button"><IconPlus /> Quick Add</button>
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <h2 className="text-lg font-bold text-slate-900">Monthly Savings Storage</h2>
+          <div className="flex items-center gap-3">
+            <span className={`text-sm font-semibold ${monthlySavingsStorageSummary.monthlySavingsAmount >= 0 ? 'text-emerald-700' : 'text-rose-700'}`}>{formatCurrencyValueForDashboard(monthlySavingsStorageSummary.monthlySavingsAmount)}</span>
+            <span className={`text-sm font-semibold ${resolveSavingsRateToneClasses(monthlySavingsStorageSummary.monthlySavingsRatePercent).valueClassName}`}>{monthlySavingsStorageSummary.monthlySavingsRatePercent.toFixed(1)}% rate</span>
+            <button className="inline-flex items-center gap-1.5 rounded-xl border border-white/30 bg-emerald-600 px-3 py-2 text-xs font-semibold text-white" onClick={() => openAddRecordModalWithPresetTypeAndCategory('savings', 'Savings')} type="button"><IconPlus /> Add</button>
+          </div>
+        </div>
+        <div className="rounded-2xl border border-slate-200/90 bg-white/75 backdrop-blur">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200/90 px-4 py-3">
+            <h3 className="text-sm font-bold text-slate-800">Recommended Target</h3>
+            <div className="flex flex-wrap items-center gap-4">
+              <span className="text-xs text-slate-500">{savingsRecommendation.recommendationReason}</span>
+              <span className="text-xs font-semibold text-slate-600">Recommended: <span className="text-emerald-700">{formatCurrencyValueForDashboard(savingsRecommendation.recommendedMonthlySavings)}</span> ({savingsRecommendation.recommendedSavingsRatePercent.toFixed(1)}%)</span>
+              <span className="text-xs font-semibold text-slate-600">Range: <span className="text-slate-800">{formatCurrencyValueForDashboard(savingsRecommendation.minimumRecommendedSavings)}–{formatCurrencyValueForDashboard(savingsRecommendation.stretchRecommendedSavings)}</span></span>
+              <span className={`text-xs font-semibold ${savingsRecommendation.gapToRecommendedSavings <= 0 ? 'text-emerald-700' : 'text-rose-700'}`}>Gap: {formatCurrencyValueForDashboard(savingsRecommendation.gapToRecommendedSavings)}</span>
             </div>
           </div>
-          <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <article className="squircle-sm border border-slate-200/90 bg-white/90 p-3"><p className="text-xs uppercase tracking-[0.12em] text-slate-500">Monthly Savings</p><p className={`text-2xl font-bold ${monthlySavingsStorageSummary.monthlySavingsAmount >= 0 ? 'text-emerald-700' : 'text-rose-700'}`}>{formatCurrencyValueForDashboard(monthlySavingsStorageSummary.monthlySavingsAmount)}</p></article>
-            <article className="squircle-sm border border-slate-200/90 bg-white/90 p-3"><p className="text-xs uppercase tracking-[0.12em] text-slate-500">Savings Rate</p><p className={`text-2xl font-bold ${resolveSavingsRateToneClasses(monthlySavingsStorageSummary.monthlySavingsRatePercent).valueClassName}`}>{monthlySavingsStorageSummary.monthlySavingsRatePercent.toFixed(2)}%</p></article>
-          </div>
-          <div className="mb-4 rounded-2xl border border-slate-200/90 bg-white/75 p-4 backdrop-blur">
-            <h3 className="text-base font-bold text-slate-900">Recommended Savings Target</h3>
-            <p className="mt-1 text-xs text-slate-500">{savingsRecommendation.recommendationReason}</p>
-            <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-5">
-              <article className="squircle-sm border border-slate-200/90 bg-white/90 p-3"><p className="text-xs uppercase tracking-[0.12em] text-slate-500">Total Income</p><p className="text-xl font-bold text-slate-700">{formatCurrencyValueForDashboard(savingsRecommendation.totalIncomeForReference)}</p></article>
-              <article className="squircle-sm border border-slate-200/90 bg-white/90 p-3"><p className="text-xs uppercase tracking-[0.12em] text-slate-500">Recommended</p><p className="text-xl font-bold text-emerald-700">{formatCurrencyValueForDashboard(savingsRecommendation.recommendedMonthlySavings)}</p></article>
-              <article className="squircle-sm border border-slate-200/90 bg-white/90 p-3"><p className="text-xs uppercase tracking-[0.12em] text-slate-500">Recommended Rate</p><p className="text-xl font-bold text-sky-700">{savingsRecommendation.recommendedSavingsRatePercent.toFixed(2)}%</p></article>
-              <article className="squircle-sm border border-slate-200/90 bg-white/90 p-3"><p className="text-xs uppercase tracking-[0.12em] text-slate-500">Target Range</p><p className="text-sm font-bold text-slate-700">{formatCurrencyValueForDashboard(savingsRecommendation.minimumRecommendedSavings)} - {formatCurrencyValueForDashboard(savingsRecommendation.stretchRecommendedSavings)}</p></article>
-              <article className="squircle-sm border border-slate-200/90 bg-white/90 p-3"><p className="text-xs uppercase tracking-[0.12em] text-slate-500">Gap</p><p className={`text-xl font-bold ${savingsRecommendation.gapToRecommendedSavings <= 0 ? 'text-emerald-700' : 'text-rose-700'}`}>{formatCurrencyValueForDashboard(savingsRecommendation.gapToRecommendedSavings)}</p></article>
-            </div>
-          </div>
-          <div className="table-scroll-region rounded-2xl border border-slate-200/90 bg-white/75 backdrop-blur">
-            <table className="w-full min-w-[920px] border-collapse text-sm">
-              <thead className="bg-slate-100 text-slate-600"><tr>{renderSortableHeaderCell('savings', 'person', 'Person')}{renderSortableHeaderCell('savings', 'location', 'Storage')}{renderSortableHeaderCell('savings', 'balance', 'Balance', true)}{renderSortableHeaderCell('savings', 'allocationPercent', 'Allocation', true)}{renderSortableHeaderCell('savings', 'description', 'Description')}<th className="px-3 py-2 text-right font-semibold">Actions</th></tr></thead>
-              <tbody>{savingsStorageRowsSorted.map((rowItem) => <tr key={rowItem.id} className="group border-t border-slate-200 bg-white"><td className="px-3 py-2 text-slate-700">{formatPersonaLabelWithEmoji(rowItem.person, personaEmojiByName)}</td><td className="px-3 py-2 text-slate-700">{rowItem.location}</td><td className="px-3 py-2 text-right font-semibold text-slate-700">{formatCurrencyValueForDashboard(rowItem.balance)}</td><td className="px-3 py-2 text-right font-semibold text-slate-700">{rowItem.allocationPercent.toFixed(2)}%</td><td className="px-3 py-2 text-slate-500">{rowItem.description}</td><td className="px-3 py-2 text-right">{renderRecordActionsWithIconButtons('assets', rowItem)}</td></tr>)}</tbody>
+          <div className="table-scroll-region rounded-b-2xl">
+            <table className="w-full min-w-[560px] border-collapse text-sm">
+              <thead className="bg-slate-100 text-slate-600">
+                <tr>
+                  {renderSortableHeaderCell('savings', 'person', 'Person')}
+                  {renderSortableHeaderCell('savings', 'location', 'Storage')}
+                  {renderSortableHeaderCell('savings', 'balance', 'Balance', true)}
+                  {renderSortableHeaderCell('savings', 'allocationPercent', 'Allocation', true)}
+                  {renderSortableHeaderCell('savings', 'description', 'Description')}
+                  <th className="px-3 py-2 text-right font-semibold">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {savingsStorageRowsSorted.length === 0 ? (
+                  <tr><td colSpan={6} className="px-4 py-8 text-center text-slate-400">No savings storage recorded yet</td></tr>
+                ) : savingsStorageRowsSorted.map((rowItem) => (
+                  <tr key={rowItem.id} className="group border-t border-slate-200 bg-white">
+                    <td className="px-3 py-2 text-slate-700">{formatPersonaLabelWithEmoji(rowItem.person, personaEmojiByName)}</td>
+                    <td className="px-3 py-2 text-slate-700">{rowItem.location}</td>
+                    <td className="px-3 py-2 text-right font-semibold text-emerald-700">{formatCurrencyValueForDashboard(rowItem.balance)}</td>
+                    <td className="px-3 py-2 text-right font-semibold text-slate-700">{rowItem.allocationPercent.toFixed(1)}%</td>
+                    <td className="px-3 py-2 text-slate-500">{rowItem.description}</td>
+                    <td className="px-3 py-2 text-right">{renderRecordActionsWithIconButtons('assets', rowItem)}</td>
+                  </tr>
+                ))}
+              </tbody>
             </table>
           </div>
+        </div>
       </section>
 
       <section id="assets" className="section-tight glass-panel-soft squircle-md z-layer-section mb-4 scroll-mt-40 p-4 md:mb-6 md:p-6" style={{ order: 1 }}>
@@ -3898,47 +4005,97 @@ export default function App() {
       </section>) : null}
 
       <section id="loan-calculator" className="section-tight glass-panel-soft squircle-md z-layer-section mb-4 scroll-mt-40 p-4 md:mb-6 md:p-6" style={{ order: 10 }}>
-        <div className="mb-4">
-          <h2 className="text-lg font-bold text-slate-900">Loan Payoff Calculator</h2>
-          <p className="text-xs text-slate-500">Estimate payoff time for base payment versus base + extra payment, including interest savings.</p>
-        </div>
-        <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <label className="text-sm font-medium text-slate-700 lg:col-span-4">Use Existing Debt / Loan<select className="mt-1 h-11 w-full rounded-2xl border border-slate-200/90 bg-slate-50/90 px-3 text-slate-900 outline-none transition focus:border-sky-400 focus:bg-white" value={loanCalculatorFormState.selectedLoanKey} onChange={(event) => selectLoanRecordForCalculatorByKey(event.target.value)}><option value="">Manual entry...</option>{loanCalculatorSourceRows.map((rowItem) => <option key={rowItem.key} value={rowItem.key}>{rowItem.label}</option>)}</select></label>
-          <label className="text-sm font-medium text-slate-700">Loan Balance<input className="mt-1 h-11 w-full rounded-2xl border border-slate-200/90 bg-slate-50/90 px-3 text-slate-900 outline-none transition focus:border-sky-400 focus:bg-white" min="0" step="0.01" type="number" value={loanCalculatorFormState.principalBalance} onChange={(event) => updateLoanCalculatorFormFieldValue('principalBalance', event.target.value)} /></label>
-          <label className="text-sm font-medium text-slate-700">APR %<input className="mt-1 h-11 w-full rounded-2xl border border-slate-200/90 bg-slate-50/90 px-3 text-slate-900 outline-none transition focus:border-sky-400 focus:bg-white" min="0" step="0.01" type="number" value={loanCalculatorFormState.annualInterestRatePercent} onChange={(event) => updateLoanCalculatorFormFieldValue('annualInterestRatePercent', event.target.value)} /></label>
-          <label className="text-sm font-medium text-slate-700">Base Monthly Payment<input className="mt-1 h-11 w-full rounded-2xl border border-slate-200/90 bg-slate-50/90 px-3 text-slate-900 outline-none transition focus:border-sky-400 focus:bg-white" min="0" step="0.01" type="number" value={loanCalculatorFormState.baseMonthlyPayment} onChange={(event) => updateLoanCalculatorFormFieldValue('baseMonthlyPayment', event.target.value)} /></label>
-          <label className="text-sm font-medium text-slate-700">Extra Monthly Payment<input className="mt-1 h-11 w-full rounded-2xl border border-slate-200/90 bg-slate-50/90 px-3 text-slate-900 outline-none transition focus:border-sky-400 focus:bg-white" min="0" step="0.01" type="number" value={loanCalculatorFormState.extraMonthlyPayment} onChange={(event) => updateLoanCalculatorFormFieldValue('extraMonthlyPayment', event.target.value)} /></label>
-        </div>
-        {loanCalculatorResult.error ? (
-          <div className="rounded-2xl border border-rose-300 bg-rose-50/80 p-3 text-sm font-semibold text-rose-700">Unable to calculate payoff values. Check all fields are valid numbers.</div>
-        ) : (
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            <article className="squircle-sm border border-slate-200/90 bg-white/90 p-3"><p className="text-xs uppercase tracking-[0.12em] text-slate-500">Base Payoff</p><p className="text-xl font-bold text-slate-800">{loanCalculatorResult.comparison.baseMonths >= 9999 ? 'Not reachable' : `${loanCalculatorResult.comparison.baseMonths.toFixed(1)} months`}</p></article>
-            <article className="squircle-sm border border-slate-200/90 bg-white/90 p-3"><p className="text-xs uppercase tracking-[0.12em] text-slate-500">Base + Extra Payoff</p><p className="text-xl font-bold text-sky-700">{loanCalculatorResult.comparison.acceleratedMonths >= 9999 ? 'Not reachable' : `${loanCalculatorResult.comparison.acceleratedMonths.toFixed(1)} months`}</p></article>
-            <article className="squircle-sm border border-slate-200/90 bg-white/90 p-3"><p className="text-xs uppercase tracking-[0.12em] text-slate-500">Months Saved</p><p className="text-xl font-bold text-emerald-700">{loanCalculatorResult.comparison.monthsSaved.toFixed(1)}</p></article>
-            <article className="squircle-sm border border-slate-200/90 bg-white/90 p-3"><p className="text-xs uppercase tracking-[0.12em] text-slate-500">Interest (Base)</p><p className="text-xl font-bold text-slate-800">{Number.isFinite(loanCalculatorResult.comparison.baseInterestPaid) ? formatCurrencyValueForDashboard(loanCalculatorResult.comparison.baseInterestPaid) : 'Not reachable'}</p></article>
-            <article className="squircle-sm border border-slate-200/90 bg-white/90 p-3"><p className="text-xs uppercase tracking-[0.12em] text-slate-500">Interest (Base + Extra)</p><p className="text-xl font-bold text-sky-700">{Number.isFinite(loanCalculatorResult.comparison.acceleratedInterestPaid) ? formatCurrencyValueForDashboard(loanCalculatorResult.comparison.acceleratedInterestPaid) : 'Not reachable'}</p></article>
-            <article className="squircle-sm border border-slate-200/90 bg-white/90 p-3"><p className="text-xs uppercase tracking-[0.12em] text-slate-500">Interest Saved</p><p className="text-xl font-bold text-emerald-700">{formatCurrencyValueForDashboard(loanCalculatorResult.comparison.interestSaved)}</p></article>
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-bold text-slate-900">Loan Payoff Calculator</h2>
+            <p className="text-xs text-slate-500">Base vs. base + extra payment — months and interest saved.</p>
           </div>
-        )}
+        </div>
+        <div className="rounded-2xl border border-slate-200/90 bg-white/75 backdrop-blur">
+          <div className="grid grid-cols-1 gap-3 border-b border-slate-200/90 p-4 sm:grid-cols-2 lg:grid-cols-5">
+            <label className="text-sm font-medium text-slate-700 sm:col-span-2 lg:col-span-1">Existing Debt<select className="mt-1 h-11 w-full rounded-2xl border border-slate-200/90 bg-slate-50/90 px-3 text-slate-900 outline-none transition focus:border-sky-400 focus:bg-white" value={loanCalculatorFormState.selectedLoanKey} onChange={(event) => selectLoanRecordForCalculatorByKey(event.target.value)}><option value="">Manual entry...</option>{loanCalculatorSourceRows.map((rowItem) => <option key={rowItem.key} value={rowItem.key}>{rowItem.label}</option>)}</select></label>
+            <label className="text-sm font-medium text-slate-700">Balance<input className="mt-1 h-11 w-full rounded-2xl border border-slate-200/90 bg-slate-50/90 px-3 text-slate-900 outline-none transition focus:border-sky-400 focus:bg-white" min="0" step="0.01" type="number" value={loanCalculatorFormState.principalBalance} onChange={(event) => updateLoanCalculatorFormFieldValue('principalBalance', event.target.value)} /></label>
+            <label className="text-sm font-medium text-slate-700">APR %<input className="mt-1 h-11 w-full rounded-2xl border border-slate-200/90 bg-slate-50/90 px-3 text-slate-900 outline-none transition focus:border-sky-400 focus:bg-white" min="0" step="0.01" type="number" value={loanCalculatorFormState.annualInterestRatePercent} onChange={(event) => updateLoanCalculatorFormFieldValue('annualInterestRatePercent', event.target.value)} /></label>
+            <label className="text-sm font-medium text-slate-700">Base Payment<input className="mt-1 h-11 w-full rounded-2xl border border-slate-200/90 bg-slate-50/90 px-3 text-slate-900 outline-none transition focus:border-sky-400 focus:bg-white" min="0" step="0.01" type="number" value={loanCalculatorFormState.baseMonthlyPayment} onChange={(event) => updateLoanCalculatorFormFieldValue('baseMonthlyPayment', event.target.value)} /></label>
+            <label className="text-sm font-medium text-slate-700">Extra Payment<input className="mt-1 h-11 w-full rounded-2xl border border-slate-200/90 bg-slate-50/90 px-3 text-slate-900 outline-none transition focus:border-sky-400 focus:bg-white" min="0" step="0.01" type="number" value={loanCalculatorFormState.extraMonthlyPayment} onChange={(event) => updateLoanCalculatorFormFieldValue('extraMonthlyPayment', event.target.value)} /></label>
+          </div>
+          {loanCalculatorResult.error ? (
+            <div className="px-4 py-3 text-sm font-semibold text-rose-700">Unable to calculate — check all fields are valid numbers.</div>
+          ) : (
+            <div className="flex flex-wrap divide-x divide-slate-200/70">
+              <div className="flex min-w-[130px] flex-1 flex-col gap-0.5 px-4 py-3">
+                <span className="text-xs font-semibold uppercase tracking-wide text-slate-400">Base Payoff</span>
+                <span className="text-base font-bold text-slate-800">{loanCalculatorResult.comparison.baseMonths >= 9999 ? 'Not reachable' : `${loanCalculatorResult.comparison.baseMonths.toFixed(1)} mo`}</span>
+              </div>
+              <div className="flex min-w-[130px] flex-1 flex-col gap-0.5 px-4 py-3">
+                <span className="text-xs font-semibold uppercase tracking-wide text-slate-400">With Extra</span>
+                <span className="text-base font-bold text-sky-700">{loanCalculatorResult.comparison.acceleratedMonths >= 9999 ? 'Not reachable' : `${loanCalculatorResult.comparison.acceleratedMonths.toFixed(1)} mo`}</span>
+              </div>
+              <div className="flex min-w-[130px] flex-1 flex-col gap-0.5 px-4 py-3">
+                <span className="text-xs font-semibold uppercase tracking-wide text-slate-400">Months Saved</span>
+                <span className="text-base font-bold text-emerald-700">{loanCalculatorResult.comparison.monthsSaved.toFixed(1)}</span>
+              </div>
+              <div className="flex min-w-[130px] flex-1 flex-col gap-0.5 px-4 py-3">
+                <span className="text-xs font-semibold uppercase tracking-wide text-slate-400">Interest (Base)</span>
+                <span className="text-base font-bold text-slate-700">{Number.isFinite(loanCalculatorResult.comparison.baseInterestPaid) ? formatCurrencyValueForDashboard(loanCalculatorResult.comparison.baseInterestPaid) : '—'}</span>
+              </div>
+              <div className="flex min-w-[130px] flex-1 flex-col gap-0.5 px-4 py-3">
+                <span className="text-xs font-semibold uppercase tracking-wide text-slate-400">Interest (w/ Extra)</span>
+                <span className="text-base font-bold text-sky-700">{Number.isFinite(loanCalculatorResult.comparison.acceleratedInterestPaid) ? formatCurrencyValueForDashboard(loanCalculatorResult.comparison.acceleratedInterestPaid) : '—'}</span>
+              </div>
+              <div className="flex min-w-[130px] flex-1 flex-col gap-0.5 px-4 py-3">
+                <span className="text-xs font-semibold uppercase tracking-wide text-slate-400">Interest Saved</span>
+                <span className="text-base font-bold text-emerald-700">{formatCurrencyValueForDashboard(loanCalculatorResult.comparison.interestSaved)}</span>
+              </div>
+            </div>
+          )}
+        </div>
       </section>
 
       <section id="details" className="section-tight glass-panel-soft squircle-md z-layer-section mb-4 scroll-mt-40 p-4 md:mb-6 md:p-6" style={{ order: 6 }}>
-        <div className="mb-5"><h2 className="text-lg font-bold text-slate-900">Detailed Dashboard Metrics</h2></div>
-        <div className="table-scroll-region mb-2 rounded-2xl border border-slate-200/90 bg-white/75 backdrop-blur md:mb-6">
-          <table className="w-full min-w-[980px] border-collapse text-sm">
-            <thead className="bg-slate-100 text-slate-600"><tr>{renderSortableHeaderCell('detailed', 'metric', 'Metric')}{renderSortableHeaderCell('detailed', 'value', 'Value', true)}{renderSortableHeaderCell('detailed', 'value', 'Money', true)}{renderSortableHeaderCell('detailed', 'description', 'Description')}</tr></thead>
-            <tbody>{detailedRowsSorted.map((rowItem) => <tr key={rowItem.metric} className="border-t border-slate-200 bg-white"><td className="px-3 py-2 font-semibold text-slate-800">{rowItem.metric}</td><td className="px-3 py-2 text-right font-semibold text-slate-700">{rowItem.valueFormat === 'currency' ? '-' : formatPlainNumericValueForDashboard(rowItem.value, rowItem.valueFormat)}</td><td className="px-3 py-2 text-right font-semibold text-slate-700">{rowItem.valueFormat === 'currency' ? formatCurrencyValueForDashboard(rowItem.value) : '-'}</td><td className="px-3 py-2 text-slate-500">{rowItem.description}</td></tr>)}</tbody>
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <h2 className="text-lg font-bold text-slate-900">Detailed Dashboard Metrics</h2>
+          <span className="rounded-full bg-slate-100/90 px-3 py-1 text-xs font-semibold text-slate-600 backdrop-blur">{detailedRowsSorted.length} metrics</span>
+        </div>
+        <div className="table-scroll-region rounded-2xl border border-slate-200/90 bg-white/75 backdrop-blur">
+          <table className="w-full min-w-[640px] border-collapse text-sm">
+            <thead className="bg-slate-100 text-slate-600"><tr>{renderSortableHeaderCell('detailed', 'metric', 'Metric')}{renderSortableHeaderCell('detailed', 'value', 'Value', true)}{renderSortableHeaderCell('detailed', 'description', 'Description')}</tr></thead>
+            <tbody>{detailedRowsSorted.map((rowItem) => {
+              const isCurrency = rowItem.valueFormat === 'currency'
+              const isDuration = rowItem.valueFormat === 'duration'
+              const isPercent = rowItem.valueFormat === 'percent'
+              const numVal = typeof rowItem.value === 'number' ? rowItem.value : 0
+              const valueColorClass = isCurrency
+                ? (numVal > 0 ? 'text-emerald-700' : numVal < 0 ? 'text-rose-700' : 'text-slate-600')
+                : (isPercent || isDuration ? 'text-slate-700' : 'text-slate-700')
+              const formattedValue = isCurrency
+                ? formatCurrencyValueForDashboard(numVal)
+                : (isDuration
+                    ? (Number.isFinite(numVal) && numVal > 0 ? `${numVal.toFixed(1)} mo` : '—')
+                    : formatPlainNumericValueForDashboard(numVal, rowItem.valueFormat) + (isPercent ? '%' : ''))
+              return (
+                <tr key={rowItem.metric} className="border-t border-slate-200 bg-white">
+                  <td className="px-3 py-2 font-semibold text-slate-800">{rowItem.metric}</td>
+                  <td className={`px-3 py-2 text-right font-semibold tabular-nums ${valueColorClass}`}>{formattedValue}</td>
+                  <td className="px-3 py-2 text-slate-500">{rowItem.description}</td>
+                </tr>
+              )
+            })}</tbody>
           </table>
         </div>
       </section>
 
       <section id="records" className="section-tight glass-panel-soft squircle-md z-layer-section mb-4 scroll-mt-40 p-4 md:mb-6 md:p-6" style={{ order: 5 }}>
-        <div className="mb-4 flex flex-wrap items-center justify-between gap-3"><h2 className="text-lg font-bold text-slate-900">Recent Income, Expense, and Savings Records</h2><div className="flex flex-wrap items-center gap-2"><button className="inline-flex items-center gap-1.5 rounded-xl border border-white/30 bg-emerald-600 px-3 py-2 text-xs font-semibold text-white" onClick={() => openAddRecordModalWithPresetTypeAndCategory('income', 'Income')} type="button"><IconPlus /> Income</button><button className="inline-flex items-center gap-1.5 rounded-xl border border-white/30 bg-rose-600 px-3 py-2 text-xs font-semibold text-white" onClick={() => openAddRecordModalWithPresetTypeAndCategory('expense', 'Miscellaneous')} type="button"><IconPlus /> Expense</button><button className="inline-flex items-center gap-1.5 rounded-xl border border-white/30 bg-sky-600 px-3 py-2 text-xs font-semibold text-white" onClick={() => openAddRecordModalWithPresetTypeAndCategory('savings', 'Savings')} type="button"><IconPlus /> Savings</button><button className="inline-flex items-center gap-1.5 rounded-xl border border-slate-300 bg-white/85 px-3 py-2 text-xs font-semibold text-slate-700 disabled:cursor-not-allowed disabled:opacity-40" disabled={transactionUndoDepth <= 0} onClick={() => { void undoMostRecentTransactionChangeFromUndoStack() }} type="button"><IconRefresh /> Undo Transaction</button><span className="rounded-full bg-slate-100/90 px-3 py-1 text-xs font-semibold text-slate-600 backdrop-blur">{incomeAndExpenseRows.length} records</span></div></div>
-        <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
-          <article className="squircle-sm border border-slate-200/90 bg-white/90 p-3"><p className="text-xs uppercase tracking-[0.12em] text-slate-500">Total In</p><p className="text-xl font-bold text-emerald-700">{formatCurrencyValueForDashboard(recordsFlowSummary.totalIn)}</p></article>
-          <article className="squircle-sm border border-slate-200/90 bg-white/90 p-3"><p className="text-xs uppercase tracking-[0.12em] text-slate-500">Total Out</p><p className="text-xl font-bold text-rose-700">{formatCurrencyValueForDashboard(recordsFlowSummary.totalOut)}</p></article>
-          <article className="squircle-sm border border-slate-200/90 bg-white/90 p-3"><p className="text-xs uppercase tracking-[0.12em] text-slate-500">Diff</p><p className={`text-xl font-bold ${recordsFlowSummary.diff > 0 ? 'text-emerald-700' : (recordsFlowSummary.diff < 0 ? 'text-rose-700' : 'text-slate-600')}`}>{formatCurrencyValueForDashboard(recordsFlowSummary.diff)}</p></article>
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center gap-3">
+            <h2 className="text-lg font-bold text-slate-900">Records</h2>
+            <span className="text-sm font-semibold text-emerald-700">In {formatCurrencyValueForDashboard(recordsFlowSummary.totalIn)}</span>
+            <span className="text-xs text-slate-300">|</span>
+            <span className="text-sm font-semibold text-rose-700">Out {formatCurrencyValueForDashboard(recordsFlowSummary.totalOut)}</span>
+            <span className="text-xs text-slate-300">|</span>
+            <span className={`text-sm font-semibold ${recordsFlowSummary.diff > 0 ? 'text-emerald-700' : (recordsFlowSummary.diff < 0 ? 'text-rose-700' : 'text-slate-600')}`}>Net {formatCurrencyValueForDashboard(recordsFlowSummary.diff)}</span>
+          </div>
+          <div className="flex flex-wrap items-center gap-2"><button className="inline-flex items-center gap-1.5 rounded-xl border border-white/30 bg-emerald-600 px-3 py-2 text-xs font-semibold text-white" onClick={() => openAddRecordModalWithPresetTypeAndCategory('income', 'Income')} type="button"><IconPlus /> Income</button><button className="inline-flex items-center gap-1.5 rounded-xl border border-white/30 bg-rose-600 px-3 py-2 text-xs font-semibold text-white" onClick={() => openAddRecordModalWithPresetTypeAndCategory('expense', 'Miscellaneous')} type="button"><IconPlus /> Expense</button><button className="inline-flex items-center gap-1.5 rounded-xl border border-white/30 bg-sky-600 px-3 py-2 text-xs font-semibold text-white" onClick={() => openAddRecordModalWithPresetTypeAndCategory('savings', 'Savings')} type="button"><IconPlus /> Savings</button><button className="inline-flex items-center gap-1.5 rounded-xl border border-slate-300 bg-white/85 px-3 py-2 text-xs font-semibold text-slate-700 disabled:cursor-not-allowed disabled:opacity-40" disabled={transactionUndoDepth <= 0} onClick={() => { void undoMostRecentTransactionChangeFromUndoStack() }} type="button"><IconRefresh /> Undo</button><span className="rounded-full bg-slate-100/90 px-3 py-1 text-xs font-semibold text-slate-600 backdrop-blur">{incomeAndExpenseRows.length} records</span></div>
         </div>
         <div className="table-scroll-region rounded-2xl border border-slate-200/90 bg-white/75 backdrop-blur">
           <table className="w-full min-w-[840px] border-collapse text-sm">
@@ -3999,7 +4156,7 @@ export default function App() {
         <section className="fixed inset-0 z-[5000] flex items-center justify-center p-3 sm:p-4" role="dialog" aria-modal="true" aria-label="Add Income Or Expense Modal">
           <button className="absolute inset-0 bg-slate-950/55 backdrop-blur-sm" onClick={() => setIsAddRecordModalOpen(false)} type="button" aria-label="Close add record modal backdrop" />
           <div className="relative z-[5001] w-full max-w-2xl rounded-3xl border border-white/40 bg-white p-4 shadow-2xl sm:p-6">
-            <div className="mb-4 flex items-center justify-between gap-3"><h3 className="text-lg font-bold text-slate-900">Add Income or Expense</h3><button className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700" onClick={() => setIsAddRecordModalOpen(false)} type="button"><IconX /> Close</button></div>
+            <div className="mb-4 flex items-center justify-between gap-3"><h3 className="text-lg font-bold text-slate-900">{entryFormState.recordType === 'income' ? 'Add Income Record' : entryFormState.recordType === 'savings' ? 'Add Savings Record' : entryFormState.recordType === 'asset' ? 'Add Asset Record' : entryFormState.recordType === 'debt' ? 'Add Debt Record' : entryFormState.recordType === 'loan' ? 'Add Loan Record' : entryFormState.recordType === 'credit_card' ? 'Add Credit Card Record' : 'Add Expense Record'}</h3><button className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700" onClick={() => setIsAddRecordModalOpen(false)} type="button"><IconX /> Close</button></div>
             <form className="grid grid-cols-1 gap-4 sm:grid-cols-2" onSubmit={submitNewIncomeOrExpenseRecord}>
               <label className="text-sm font-medium text-slate-700">Person<select className="mt-1 h-11 w-full rounded-2xl border border-slate-200/90 bg-slate-50/90 px-3 text-slate-900 outline-none transition focus:border-teal-400 focus:bg-white" value={entryFormState.person} onChange={(event) => updateEntryFormFieldValue('person', event.target.value)}>{personaSelectOptions.map((personaOption) => <option key={personaOption.value} value={personaOption.value}>{personaOption.label}</option>)}<option value="__custom__">Custom person...</option></select></label>
               <label className="text-sm font-medium text-slate-700">Type<select className="mt-1 h-11 w-full rounded-2xl border border-slate-200/90 bg-slate-50/90 px-3 text-slate-900 outline-none transition focus:border-teal-400 focus:bg-white" value={entryFormState.recordType} onChange={(event) => updateEntryFormFieldValue('recordType', event.target.value)}><option value="expense">Expense</option><option value="income">Income</option><option value="savings">Savings</option><option value="asset">Asset</option><option value="debt">Debt</option><option value="loan">Loan</option><option value="credit_card">Credit Account</option></select></label>
@@ -4012,7 +4169,7 @@ export default function App() {
               {entryFormState.recordType === 'debt' || entryFormState.recordType === 'loan' ? (
                 <label className="text-sm font-medium text-slate-700">Item<input className="mt-1 h-11 w-full rounded-2xl border border-slate-200/90 bg-slate-50/90 px-3 text-slate-900 outline-none transition focus:border-teal-400 focus:bg-white" type="text" value={entryFormState.item} onChange={(event) => updateEntryFormFieldValue('item', event.target.value)} /></label>
               ) : null}
-              <label className="text-sm font-medium text-slate-700">{entryFormState.recordType === 'credit_card' ? 'Current Balance' : 'Amount'}<input className="mt-1 h-11 w-full rounded-2xl border border-slate-200/90 bg-slate-50/90 px-3 text-slate-900 outline-none transition focus:border-teal-400 focus:bg-white" type="number" step="0.01" value={entryFormState.recordType === 'credit_card' ? entryFormState.currentBalance : entryFormState.amount} onChange={(event) => updateEntryFormFieldValue(entryFormState.recordType === 'credit_card' ? 'currentBalance' : 'amount', event.target.value)} /></label>
+              <label className="text-sm font-medium text-slate-700">{entryFormState.recordType === 'credit_card' ? 'Current Balance' : 'Amount'}<input className="mt-1 h-11 w-full rounded-2xl border border-slate-200/90 bg-slate-50/90 px-3 text-slate-900 outline-none transition focus:border-teal-400 focus:bg-white" type="number" step="0.01" autoFocus value={entryFormState.recordType === 'credit_card' ? entryFormState.currentBalance : entryFormState.amount} onChange={(event) => updateEntryFormFieldValue(entryFormState.recordType === 'credit_card' ? 'currentBalance' : 'amount', event.target.value)} /></label>
               {entryFormState.recordType === 'credit_card' ? (
                 <label className="text-sm font-medium text-slate-700">Max Capacity<input className="mt-1 h-11 w-full rounded-2xl border border-slate-200/90 bg-slate-50/90 px-3 text-slate-900 outline-none transition focus:border-teal-400 focus:bg-white" type="number" step="0.01" value={entryFormState.maxCapacity} onChange={(event) => updateEntryFormFieldValue('maxCapacity', event.target.value)} /></label>
               ) : (
@@ -4020,6 +4177,23 @@ export default function App() {
               )}
               {entryFormState.category === '__custom__' ? (
                 <label className="text-sm font-medium text-slate-700 sm:col-span-2">Custom Category<input className="mt-1 h-11 w-full rounded-2xl border border-slate-200/90 bg-slate-50/90 px-3 text-slate-900 outline-none transition focus:border-teal-400 focus:bg-white" type="text" value={entryFormState.customCategory} onChange={(event) => updateEntryFormFieldValue('customCategory', event.target.value)} /></label>
+              ) : null}
+              {entryFormState.recordType !== 'credit_card' && entryFormState.recordType !== 'debt' && entryFormState.recordType !== 'loan' ? (
+                <div className="sm:col-span-2">
+                  <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-slate-400">Quick pick</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {(entryFormState.recordType === 'income'
+                      ? ['Income', 'Investments', 'Savings']
+                      : entryFormState.recordType === 'savings'
+                        ? ['Savings', 'Investments', 'Income']
+                        : entryFormState.recordType === 'asset'
+                          ? ['Investments', 'Housing', 'Transportation']
+                          : ['Groceries', 'Dining', 'Transportation', 'Fuel', 'Housing', 'Entertainment', 'Personal Care', 'Healthcare', 'Miscellaneous']
+                    ).map((cat) => (
+                      <button key={cat} type="button" className={`rounded-lg border px-2.5 py-1 text-xs font-semibold transition ${entryFormState.category === cat ? 'border-teal-400 bg-teal-50 text-teal-700' : 'border-slate-200 bg-slate-100/80 text-slate-600 hover:border-slate-300 hover:bg-slate-200'}`} onClick={() => updateEntryFormFieldValue('category', cat)}>{cat}</button>
+                    ))}
+                  </div>
+                </div>
               ) : null}
               {entryFormState.recordType === 'debt' || entryFormState.recordType === 'loan' || entryFormState.recordType === 'credit_card' ? (
                 <label className="text-sm font-medium text-slate-700">Minimum Payment<input className="mt-1 h-11 w-full rounded-2xl border border-slate-200/90 bg-slate-50/90 px-3 text-slate-900 outline-none transition focus:border-teal-400 focus:bg-white" type="number" step="0.01" value={entryFormState.minimumPayment} onChange={(event) => updateEntryFormFieldValue('minimumPayment', event.target.value)} /></label>
