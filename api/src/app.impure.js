@@ -199,6 +199,25 @@ const defaultAnimeSearchStaleTtlMs = 86_400_000;
 const defaultAnimeQuestionCacheTtlMs = 3_600_000;
 const ANILIST_IDS_CHUNK_SIZE = 40;
 const ANIME_QUESTION_MAX_LEN = 220;
+const ANIME_QUESTION_RECENT_LIMIT = 10;
+const ANIME_QUESTION_GENERATION_ATTEMPTS = 3;
+const ANIME_QUESTION_FRANCHISE_RATE = 0.2;
+const ANIME_QUESTION_TOKEN_OVERLAP_MAX = 0.58;
+const ANIME_QUESTION_STEM_WINDOW = 3;
+const ANIME_QUESTION_STEM_REPEAT_MAX = 2;
+const ANIME_QUESTION_THEME_GENERIC = "generic";
+const ANIME_QUESTION_THEME_FRANCHISE = "franchise";
+const ANIME_QUESTION_SAFE_BLOCKLIST = [
+  "nsfw",
+  "porn",
+  "explicit",
+  "fetish",
+  "nude",
+  "sexual",
+  "sex",
+  "slur",
+  "hate speech"
+];
 const DAILY_ANIME_QUESTIONS = [
   "What currently airing anime has the strongest world-building this season?",
   "Which anime character had the best growth arc this year?",
@@ -374,6 +393,7 @@ const openai = new OpenAI({ apiKey: process.env[OPENAI_KEY_ENV] });
 const memoryCache = new Map();
 const animeSearchStaleCache = new Map();
 const animeSearchInflight = new Map();
+const recentAnimeQuestions = [];
 const homeContentContextRes = loadHomeContentContext();
 const homeContentContext = homeContentContextRes.err ? "" : homeContentContextRes.value;
 const sampleSeedRes = ensureSampleBlogs();
@@ -1537,18 +1557,46 @@ export async function getDailyAnimeQuestionCached() {
     return { value: null, err: cacheRes.err };
   }
   if (cacheRes.value) {
+    const rememberCachedRes = rememberRecentAnimeQuestion(cacheRes.value);
+    if (rememberCachedRes.err) {
+      return { value: null, err: rememberCachedRes.err };
+    }
     return { value: cacheRes.value, err: null };
   }
-  const prompt = `${ANIME_DAILY_QUESTION_PROMPT_PREFIX} Date key: ${dayKey}. ${ANIME_DAILY_QUESTION_PROMPT_SUFFIX}`;
-  const generatedRes = await generateReply(prompt);
-  const cleanedRes = generatedRes.err ? { value: "", err: null } : normalizeAnimeQuestionText(generatedRes.value);
-  const fallbackRes = selectFallbackDailyAnimeQuestion(dayKey);
+  const recentRes = listRecentAnimeQuestions(ANIME_QUESTION_RECENT_LIMIT);
+  if (recentRes.err) {
+    return { value: null, err: recentRes.err };
+  }
+  const themeRes = pickAnimeQuestionTheme(recentRes.value);
+  if (themeRes.err) {
+    return { value: null, err: themeRes.err };
+  }
+  const generatedRes = await generateAnimeQuestionWithRetries(dayKey, recentRes.value, themeRes.value);
+  const fallbackRes = selectFallbackDailyAnimeQuestion(dayKey, recentRes.value, themeRes.value.kind);
   if (fallbackRes.err) {
     return { value: null, err: fallbackRes.err };
   }
-  const payload = cleanedRes.value
-    ? { dateKey: dayKey, question: cleanedRes.value, index: fallbackRes.value.index, source: "openai" }
-    : { dateKey: dayKey, question: fallbackRes.value.question, index: fallbackRes.value.index, source: "fallback" };
+  const payload = generatedRes.value
+    ? {
+      dateKey: dayKey,
+      question: generatedRes.value.question,
+      index: fallbackRes.value.index,
+      source: "openai",
+      theme: generatedRes.value.theme,
+      franchise: generatedRes.value.franchise || ""
+    }
+    : {
+      dateKey: dayKey,
+      question: fallbackRes.value.question,
+      index: fallbackRes.value.index,
+      source: "fallback",
+      theme: fallbackRes.value.theme,
+      franchise: fallbackRes.value.franchise || ""
+    };
+  const rememberRes = rememberRecentAnimeQuestion(payload);
+  if (rememberRes.err) {
+    return { value: null, err: rememberRes.err };
+  }
   const writeRes = writeCache(cacheKey, payload, defaultAnimeQuestionCacheTtlMs);
   if (writeRes.err) {
     return { value: null, err: writeRes.err };
@@ -1558,12 +1606,50 @@ export async function getDailyAnimeQuestionCached() {
 
 /**
  * @param {string} dateKey
- * @returns {Result<{question: string, index: number}>}
+ * @param {Array<{dateKey: string, question: string, source?: string, theme?: string, franchise?: string}>} [recentRows]
+ * @param {string} [preferredTheme]
+ * @returns {Result<{question: string, index: number, theme: string, franchise?: string}>}
  */
-function selectFallbackDailyAnimeQuestion(dateKey) {
+function selectFallbackDailyAnimeQuestion(dateKey, recentRows = [], preferredTheme = ANIME_QUESTION_THEME_GENERIC) {
   const dayNumber = Math.floor(Date.parse(`${dateKey}T00:00:00Z`) / 86_400_000);
-  const questionIndex = Math.abs(dayNumber) % DAILY_ANIME_QUESTIONS.length;
-  return { value: { question: DAILY_ANIME_QUESTIONS[questionIndex], index: questionIndex }, err: null };
+  const startIndex = Math.abs(dayNumber) % DAILY_ANIME_QUESTIONS.length;
+  let firstNonDuplicate = -1;
+  for (let offset = 0; offset < DAILY_ANIME_QUESTIONS.length; offset += 1) {
+    const index = (startIndex + offset) % DAILY_ANIME_QUESTIONS.length;
+    const question = DAILY_ANIME_QUESTIONS[index];
+    const theme = classifyAnimeQuestionTheme(question);
+    const franchise = readFranchiseTag(question);
+    const noveltyRes = isAnimeQuestionNovel(question, recentRows);
+    if (noveltyRes.err) {
+      return { value: null, err: noveltyRes.err };
+    }
+    if (!noveltyRes.value) {
+      continue;
+    }
+    if (firstNonDuplicate < 0) {
+      firstNonDuplicate = index;
+    }
+    if (preferredTheme === ANIME_QUESTION_THEME_FRANCHISE) {
+      if (theme !== ANIME_QUESTION_THEME_FRANCHISE) {
+        continue;
+      }
+      return { value: { question, index, theme, franchise }, err: null };
+    }
+    if (theme === ANIME_QUESTION_THEME_GENERIC) {
+      return { value: { question, index, theme }, err: null };
+    }
+  }
+  const finalIndex = firstNonDuplicate >= 0 ? firstNonDuplicate : startIndex;
+  const fallbackQuestion = DAILY_ANIME_QUESTIONS[finalIndex];
+  return {
+    value: {
+      question: fallbackQuestion,
+      index: finalIndex,
+      theme: classifyAnimeQuestionTheme(fallbackQuestion),
+      franchise: readFranchiseTag(fallbackQuestion)
+    },
+    err: null
+  };
 }
 
 /**
@@ -1576,12 +1662,251 @@ function normalizeAnimeQuestionText(value) {
     return { value: "", err: null };
   }
   const withoutQuotes = normalized.replace(/^["'`]+|["'`]+$/g, "");
+  if (!isAnimeQuestionSafe(withoutQuotes)) {
+    return { value: "", err: null };
+  }
   const truncated = withoutQuotes.slice(0, ANIME_QUESTION_MAX_LEN).trim();
   if (!truncated) {
     return { value: "", err: null };
   }
   const question = /[?]$/.test(truncated) ? truncated : `${truncated}?`;
   return { value: question, err: null };
+}
+
+/**
+ * @param {number} [limit]
+ * @returns {Result<Array<{dateKey: string, question: string, source?: string, theme?: string, franchise?: string, createdAt: string}>>}
+ */
+function listRecentAnimeQuestions(limit = ANIME_QUESTION_RECENT_LIMIT) {
+  return { value: recentAnimeQuestions.slice(0, Math.max(1, limit)), err: null };
+}
+
+/**
+ * @param {{dateKey: string, question: string, source?: string, theme?: string, franchise?: string}} row
+ * @returns {Result<boolean>}
+ */
+function rememberRecentAnimeQuestion(row) {
+  const normalizedQuestion = normalizeForSimilarity(row?.question || "");
+  if (!normalizedQuestion) {
+    return { value: false, err: null };
+  }
+  const dateKey = String(row?.dateKey || "").trim();
+  const filtered = recentAnimeQuestions.filter((item) => {
+    const sameDay = String(item?.dateKey || "") === dateKey && dateKey.length > 0;
+    const sameQuestion = normalizeForSimilarity(item?.question || "") === normalizedQuestion;
+    return !sameDay && !sameQuestion;
+  });
+  recentAnimeQuestions.length = 0;
+  recentAnimeQuestions.push({
+    dateKey,
+    question: String(row?.question || "").trim(),
+    source: String(row?.source || ""),
+    theme: String(row?.theme || classifyAnimeQuestionTheme(String(row?.question || ""))),
+    franchise: String(row?.franchise || readFranchiseTag(String(row?.question || ""))),
+    createdAt: new Date().toISOString()
+  });
+  recentAnimeQuestions.push(...filtered.slice(0, ANIME_QUESTION_RECENT_LIMIT - 1));
+  return { value: true, err: null };
+}
+
+/**
+ * @param {string} dayKey
+ * @param {Array<{dateKey: string, question: string, source?: string, theme?: string, franchise?: string}>} recentRows
+ * @param {{kind: string}} theme
+ * @returns {Promise<Result<{question: string, theme: string, franchise?: string} | null>>}
+ */
+async function generateAnimeQuestionWithRetries(dayKey, recentRows, theme) {
+  for (let attempt = 0; attempt < ANIME_QUESTION_GENERATION_ATTEMPTS; attempt += 1) {
+    const prompt = buildAnimeQuestionPrompt(dayKey, recentRows, theme, attempt + 1);
+    const generatedRes = await generateReply(prompt);
+    if (generatedRes.err) {
+      continue;
+    }
+    const cleanedRes = normalizeAnimeQuestionText(generatedRes.value);
+    if (cleanedRes.err || !cleanedRes.value) {
+      continue;
+    }
+    const noveltyRes = isAnimeQuestionNovel(cleanedRes.value, recentRows);
+    if (noveltyRes.err) {
+      return { value: null, err: noveltyRes.err };
+    }
+    if (!noveltyRes.value) {
+      continue;
+    }
+    const questionTheme = theme.kind;
+    const questionFranchise = "";
+    return { value: { question: cleanedRes.value, theme: questionTheme, franchise: questionFranchise }, err: null };
+  }
+  return { value: null, err: null };
+}
+
+/**
+ * @param {string} dayKey
+ * @param {Array<{dateKey: string, question: string}>} recentRows
+ * @param {{kind: string}} theme
+ * @param {number} attemptNumber
+ * @returns {string}
+ */
+function buildAnimeQuestionPrompt(dayKey, recentRows, theme, attemptNumber) {
+  const avoidList = recentRows
+    .slice(0, ANIME_QUESTION_RECENT_LIMIT)
+    .map((row, index) => `${index + 1}. ${String(row?.question || "").trim()}`)
+    .filter(Boolean)
+    .join("\n");
+  const themeInstruction = theme.kind === ANIME_QUESTION_THEME_FRANCHISE
+    ? "Use a franchise-specific angle inspired by popular anime franchises, but keep it broad and accessible to mixed audiences without depending on exact title names."
+    : "Use a broad, generic anime angle that works for the largest possible audience.";
+  return `${ANIME_DAILY_QUESTION_PROMPT_PREFIX}
+Date key: ${dayKey}
+Attempt: ${attemptNumber}
+Tone: Slightly edgy, playful, and safe for work.
+Safety: No NSFW, no sexual content, no hateful content, no harassment, no graphic violence.
+Style: One question only, concise, high-engagement, no emoji, no numbering, no markdown.
+Variety: Avoid reusing wording, opener patterns, or framing from recent questions.
+Franchise handling: Prefer hints and archetypes over direct title-name drops unless naturally needed.
+${themeInstruction}
+Recent questions to avoid repeating or lightly rephrasing:
+${avoidList || "(none)"}
+${ANIME_DAILY_QUESTION_PROMPT_SUFFIX}`;
+}
+
+/**
+ * @param {Array<{dateKey: string, question: string, source?: string, theme?: string, franchise?: string}>} recentRows
+ * @returns {Result<{kind: string}>}
+ */
+function pickAnimeQuestionTheme(recentRows) {
+  const shouldTryFranchise = Math.random() < ANIME_QUESTION_FRANCHISE_RATE;
+  if (!shouldTryFranchise) {
+    return { value: { kind: ANIME_QUESTION_THEME_GENERIC }, err: null };
+  }
+  return { value: { kind: ANIME_QUESTION_THEME_FRANCHISE }, err: null };
+}
+
+/**
+ * @param {string} question
+ * @param {Array<{question: string}>} recentRows
+ * @returns {Result<boolean>}
+ */
+function isAnimeQuestionNovel(question, recentRows) {
+  const normalizedCandidate = normalizeForSimilarity(question);
+  if (!normalizedCandidate) {
+    return { value: false, err: null };
+  }
+  const candidateTokens = tokenizeForSimilarity(normalizedCandidate);
+  for (const row of recentRows.slice(0, ANIME_QUESTION_RECENT_LIMIT)) {
+    const normalizedRecent = normalizeForSimilarity(row?.question || "");
+    if (!normalizedRecent) {
+      continue;
+    }
+    if (normalizedRecent === normalizedCandidate) {
+      return { value: false, err: null };
+    }
+    const recentTokens = tokenizeForSimilarity(normalizedRecent);
+    const overlap = readTokenOverlapRatio(candidateTokens, recentTokens);
+    if (overlap > ANIME_QUESTION_TOKEN_OVERLAP_MAX) {
+      return { value: false, err: null };
+    }
+  }
+  const candidateStem = readQuestionStem(question);
+  if (candidateStem) {
+    const recentStemCount = recentRows
+      .slice(0, ANIME_QUESTION_STEM_WINDOW)
+      .filter((row) => readQuestionStem(row?.question || "") === candidateStem)
+      .length;
+    if (recentStemCount >= ANIME_QUESTION_STEM_REPEAT_MAX) {
+      return { value: false, err: null };
+    }
+  }
+  return { value: true, err: null };
+}
+
+/**
+ * @param {string} value
+ * @returns {string}
+ */
+function normalizeForSimilarity(value) {
+  return String(value || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/**
+ * @param {string} value
+ * @returns {Set<string>}
+ */
+function tokenizeForSimilarity(value) {
+  const tokens = String(value || "").split(" ").filter((token) => token.length > 2);
+  return new Set(tokens);
+}
+
+/**
+ * @param {Set<string>} left
+ * @param {Set<string>} right
+ * @returns {number}
+ */
+function readTokenOverlapRatio(left, right) {
+  if (!left.size || !right.size) {
+    return 0;
+  }
+  let shared = 0;
+  for (const token of left) {
+    if (right.has(token)) {
+      shared += 1;
+    }
+  }
+  const denominator = Math.max(left.size, right.size);
+  if (denominator <= 0) {
+    return 0;
+  }
+  return shared / denominator;
+}
+
+/**
+ * @param {string} question
+ * @returns {string}
+ */
+function readQuestionStem(question) {
+  const normalized = normalizeForSimilarity(question);
+  if (!normalized) {
+    return "";
+  }
+  const words = normalized.split(" ").filter(Boolean);
+  return words.slice(0, 2).join(" ");
+}
+
+/**
+ * @param {string} question
+ * @returns {string}
+ */
+function readFranchiseTag(question) {
+  return "";
+}
+
+/**
+ * @param {string} question
+ * @returns {string}
+ */
+function classifyAnimeQuestionTheme(question) {
+  return readFranchiseTag(question) ? ANIME_QUESTION_THEME_FRANCHISE : ANIME_QUESTION_THEME_GENERIC;
+}
+
+/**
+ * @param {string} text
+ * @returns {boolean}
+ */
+function isAnimeQuestionSafe(text) {
+  const normalized = normalizeForSimilarity(text);
+  if (!normalized) {
+    return false;
+  }
+  for (const blocked of ANIME_QUESTION_SAFE_BLOCKLIST) {
+    if (normalized.includes(blocked)) {
+      return false;
+    }
+  }
+  return true;
 }
 
 /**

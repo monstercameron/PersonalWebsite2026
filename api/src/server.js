@@ -36,6 +36,7 @@ import {
   listBlogTags,
   listPromptsCached,
   getDailyAnimeQuestionCached,
+  invalidateCacheByPrefix,
   listTrackedAnime,
   logEvent,
   removeTrackedAnime,
@@ -103,6 +104,7 @@ const PATH_API_ANIME_SEARCH = "/api/slackanime/search";
 const PATH_API_ANIME_TRACKED = "/api/slackanime/tracked";
 const PATH_API_ANIME_TRACKED_ID = "/api/slackanime/tracked/:anilistId";
 const PATH_API_ANIME_QUESTION = "/api/slackanime/question/today";
+const PATH_API_ANIME_QUESTION_TEST = "/api/slackanime/question/test";
 const PATH_API_ANIME_FEED = "/api/slackanime/feed.xml";
 const PATH_API_ANIME_FEED_TRACKED = "/api/slackanime/feed/tracked.xml";
 const PATH_API_ANIME_FEED_QUESTIONS = "/api/slackanime/feed/questions.xml";
@@ -749,6 +751,29 @@ app.get(PATH_API_ANIME_QUESTION, async (c) => {
   }
   c.header(CACHE_CONTROL, CACHE_PUBLIC_PROMPTS);
   return c.json({ row: questionRes.value });
+});
+
+app.get(PATH_API_ANIME_QUESTION_TEST, async (c) => {
+  const authRes = requireAdminSessionLogged(c);
+  if (authRes.err) {
+    return c.json({ message: authRes.err.message, code: "UNAUTHORIZED" }, STATUS_UNAUTHORIZED);
+  }
+  const refreshRaw = String(c.req.query(QUERY_REFRESH) || "").trim().toLowerCase();
+  const forceRefresh = refreshRaw === "1" || refreshRaw === "true" || refreshRaw === "yes";
+  if (forceRefresh) {
+    const invalidateRes = invalidateCacheByPrefix("anime:question:day:");
+    if (invalidateRes.err) {
+      const publicErrRes = toPublicError(invalidateRes.err);
+      return c.json(publicErrRes.value, STATUS_SERVER_ERROR);
+    }
+  }
+  const questionRes = await getDailyAnimeQuestionCached();
+  if (questionRes.err) {
+    const publicErrRes = toPublicError(questionRes.err);
+    return c.json(publicErrRes.value, STATUS_SERVER_ERROR);
+  }
+  c.header(CACHE_CONTROL, CACHE_NO_STORE);
+  return c.json({ row: questionRes.value, forceRefresh });
 });
 
 app.get(PATH_API_ANIME_FEED, (c) => {
