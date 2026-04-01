@@ -4868,20 +4868,47 @@ export default function App() {
       ) : null}
 
       {isAddAssetModalOpen ? (
-        <section className="fixed inset-0 z-[5000] flex items-center justify-center p-3 sm:p-4" role="dialog" aria-modal="true" aria-label="Add Asset Modal">
-          <button className="absolute inset-0 bg-black/55 backdrop-blur-sm" onClick={() => setIsAddAssetModalOpen(false)} type="button" aria-label="Close add asset modal backdrop" />
-          <div className="relative z-[5001] w-full max-w-2xl rounded-3xl border border-white/40 bg-[#141414] p-4 shadow-2xl sm:p-6">
-            <div className="mb-4 flex items-center justify-between gap-3"><h3 className="text-lg font-bold text-[#ededed]">Add Asset</h3><button className="inline-flex items-center gap-1.5 rounded-xl border border-white/[0.025] px-3 py-2 text-sm font-semibold text-[#d4d4d4]" onClick={() => setIsAddAssetModalOpen(false)} type="button"><IconX /> Close</button></div>
-            <form className="grid grid-cols-1 gap-4 sm:grid-cols-2" onSubmit={submitNewAssetHoldingRecord}>
-              <label className="text-sm font-medium text-[#d4d4d4]">Person<select className="mt-1 h-11 w-full rounded-2xl border border-white/[0.06] bg-[rgba(15,15,15,0.8)] px-3 text-[#ededed] outline-none transition focus:border-cyan-400 focus:bg-[#141414]" value={assetHoldingEntryFormState.person} onChange={(event) => updateAssetHoldingEntryFormFieldValue('person', event.target.value)}>{personaSelectOptions.map((personaOption) => <option key={personaOption.value} value={personaOption.value}>{personaOption.label}</option>)}<option value="__custom__">Custom person...</option></select></label>
-              {assetHoldingEntryFormState.person === '__custom__' ? <label className="text-sm font-medium text-[#d4d4d4]">Custom Person<input className="mt-1 h-11 w-full rounded-2xl border border-white/[0.06] bg-[rgba(15,15,15,0.8)] px-3 text-[#ededed] outline-none transition focus:border-cyan-400 focus:bg-[#141414]" type="text" value={assetHoldingEntryFormState.customPerson} onChange={(event) => updateAssetHoldingEntryFormFieldValue('customPerson', event.target.value)} /></label> : null}
-              <label className="text-sm font-medium text-[#d4d4d4]">Item<input className="mt-1 h-11 w-full rounded-2xl border border-white/[0.06] bg-[rgba(15,15,15,0.8)] px-3 text-[#ededed] outline-none transition focus:border-cyan-400 focus:bg-[#141414]" type="text" value={assetHoldingEntryFormState.item} onChange={(event) => updateAssetHoldingEntryFormFieldValue('item', event.target.value)} /></label>
-              <label className="text-sm font-medium text-[#d4d4d4]">Asset Value Owed<input className="mt-1 h-11 w-full rounded-2xl border border-white/[0.06] bg-[rgba(15,15,15,0.8)] px-3 text-[#ededed] outline-none transition focus:border-cyan-400 focus:bg-[#141414]" type="number" min="0" step="0.01" value={assetHoldingEntryFormState.assetValueOwed} onChange={(event) => updateAssetHoldingEntryFormFieldValue('assetValueOwed', event.target.value)} /></label>
-              <label className="text-sm font-medium text-[#d4d4d4]">Asset Market Value<input className="mt-1 h-11 w-full rounded-2xl border border-white/[0.06] bg-[rgba(15,15,15,0.8)] px-3 text-[#ededed] outline-none transition focus:border-cyan-400 focus:bg-[#141414]" type="number" min="0" step="0.01" value={assetHoldingEntryFormState.assetMarketValue} onChange={(event) => updateAssetHoldingEntryFormFieldValue('assetMarketValue', event.target.value)} /></label>
-              <label className="text-sm font-medium text-[#d4d4d4]">Date<input className="mt-1 h-11 w-full rounded-2xl border border-white/[0.06] bg-[rgba(15,15,15,0.8)] px-3 text-[#ededed] outline-none transition focus:border-cyan-400 focus:bg-[#141414]" type="date" value={assetHoldingEntryFormState.date} onChange={(event) => updateAssetHoldingEntryFormFieldValue('date', event.target.value)} /></label>
-              <label className="text-sm font-medium text-[#d4d4d4] sm:col-span-2">Description<input className="mt-1 h-11 w-full rounded-2xl border border-white/[0.06] bg-[rgba(15,15,15,0.8)] px-3 text-[#ededed] outline-none transition focus:border-cyan-400 focus:bg-[#141414]" type="text" value={assetHoldingEntryFormState.description} onChange={(event) => updateAssetHoldingEntryFormFieldValue('description', event.target.value)} /></label>
-              <div className="sm:col-span-2 flex flex-wrap justify-end gap-2"><button className="inline-flex items-center gap-1.5 rounded-2xl border border-white/[0.025] px-4 py-2 text-sm font-semibold text-[#d4d4d4]" onClick={() => setIsAddAssetModalOpen(false)} type="button"><IconX /> Cancel</button><button className="rounded-2xl bg-cyan-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-cyan-700 inline-flex items-center gap-1.5" type="submit"><IconCheck /> Save Asset</button></div>
-            </form>
+        <section style={{ position: 'fixed', inset: 0, zIndex: 5000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }} role="dialog" aria-modal="true" aria-label="Add Asset Modal">
+          <button style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)' }} onClick={() => setIsAddAssetModalOpen(false)} type="button" aria-label="Close add asset modal backdrop" />
+          <div style={{ position: 'relative', zIndex: 5001, width: '100%', maxWidth: '560px', overflow: 'hidden', borderRadius: '24px', boxShadow: '0 25px 60px rgba(0,0,0,0.6)', background: 'rgba(17,17,17,0.95)', backdropFilter: 'blur(24px)', WebkitBackdropFilter: 'blur(24px)', border: '1px solid rgba(34,211,238,0.15)' }}>
+            <div style={{ height: '3px', background: 'linear-gradient(90deg,#22d3ee,#0891b2)' }} />
+            <div style={{ padding: '20px 24px 24px', maxHeight: 'calc(85vh - 3px)', overflowY: 'auto' }}>
+              <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '16px', marginBottom: '20px' }}>
+                <div>
+                  <p style={{ margin: 0, fontSize: '10px', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#71717a' }}>New Record</p>
+                  <h3 style={{ margin: '2px 0 0', fontSize: '20px', fontWeight: 700, letterSpacing: '-0.01em', color: '#22d3ee' }}>Add Asset</h3>
+                </div>
+                <button style={{ flexShrink: 0, width: '32px', height: '32px', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.08)', background: 'rgba(255,255,255,0.03)', color: '#71717a', cursor: 'pointer' }} onClick={() => setIsAddAssetModalOpen(false)} type="button" aria-label="Close"><IconX /></button>
+              </div>
+              {(() => {
+                const lbl = { display: 'flex', flexDirection: 'column', gap: '6px', fontSize: '12px', fontWeight: 600, color: '#d4d4d4' }
+                const inp = { height: '40px', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.08)', background: '#141414', color: '#ededed', padding: '0 12px', fontSize: '13px', outline: 'none', fontFamily: 'inherit' }
+                const sel = { ...inp, cursor: 'pointer' }
+                return (
+                  <form style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }} onSubmit={submitNewAssetHoldingRecord}>
+                    <label style={lbl}>
+                      Person
+                      <select style={sel} value={assetHoldingEntryFormState.person} onChange={(event) => updateAssetHoldingEntryFormFieldValue('person', event.target.value)}>
+                        {personaSelectOptions.map((personaOption) => <option key={personaOption.value} value={personaOption.value}>{personaOption.label}</option>)}
+                        <option value="__custom__">Custom person...</option>
+                      </select>
+                    </label>
+                    {assetHoldingEntryFormState.person === '__custom__' ? (
+                      <label style={lbl}>Custom Person<input style={inp} type="text" value={assetHoldingEntryFormState.customPerson} onChange={(event) => updateAssetHoldingEntryFormFieldValue('customPerson', event.target.value)} /></label>
+                    ) : null}
+                    <label style={lbl}>Item<input style={inp} type="text" value={assetHoldingEntryFormState.item} onChange={(event) => updateAssetHoldingEntryFormFieldValue('item', event.target.value)} /></label>
+                    <label style={lbl}>Value Owed<input style={inp} type="number" min="0" step="0.01" value={assetHoldingEntryFormState.assetValueOwed} onChange={(event) => updateAssetHoldingEntryFormFieldValue('assetValueOwed', event.target.value)} /></label>
+                    <label style={lbl}>Market Value<input style={inp} type="number" min="0" step="0.01" value={assetHoldingEntryFormState.assetMarketValue} onChange={(event) => updateAssetHoldingEntryFormFieldValue('assetMarketValue', event.target.value)} /></label>
+                    <label style={lbl}>Date<input style={inp} type="date" value={assetHoldingEntryFormState.date} onChange={(event) => updateAssetHoldingEntryFormFieldValue('date', event.target.value)} /></label>
+                    <label style={{ ...lbl, gridColumn: '1 / -1' }}>Description<input style={inp} type="text" value={assetHoldingEntryFormState.description} onChange={(event) => updateAssetHoldingEntryFormFieldValue('description', event.target.value)} /></label>
+                    <div style={{ gridColumn: '1 / -1', display: 'flex', flexWrap: 'wrap', justifyContent: 'flex-end', gap: '8px' }}>
+                      <button style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '7px 16px', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.07)', background: 'rgba(255,255,255,0.03)', color: '#a1a1aa', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }} onClick={() => setIsAddAssetModalOpen(false)} type="button"><IconX /> Cancel</button>
+                      <button style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '7px 16px', borderRadius: '10px', border: 'none', background: 'rgba(8,145,178,0.9)', color: '#fff', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }} type="submit"><IconCheck /> Save Asset</button>
+                    </div>
+                  </form>
+                )
+              })()}
+            </div>
           </div>
         </section>
       ) : null}
