@@ -1630,10 +1630,7 @@ function selectFallbackDailyAnimeQuestion(dateKey, recentRows = [], preferredThe
       firstNonDuplicate = index;
     }
     if (preferredTheme === ANIME_QUESTION_THEME_FRANCHISE) {
-      if (theme !== ANIME_QUESTION_THEME_FRANCHISE) {
-        continue;
-      }
-      return { value: { question, index, theme, franchise }, err: null };
+      return { value: { question, index, theme: ANIME_QUESTION_THEME_FRANCHISE, franchise: "" }, err: null };
     }
     if (theme === ANIME_QUESTION_THEME_GENERIC) {
       return { value: { question, index, theme }, err: null };
@@ -1645,8 +1642,10 @@ function selectFallbackDailyAnimeQuestion(dateKey, recentRows = [], preferredThe
     value: {
       question: fallbackQuestion,
       index: finalIndex,
-      theme: classifyAnimeQuestionTheme(fallbackQuestion),
-      franchise: readFranchiseTag(fallbackQuestion)
+      theme: preferredTheme === ANIME_QUESTION_THEME_FRANCHISE
+        ? ANIME_QUESTION_THEME_FRANCHISE
+        : classifyAnimeQuestionTheme(fallbackQuestion),
+      franchise: ""
     },
     err: null
   };
