@@ -575,8 +575,9 @@ function renderHoverMetadataBoxForElement(props) {
     : firstLine.startsWith('Watch') ? 'watch'
     : (firstLine.startsWith('Risk') || firstLine.startsWith('Gap')) ? 'risk'
     : null
-  const dotColor = statusTone === 'good' ? '#34d399' : statusTone === 'watch' ? '#fbbf24' : statusTone === 'risk' ? '#f87171' : '#64748b'
-  const statusTextColor = statusTone === 'good' ? '#6ee7b7' : statusTone === 'watch' ? '#fcd34d' : statusTone === 'risk' ? '#fca5a5' : '#cbd5e1'
+  // Use app-native dark-neutral palette rather than blue-slate
+  const dotColor = statusTone === 'good' ? '#34d399' : statusTone === 'watch' ? '#fbbf24' : statusTone === 'risk' ? '#fb7185' : '#52525b'
+  const statusTextColor = statusTone === 'good' ? '#6ee7b7' : statusTone === 'watch' ? '#fde68a' : statusTone === 'risk' ? '#fca5a5' : '#a1a1aa'
   return (
     <div className={`meta-hover group relative ${className}`}>
       {children}
@@ -966,6 +967,7 @@ export default function App() {
   const [auditTimelineEntries, setAuditTimelineEntries] = React.useState([])
   const [trendWindowMonths, setTrendWindowMonths] = React.useState(6)
   const [netWorthProjectionProfileId, setNetWorthProjectionProfileId] = React.useState('base')
+  const [hoveredNetWorthChartPointIndex, setHoveredNetWorthChartPointIndex] = React.useState(null)
   const [loanCalculatorFormState, setLoanCalculatorFormState] = React.useState(buildInitialLoanCalculatorFormState)
   const [syncNoticeState, setSyncNoticeState] = React.useState({ tone: '', message: '' })
   const transactionUndoStackRef = React.useRef([])
@@ -3189,13 +3191,8 @@ export default function App() {
         aria-sort={isActiveSortColumn ? (isAscendingSort ? 'ascending' : 'descending') : 'none'}
       >
         <button className={`inline-flex items-center gap-1 transition hover:text-[#a1a1aa] ${isRightAligned ? 'w-full justify-end' : ''}`} onClick={() => updateTableSortingForTableName(tableName, keyName)} type="button">
-          {isRightAligned && (
-            <span style={{ color: isActiveSortColumn ? '#fbbf24' : undefined, opacity: isActiveSortColumn ? 1 : 0.35 }}>{indicator}</span>
-          )}
           {label}
-          {!isRightAligned && (
-            <span style={{ color: isActiveSortColumn ? '#fbbf24' : undefined, opacity: isActiveSortColumn ? 1 : 0.35 }}>{indicator}</span>
-          )}
+          <span style={{ color: isActiveSortColumn ? '#fbbf24' : undefined, opacity: isActiveSortColumn ? 1 : 0.35 }}>{indicator}</span>
         </button>
       </th>
     )
@@ -3218,7 +3215,7 @@ export default function App() {
   ]
 
   return (
-    <main className={`app-shell theme-${themeName} mx-auto min-h-screen w-full max-w-7xl p-4 pb-16 md:p-8`}>
+    <main className={`app-shell theme-${themeName} mx-auto min-h-screen w-full max-w-7xl p-4 pb-24 md:p-8 md:pb-32`}>
       <section className="budget-sticky-toolbar sticky z-[110] mb-4 overflow-hidden" style={{ borderRadius: '18px', border: '1px solid rgba(255,255,255,0.06)', background: 'rgba(14,14,14,0.94)', boxShadow: '0 8px 32px rgba(0,0,0,0.45), inset 0 2px 0 #f59e0b' }}>
         {/* Row 1: title + utility controls + action buttons */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 14px', minWidth: 0 }}>
@@ -3282,262 +3279,428 @@ export default function App() {
         </div>
       </section>
 
-      <section id="overview" className="z-layer-section mb-4 scroll-mt-40 grid grid-cols-1 gap-3 md:mb-6 md:gap-4 md:grid-cols-2 xl:grid-cols-4">
-        {topMetrics.map((metricRow, metricIndex) => {
-          const label = metricRow.metric
-          const isNetWorth = label === 'Net Worth'
-          const formattedValue = formatDashboardDatapointValueByFormat(metricRow.value, metricRow.valueFormat)
-          const metadataLines = buildOverviewHoverContextLinesForMetric(metricRow, sourceBreakdown, emergencyFundSummary)
-          const statusBlurb = Array.isArray(metadataLines) && metadataLines.length > 0 ? String(metadataLines[0]) : ''
-          const trendSignalValue = isNetWorth
-            ? sourceBreakdown.netWorth.delta
-            : metricRow.value
-          const trendDir = trendSignalValue > 0 ? 'up' : (trendSignalValue < 0 ? 'down' : 'flat')
-          const savingsRateToneClasses = label === 'Savings Rate'
-            ? resolveSavingsRateToneClasses(metricRow.value)
-            : null
-          const emergencyFundGapToneClasses = label === 'Emergency Fund Gap'
-            ? (
-                metricRow.value > 0
-                  ? { valueClassName: 'text-rose-400', badgeClassName: 'bg-rose-500/15 text-rose-400' }
-                  : { valueClassName: 'text-emerald-400', badgeClassName: 'bg-emerald-500/15 text-emerald-400' }
-              )
-            : null
-          const toneClasses = savingsRateToneClasses ?? emergencyFundGapToneClasses
-          const trendBadgeClassName = toneClasses
-            ? toneClasses.badgeClassName
-            : (trendDir === 'up' ? 'bg-emerald-500/15 text-emerald-400' : (trendDir === 'down' ? 'bg-rose-500/15 text-rose-400' : 'bg-[#1a1a1a] text-[#71717a]'))
-          const valueClassName = toneClasses
-            ? toneClasses.valueClassName
-            : 'text-[#ededed]'
-          const accentBorderColor = toneClasses
-            ? (toneClasses.valueClassName.includes('emerald') ? '#10b981' : (toneClasses.valueClassName.includes('amber') ? '#f59e0b' : '#f43f5e'))
-            : (trendDir === 'up' ? '#10b981' : (trendDir === 'down' ? '#f43f5e' : '#94a3b8'))
-          const trendIcon = trendDir === 'up' ? 'G��' : (trendDir === 'down' ? 'G��' : 'G��')
-          const trendLabel = trendDir === 'up' ? 'Up' : (trendDir === 'down' ? 'Down' : 'Flat')
+      <section id="overview" className="z-layer-section scroll-mt-40" style={{ marginBottom: '16px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+        {(() => {
+          if (topMetrics.length === 0) return null
+
+          // Resolve inline style colors from Tailwind class name strings returned by resolveSavingsRateToneClasses
+          const resolveColorFromTailwindValueClass = (className) => {
+            if (className.includes('emerald')) return '#34d399'
+            if (className.includes('amber')) return '#fbbf24'
+            return '#fb7185'
+          }
+
+          const resolveMetricStyleColors = (metricRow) => {
+            const label = String(metricRow.metric)
+            if (label === 'Savings Rate') {
+              const tone = resolveSavingsRateToneClasses(metricRow.value)
+              const valueColor = resolveColorFromTailwindValueClass(tone.valueClassName)
+              return { valueColor, badgeColor: valueColor, badgeBg: `${valueColor}1a`, badgeBorder: `${valueColor}33` }
+            }
+            if (label === 'Emergency Fund Gap') {
+              const valueColor = metricRow.value > 0 ? '#fb7185' : '#34d399'
+              return { valueColor, badgeColor: valueColor, badgeBg: `${valueColor}1a`, badgeBorder: `${valueColor}33` }
+            }
+            const trendSignal = label === 'Net Worth' ? sourceBreakdown.netWorth.delta : metricRow.value
+            if (trendSignal > 0) return { valueColor: '#ededed', badgeColor: '#34d399', badgeBg: 'rgba(52,211,153,0.1)', badgeBorder: 'rgba(52,211,153,0.2)' }
+            if (trendSignal < 0) return { valueColor: '#ededed', badgeColor: '#fb7185', badgeBg: 'rgba(251,113,133,0.1)', badgeBorder: 'rgba(251,113,133,0.2)' }
+            return { valueColor: '#ededed', badgeColor: '#71717a', badgeBg: 'rgba(255,255,255,0.04)', badgeBorder: 'rgba(255,255,255,0.08)' }
+          }
+
+          const trendIndicator = (metricRow) => {
+            const label = String(metricRow.metric)
+            const trendSignal = label === 'Net Worth' ? sourceBreakdown.netWorth.delta : metricRow.value
+            if (trendSignal > 0) return { arrow: '▲', dir: 'Up' }
+            if (trendSignal < 0) return { arrow: '▼', dir: 'Down' }
+            return { arrow: '—', dir: 'Flat' }
+          }
+
+          // ---- Net Worth hero ----
+          const nwMetric = topMetrics[0]
+          const nwValue = typeof nwMetric.value === 'number' ? nwMetric.value : 0
+          const nwDelta = sourceBreakdown.netWorth.delta
+          const nwColor = nwValue >= 0 ? '#34d399' : '#fb7185'
+          const totalAssets = sourceBreakdown.assets.currentMonth
+          const totalLiabilities = Math.abs(sourceBreakdown.liabilities.currentMonth)
+          const assetPct = totalAssets + totalLiabilities > 0 ? (totalAssets / (totalAssets + totalLiabilities)) * 100 : 100
+          const nwMetadataLines = buildOverviewHoverContextLinesForMetric(nwMetric, sourceBreakdown, emergencyFundSummary)
+
           return (
-            <React.Fragment key={label}>
+            <React.Fragment>
+              {/* ---- Net Worth hero card ---- */}
               {renderHoverMetadataBoxForElement({
-                label: `${label} Metadata`,
-                lines: metadataLines,
-                className: isNetWorth ? 'md:col-span-2 xl:col-span-2 h-full' : 'h-full',
+                label: 'Net Worth Metadata',
+                lines: nwMetadataLines,
                 children: (
-                  <article
-                    className={`glass-panel-soft squircle-md metric-card-enter flex h-full flex-col justify-between ${isNetWorth ? 'p-5' : 'p-4'}`}
-                    style={{ animationDelay: `${metricIndex * 70}ms`, borderTopWidth: '3px', borderTopColor: accentBorderColor, borderTopStyle: 'solid' }}
-                  >
-                    <div>
-                      <h2 className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#52525b]">{label}</h2>
-                      <p className={`mt-2 ${isNetWorth ? 'text-3xl' : 'text-2xl'} font-bold leading-none ${valueClassName}`}>{formattedValue}</p>
-                      {isNetWorth && sourceBreakdown.netWorth.delta !== 0 && (
-                        <p className="mt-1.5 text-xs font-medium text-[#52525b]">
-                          {sourceBreakdown.netWorth.delta > 0 ? '+' : ''}{formatCurrencyValueForDashboard(sourceBreakdown.netWorth.delta)} vs last month
-                        </p>
-                      )}
-                    </div>
-                    <div className="mt-3 space-y-1.5">
-                      <span className={`inline-flex items-center gap-0.5 rounded-full px-2 py-0.5 text-[11px] font-semibold ${trendBadgeClassName}`}>
-                        {trendIcon} {trendLabel}
-                      </span>
-                      {statusBlurb ? (
-                        <p className="text-[11px] leading-snug text-[#52525b]">{statusBlurb}</p>
-                      ) : null}
+                  <article className="glass-panel-soft squircle-md metric-card-enter" style={{ padding: '20px 24px', borderTop: `2px solid ${nwColor}` }}>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'flex-start', justifyContent: 'space-between', gap: '16px' }}>
+                      <div style={{ minWidth: 0 }}>
+                        <p style={{ margin: '0 0 4px', fontSize: '10px', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#71717a' }}>Net Worth</p>
+                        <p style={{ margin: '0 0 6px', fontSize: '36px', fontWeight: 800, letterSpacing: '-0.03em', color: nwColor, fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>{formatDashboardDatapointValueByFormat(nwMetric.value, nwMetric.valueFormat)}</p>
+                        {nwDelta !== 0 && (
+                          <p style={{ margin: 0, fontSize: '12px', fontWeight: 600, color: nwDelta > 0 ? '#34d399' : '#fb7185', fontVariantNumeric: 'tabular-nums' }}>
+                            {nwDelta > 0 ? '▲' : '▼'} {nwDelta > 0 ? '+' : ''}{formatCurrencyValueForDashboard(nwDelta)} vs last month
+                          </p>
+                        )}
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', minWidth: '200px' }}>
+                        <div>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '5px' }}>
+                            <span style={{ fontSize: '10px', fontWeight: 600, color: '#38bdf8' }}>Assets</span>
+                            <span style={{ fontSize: '11px', fontWeight: 700, color: '#38bdf8', fontVariantNumeric: 'tabular-nums' }}>{formatCurrencyValueForDashboard(totalAssets)}</span>
+                          </div>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
+                            <span style={{ fontSize: '10px', fontWeight: 600, color: '#fb7185' }}>Liabilities</span>
+                            <span style={{ fontSize: '11px', fontWeight: 700, color: '#fb7185', fontVariantNumeric: 'tabular-nums' }}>{formatCurrencyValueForDashboard(totalLiabilities)}</span>
+                          </div>
+                          <div style={{ height: '6px', borderRadius: '999px', background: 'rgba(251,113,133,0.25)', overflow: 'hidden' }}>
+                            <div style={{ height: '100%', borderRadius: '999px', background: '#38bdf8', width: `${assetPct.toFixed(1)}%` }} />
+                          </div>
+                        </div>
+                      </div>
                     </div>
                   </article>
                 )
               })}
+
+              {/* ---- Primary metrics — 4 cards ---- */}
+              {topMetrics.length > 1 && (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(175px, 1fr))', gap: '10px' }}>
+                  {topMetrics.slice(1, 5).map((metricRow, idx) => {
+                    const label = String(metricRow.metric)
+                    const formattedValue = formatDashboardDatapointValueByFormat(metricRow.value, metricRow.valueFormat)
+                    const { valueColor, badgeColor, badgeBg, badgeBorder } = resolveMetricStyleColors(metricRow)
+                    const { arrow, dir } = trendIndicator(metricRow)
+                    const metadataLines = buildOverviewHoverContextLinesForMetric(metricRow, sourceBreakdown, emergencyFundSummary)
+                    const statusBlurb = Array.isArray(metadataLines) && metadataLines.length > 0 ? String(metadataLines[0]) : ''
+                    return (
+                      <React.Fragment key={label}>
+                        {renderHoverMetadataBoxForElement({
+                          label: `${label} Metadata`,
+                          lines: metadataLines,
+                          className: 'h-full',
+                          children: (
+                            <article className="glass-panel-soft squircle-md metric-card-enter" style={{ padding: '16px', height: '100%', boxSizing: 'border-box', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', borderTop: `2px solid ${badgeColor}`, animationDelay: `${(idx + 1) * 60}ms` }}>
+                              <div>
+                                <p style={{ margin: '0 0 8px', fontSize: '10px', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#71717a' }}>{label}</p>
+                                <p style={{ margin: 0, fontSize: '22px', fontWeight: 800, letterSpacing: '-0.02em', color: valueColor, fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>{formattedValue}</p>
+                              </div>
+                              <div style={{ marginTop: '12px', display: 'flex', flexDirection: 'column', gap: '5px' }}>
+                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', borderRadius: '999px', background: badgeBg, border: `1px solid ${badgeBorder}`, padding: '2px 8px', fontSize: '10px', fontWeight: 700, color: badgeColor, alignSelf: 'flex-start' }}>
+                                  {arrow} {dir}
+                                </span>
+                                {statusBlurb ? <p style={{ margin: 0, fontSize: '10px', color: '#52525b', lineHeight: 1.4 }}>{statusBlurb}</p> : null}
+                              </div>
+                            </article>
+                          )
+                        })}
+                      </React.Fragment>
+                    )
+                  })}
+                </div>
+              )}
+
+              {/* ---- Secondary metrics — compact grid ---- */}
+              {topMetrics.length > 5 && (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(148px, 1fr))', gap: '8px' }}>
+                  {topMetrics.slice(5).map((metricRow, idx) => {
+                    const label = String(metricRow.metric)
+                    const formattedValue = formatDashboardDatapointValueByFormat(metricRow.value, metricRow.valueFormat)
+                    const { valueColor, badgeColor, badgeBg, badgeBorder } = resolveMetricStyleColors(metricRow)
+                    const { arrow } = trendIndicator(metricRow)
+                    const metadataLines = buildOverviewHoverContextLinesForMetric(metricRow, sourceBreakdown, emergencyFundSummary)
+                    return (
+                      <React.Fragment key={label}>
+                        {renderHoverMetadataBoxForElement({
+                          label: `${label} Metadata`,
+                          lines: metadataLines,
+                          className: 'h-full',
+                          children: (
+                            <article className="glass-panel-soft squircle-md metric-card-enter" style={{ padding: '12px 14px', height: '100%', boxSizing: 'border-box', display: 'flex', flexDirection: 'column', gap: '6px', borderLeft: `2px solid ${badgeColor}`, animationDelay: `${(idx + 5) * 40}ms` }}>
+                              <p style={{ margin: 0, fontSize: '9px', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#52525b' }}>{label}</p>
+                              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '6px' }}>
+                                <p style={{ margin: 0, fontSize: '16px', fontWeight: 800, letterSpacing: '-0.02em', color: valueColor, fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>{formattedValue}</p>
+                                <span style={{ fontSize: '10px', color: badgeColor, fontWeight: 700 }}>{arrow}</span>
+                              </div>
+                            </article>
+                          )
+                        })}
+                      </React.Fragment>
+                    )
+                  })}
+                </div>
+              )}
             </React.Fragment>
           )
-        })}
+        })()}
       </section>
 
       <div className="flex flex-col">
-      <section id="net-worth-trajectory" className="section-tight section-allows-popovers glass-panel-soft squircle-md z-layer-section mb-4 scroll-mt-40 p-4 md:mb-6 md:p-6" style={{ order: 13 }}>
-        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h2 className="text-lg font-bold text-[#ededed]">Net Worth Trajectory</h2>
-          </div>
-          <div className="flex items-center gap-2">
-            {['conservative', 'base', 'accelerated'].map((profileId) => (
-              <button
-                key={profileId}
-                className={`rounded-xl border px-3 py-1.5 text-xs font-semibold ${netWorthProjectionProfileId === profileId ? 'border-amber-500 bg-amber-500 text-black' : 'border-white/[0.025] bg-[rgba(20,20,20,0.5)] text-[#a1a1aa]'}`}
-                onClick={() => setNetWorthProjectionProfileId(profileId)}
-                type="button"
-              >
-                {profileId.charAt(0).toUpperCase() + profileId.slice(1)}
-              </button>
-            ))}
-          </div>
+      <section id="net-worth-trajectory" className="section-tight glass-panel-soft squircle-md z-layer-section mb-4 scroll-mt-40 p-4 md:mb-6 md:p-6" style={{ order: 13, borderTop: '2px solid #a78bfa' }}>
+        {/* -- Header -- */}
+        <div style={{ marginBottom: '16px' }}>
+          <p style={{ margin: 0, fontSize: '10px', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#71717a' }}>Projection</p>
+          <h2 style={{ margin: '2px 0 0', fontSize: '18px', fontWeight: 700, letterSpacing: '-0.01em', color: '#a78bfa' }}>Net Worth Trajectory</h2>
         </div>
-        {selectedNetWorthProjectionProfile ? (
-          <React.Fragment>
-            <div className="mb-4 grid grid-cols-1 gap-3 lg:grid-cols-3">
-              <article className="networth-clarity-card squircle-sm p-3">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#71717a]">Baseline Inputs From Dataset</p>
-                <dl className="mt-2 space-y-1 text-xs">
-                  <div className="flex items-center justify-between gap-2">
-                    <dt className="text-[#71717a]">Savings / Month</dt>
-                    <dd className="font-semibold text-[#e0e0e0]">{formatCurrencyValueForDashboard(netWorthProjectionBaselineVariables.monthlySavingsPaceBaselineFromDataset)}</dd>
+        {(() => {
+          // Pull baseline NW + debt from the base profile's current point
+          const baseProfile = netWorthProjectionProfiles?.profiles?.find((pItem) => pItem.id === 'base') ?? selectedNetWorthProjectionProfile
+          const horizons = netWorthProjectionProfiles?.horizons ?? []
+          const chartPoints = baseProfile?.points ?? []
+          const currentPoint = chartPoints.find((ptItem) => ptItem.horizonId === 'current')
+          const baselineNW = typeof currentPoint?.projectedNetWorth === 'number' ? currentPoint.projectedNetWorth : 0
+          const baselineDebt = typeof currentPoint?.projectedDebt === 'number' ? currentPoint.projectedDebt : 0
+          const monthlySavings = typeof netWorthProjectionBaselineVariables.monthlySavingsPaceBaselineFromDataset === 'number'
+            ? netWorthProjectionBaselineVariables.monthlySavingsPaceBaselineFromDataset
+            : 0
+
+          if (chartPoints.length === 0) {
+            return <p style={{ fontSize: '13px', color: '#71717a' }}>Unable to build trajectory from current data.</p>
+          }
+
+          // FV with monthly contributions: PV*(1+r)^n + PMT*((1+r)^n - 1)/r
+          const computeFvWithContributions = (pv, annualRate, months, monthlyPmt) => {
+            if (months <= 0) return pv
+            const r = annualRate / 12
+            const factor = Math.pow(1 + r, months)
+            return pv * factor + monthlyPmt * ((factor - 1) / r)
+          }
+
+          const HYSA_RATE = 0.045
+          const SP500_RATE = 0.10
+          const SP500_BEAR_RATE = 0.04   // pessimistic band — approx bear/flat cycle avg
+          const SP500_BULL_RATE = 0.14   // optimistic band — strong bull cycle avg
+
+          const chartLabels = chartPoints.map((ptItem) => horizons.find((hItem) => hItem.id === ptItem.horizonId)?.label ?? ptItem.horizonId)
+          const hysaValues = chartPoints.map((ptItem) => {
+            const months = typeof ptItem.months === 'number' ? ptItem.months : 0
+            return computeFvWithContributions(baselineNW, HYSA_RATE, months, monthlySavings)
+          })
+          const sp500Values = chartPoints.map((ptItem) => {
+            const months = typeof ptItem.months === 'number' ? ptItem.months : 0
+            return computeFvWithContributions(baselineNW, SP500_RATE, months, monthlySavings)
+          })
+          const sp500BearValues = chartPoints.map((ptItem) => {
+            const months = typeof ptItem.months === 'number' ? ptItem.months : 0
+            return computeFvWithContributions(baselineNW, SP500_BEAR_RATE, months, monthlySavings)
+          })
+          const sp500BullValues = chartPoints.map((ptItem) => {
+            const months = typeof ptItem.months === 'number' ? ptItem.months : 0
+            return computeFvWithContributions(baselineNW, SP500_BULL_RATE, months, monthlySavings)
+          })
+          const debtValues = chartPoints.map((ptItem) => typeof ptItem.projectedDebt === 'number' ? ptItem.projectedDebt : 0)
+
+          // --- Chart geometry ---
+          const allValues = [...hysaValues, ...sp500BullValues, ...sp500BearValues, ...debtValues]
+          const rawMin = Math.min(...allValues)
+          const rawMax = Math.max(...allValues)
+          const valuePad = (rawMax - rawMin) * 0.1 || 1000
+          const chartMin = rawMin - valuePad
+          const chartMax = rawMax + valuePad
+          const chartRange = chartMax - chartMin
+
+          const svgW = 800
+          const svgH = 280
+          const padL = 76
+          const padR = 24
+          const padT = 24
+          const padB = 44
+          const plotW = svgW - padL - padR
+          const plotH = svgH - padT - padB
+          const n = chartPoints.length
+
+          const xFor = (idx) => padL + (idx / (n - 1)) * plotW
+          const yFor = (val) => padT + plotH - ((val - chartMin) / chartRange) * plotH
+
+          const polylinePoints = (values) =>
+            values.map((val, idx) => `${xFor(idx).toFixed(1)},${yFor(val).toFixed(1)}`).join(' ')
+
+          const areaPath = (values) => {
+            const pts = values.map((val, idx) => `${xFor(idx).toFixed(1)},${yFor(val).toFixed(1)}`)
+            const base = yFor(Math.max(chartMin, 0)).toFixed(1)
+            return `M ${pts[0]} L ${pts.join(' L ')} L ${xFor(n - 1).toFixed(1)},${base} L ${xFor(0).toFixed(1)},${base} Z`
+          }
+
+          // S&P 500 band path (from bear lower edge to bull upper edge, clockwise)
+          const sp500BandPath = (() => {
+            const topPts = sp500BullValues.map((val, idx) => `${xFor(idx).toFixed(1)},${yFor(val).toFixed(1)}`)
+            const botPts = [...sp500BearValues].reverse().map((val, idx) => `${xFor(n - 1 - idx).toFixed(1)},${yFor(val).toFixed(1)}`)
+            return `M ${topPts[0]} L ${topPts.join(' L ')} L ${botPts.join(' L ')} Z`
+          })()
+
+          const yGridLines = Array.from({ length: 6 }, (_, i) => {
+            const val = chartMin + (chartRange / 5) * i
+            return { y: yFor(val), val }
+          })
+
+          const formatChartValue = (val) => {
+            const abs = Math.abs(val)
+            const sign = val < 0 ? '-' : ''
+            if (abs >= 1_000_000) return `${sign}$${(abs / 1_000_000).toFixed(1)}M`
+            if (abs >= 1_000) return `${sign}$${(abs / 1_000).toFixed(0)}K`
+            return `${sign}$${abs.toFixed(0)}`
+          }
+
+          const hovIdx = hoveredNetWorthChartPointIndex
+          const hovLabel = hovIdx !== null ? chartLabels[hovIdx] : null
+          const hovHysa = hovIdx !== null ? hysaValues[hovIdx] : null
+          const hovSp500 = hovIdx !== null ? sp500Values[hovIdx] : null
+          const hovBear = hovIdx !== null ? sp500BearValues[hovIdx] : null
+          const hovBull = hovIdx !== null ? sp500BullValues[hovIdx] : null
+          const hovDebt = hovIdx !== null ? debtValues[hovIdx] : null
+          const hovXPct = hovIdx !== null ? (xFor(hovIdx) / svgW) * 100 : 50
+
+          return (
+            <React.Fragment>
+              {/* -- Stat bar -- */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', borderRadius: '12px', border: '1px solid rgba(167,139,250,0.1)', background: 'rgba(167,139,250,0.02)', overflow: 'hidden', marginBottom: '14px' }}>
+                {[
+                  ['Current Net Worth', formatCurrencyValueForDashboard(baselineNW), '#a78bfa'],
+                  ['Monthly Savings', formatCurrencyValueForDashboard(monthlySavings), '#34d399'],
+                  ['HYSA Rate', '4.5% APY', '#38bdf8'],
+                  ['S&P 500 Avg', '10% / yr', '#fbbf24'],
+                ].map(([statLabel, statValue, statColor], statIdx, arr) => (
+                  <div key={statLabel} style={{ padding: '12px 14px', borderRight: statIdx < arr.length - 1 ? '1px solid rgba(255,255,255,0.04)' : 'none' }}>
+                    <p style={{ margin: '0 0 3px', fontSize: '9px', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#71717a' }}>{statLabel}</p>
+                    <p style={{ margin: 0, fontSize: '13px', fontWeight: 700, color: statColor, fontVariantNumeric: 'tabular-nums' }}>{statValue}</p>
                   </div>
-                  <div className="flex items-center justify-between gap-2">
-                    <dt className="text-[#71717a]">Income / Month</dt>
-                    <dd className="font-semibold text-[#e0e0e0]">{formatCurrencyValueForDashboard(netWorthProjectionBaselineVariables.totalMonthlyIncomeFromDataset)}</dd>
+                ))}
+              </div>
+              {/* -- Chart -- */}
+              <div style={{ borderRadius: '14px', border: '1px solid rgba(255,255,255,0.05)', background: 'rgba(255,255,255,0.01)', overflow: 'visible' }}>
+                {/* Legend */}
+                <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '14px', padding: '12px 16px 0' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <span style={{ display: 'inline-block', width: '20px', height: '2.5px', background: '#38bdf8', borderRadius: '2px' }} />
+                    <span style={{ fontSize: '11px', fontWeight: 600, color: '#38bdf8' }}>HYSA 4.5%</span>
+                    <span style={{ fontSize: '10px', color: '#52525b' }}>stable</span>
                   </div>
-                  <div className="flex items-center justify-between gap-2">
-                    <dt className="text-[#71717a]">Expenses / Month</dt>
-                    <dd className="font-semibold text-[#e0e0e0]">{formatCurrencyValueForDashboard(netWorthProjectionBaselineVariables.totalMonthlyExpensesFromDataset)}</dd>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <span style={{ display: 'inline-block', width: '20px', height: '2.5px', background: '#fbbf24', borderRadius: '2px' }} />
+                    <span style={{ fontSize: '11px', fontWeight: 600, color: '#fbbf24' }}>S&amp;P 500 10%</span>
+                    <span style={{ fontSize: '10px', color: '#52525b' }}>volatile (4–14% range)</span>
                   </div>
-                  <div className="flex items-center justify-between gap-2">
-                    <dt className="text-[#71717a]">Debt Pmts / Month</dt>
-                    <dd className="font-semibold text-[#e0e0e0]">{formatCurrencyValueForDashboard(netWorthProjectionBaselineVariables.totalMonthlyDebtPaymentsFromDataset)}</dd>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <span style={{ display: 'inline-block', width: '20px', height: '1.5px', background: '#fb7185', borderRadius: '2px', opacity: 0.6 }} />
+                    <span style={{ fontSize: '11px', fontWeight: 500, color: '#71717a' }}>Debt Balance</span>
                   </div>
-                  <div className="flex items-center justify-between gap-2">
-                    <dt className="text-[#71717a]">Weighted APR</dt>
-                    <dd className="font-semibold text-[#e0e0e0]">{netWorthProjectionBaselineVariables.weightedAprPercentFromDataset.toFixed(2)}%</dd>
-                  </div>
-                </dl>
-              </article>
-              {renderHoverMetadataBoxForElement({
-                label: 'Selected Pace Modifiers Meaning',
-                boxClassName: 'meta-hover-box-wide',
-                lines: [
-                  'Scenario modifiers applied on top of dataset baseline values.',
-                  `Savings Multiplier (x${selectedNetWorthProjectionProfile.assumptions.savingsPaceMultiplier.toFixed(2)}): scales monthly savings contribution.`,
-                  `Asset Growth (${selectedNetWorthProjectionProfile.assumptions.annualAssetGrowthPercent.toFixed(1)}%/yr): expected annual growth on assets.`,
-                  `Debt Payment Lift (${(selectedNetWorthProjectionProfile.assumptions.debtPaymentExtraPercent * 100).toFixed(1)}%): extra debt paydown above base monthly payment.`,
-                  `APR Shift (${selectedNetWorthProjectionProfile.assumptions.aprStressAdjustmentPercent.toFixed(1)} pts): interest-rate stress adjustment for liabilities.`,
-                  'Rule of thumb: higher savings/growth/lift helps net worth; higher APR hurts net worth.'
-                ],
-                children: (
-                  <article className="networth-clarity-card squircle-sm p-3">
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#71717a]">Selected Pace Modifiers</p>
-                    <dl className="mt-2 space-y-2 text-xs">
-                      <div className="flex items-center justify-between gap-2">
-                        <dt className="text-[#71717a]">Savings Multiplier</dt>
-                        <dd className="rounded-md bg-[#1a1a1a] px-2 py-1 font-semibold text-[#e0e0e0]">x{selectedNetWorthProjectionProfile.assumptions.savingsPaceMultiplier.toFixed(2)}</dd>
-                      </div>
-                      <div className="flex items-center justify-between gap-2">
-                        <dt className="text-[#71717a]">Asset Growth (Annual)</dt>
-                        <dd className="rounded-md bg-[#1a1a1a] px-2 py-1 font-semibold text-[#e0e0e0]">{selectedNetWorthProjectionProfile.assumptions.annualAssetGrowthPercent.toFixed(1)}%</dd>
-                      </div>
-                      <div className="flex items-center justify-between gap-2">
-                        <dt className="text-[#71717a]">Debt Payment Lift</dt>
-                        <dd className="rounded-md bg-[#1a1a1a] px-2 py-1 font-semibold text-[#e0e0e0]">{(selectedNetWorthProjectionProfile.assumptions.debtPaymentExtraPercent * 100).toFixed(1)}%</dd>
-                      </div>
-                      <div className="flex items-center justify-between gap-2">
-                        <dt className="text-[#71717a]">APR Shift</dt>
-                        <dd className="rounded-md bg-[#1a1a1a] px-2 py-1 font-semibold text-[#e0e0e0]">{selectedNetWorthProjectionProfile.assumptions.aprStressAdjustmentPercent.toFixed(1)} pts</dd>
-                      </div>
-                    </dl>
-                  </article>
-                )
-              })}
-              <article className="networth-clarity-card squircle-sm p-3">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#71717a]">How To Tune</p>
-                <ul className="mt-2 space-y-1 text-xs text-[#a1a1aa]">
-                  <li>Higher savings multiplier increases monthly contribution.</li>
-                  <li>Higher growth percent compounds asset side faster.</li>
-                  <li>Higher debt payment lift lowers liability principal sooner.</li>
-                  <li>APR shift stress-tests borrowing conditions up/down.</li>
-                </ul>
-              </article>
-            </div>
-            <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              {selectedNetWorthProjectionProfile.points.map((pointItem) => {
-                const currentPoint = selectedNetWorthProjectionProfile.points.find((rowItem) => rowItem.horizonId === 'current')
-                const currentNetWorth = typeof currentPoint?.projectedNetWorth === 'number' ? currentPoint.projectedNetWorth : 0
-                const currentDebt = typeof currentPoint?.projectedDebt === 'number' ? currentPoint.projectedDebt : 0
-                const deltaValue = pointItem.projectedNetWorth - currentNetWorth
-                const debtDeltaValue = pointItem.projectedDebt - currentDebt
-                const deltaClassName = deltaValue > 0 ? 'text-emerald-400' : (deltaValue < 0 ? 'text-rose-400' : 'text-[#a1a1aa]')
-                const debtDeltaClassName = debtDeltaValue < 0 ? 'text-emerald-400' : (debtDeltaValue > 0 ? 'text-rose-400' : 'text-[#a1a1aa]')
-                const horizonLabel = netWorthProjectionProfiles?.horizons.find((rowItem) => rowItem.id === pointItem.horizonId)?.label ?? pointItem.horizonId
-                const horizonMonths = typeof pointItem.months === 'number' ? pointItem.months : 0
-                const debtPaymentMultiplier = 1 + (selectedNetWorthProjectionProfile.assumptions.debtPaymentExtraPercent || 0)
-                const incomePredictionLines = safeCollections.income.map((incomeRow, incomeIndex) => {
-                  const itemName = typeof incomeRow.item === 'string' ? incomeRow.item : `Income ${incomeIndex + 1}`
-                  const monthlyAmount = typeof incomeRow.amount === 'number' ? incomeRow.amount : 0
-                  const horizonTotal = monthlyAmount * horizonMonths
-                  if (monthlyAmount <= 0) return ''
-                  if (horizonMonths <= 0) return `Income ${itemName}: ${formatCurrencyValueForDashboard(monthlyAmount)}/mo`
-                  return `- ${itemName}: ${formatCurrencyValueForDashboard(monthlyAmount)}/mo | ${formatCurrencyValueForDashboard(horizonTotal)}`
-                }).filter((lineItem) => lineItem.length > 0)
-                const debtPaymentRows = [...safeCollections.debts, ...safeCollections.loans, ...safeCollections.credit]
-                const debtPredictionLines = debtPaymentRows.map((debtRow, debtIndex) => {
-                  const itemName = typeof debtRow.item === 'string' ? debtRow.item : `Debt ${debtIndex + 1}`
-                  const baseMonthlyPayment = typeof debtRow.monthlyPayment === 'number'
-                    ? debtRow.monthlyPayment
-                    : (typeof debtRow.minimumPayment === 'number' ? debtRow.minimumPayment : 0)
-                  const adjustedMonthlyPayment = baseMonthlyPayment * debtPaymentMultiplier
-                  const horizonTotal = adjustedMonthlyPayment * horizonMonths
-                  if (adjustedMonthlyPayment <= 0) return ''
-                  if (horizonMonths <= 0) return `Debt ${itemName}: ${formatCurrencyValueForDashboard(adjustedMonthlyPayment)}/mo`
-                  return `- ${itemName}: ${formatCurrencyValueForDashboard(adjustedMonthlyPayment)}/mo | ${formatCurrencyValueForDashboard(horizonTotal)}`
-                }).filter((lineItem) => lineItem.length > 0)
-                const incomeTotalMonthly = safeCollections.income.reduce((runningTotal, incomeRow) => {
-                  const amount = typeof incomeRow.amount === 'number' ? incomeRow.amount : 0
-                  return runningTotal + Math.max(0, amount)
-                }, 0)
-                const debtTotalMonthly = debtPaymentRows.reduce((runningTotal, debtRow) => {
-                  const baseMonthlyPayment = typeof debtRow.monthlyPayment === 'number'
-                    ? debtRow.monthlyPayment
-                    : (typeof debtRow.minimumPayment === 'number' ? debtRow.minimumPayment : 0)
-                  return runningTotal + Math.max(0, baseMonthlyPayment * debtPaymentMultiplier)
-                }, 0)
-                const incomeHorizonTotal = incomeTotalMonthly * horizonMonths
-                const debtHorizonTotal = debtTotalMonthly * horizonMonths
-                const hoverLines = [
-                  `Profile: ${selectedNetWorthProjectionProfile.label}`,
-                  `Horizon: ${horizonLabel} (${horizonMonths} months)`,
-                  `Projected Net Worth: ${formatCurrencyValueForDashboard(pointItem.projectedNetWorth)}`,
-                  `Projected Debt Balance: ${formatCurrencyValueForDashboard(pointItem.projectedDebt)}`,
-                  'Income Summary',
-                  horizonMonths <= 0
-                    ? `Total Income: ${formatCurrencyValueForDashboard(incomeTotalMonthly)}/mo`
-                    : `Total Income: ${formatCurrencyValueForDashboard(incomeTotalMonthly)}/mo | ${formatCurrencyValueForDashboard(incomeHorizonTotal)}`,
-                  ...incomePredictionLines,
-                  'Debt Summary',
-                  horizonMonths <= 0
-                    ? `Total Debt Payments: ${formatCurrencyValueForDashboard(debtTotalMonthly)}/mo`
-                    : `Total Debt Payments: ${formatCurrencyValueForDashboard(debtTotalMonthly)}/mo | ${formatCurrencyValueForDashboard(debtHorizonTotal)}`,
-                  ...debtPredictionLines
-                ]
-                return (
-                  <React.Fragment key={pointItem.horizonId}>
-                    {renderHoverMetadataBoxForElement({
-                      label: `${horizonLabel} Projection Inputs`,
-                      lines: hoverLines,
-                      boxClassName: 'meta-hover-box-wide',
-                      children: (
-                        <article className="networth-outcome-card squircle-sm p-3">
-                          <p className="text-xs uppercase tracking-[0.12em] text-[#71717a]">{horizonLabel}</p>
-                          <div className="mt-2 grid grid-cols-2 gap-3">
-                            <div>
-                              <p className="text-[11px] text-[#71717a]">Projected Net Worth</p>
-                              <p className="text-lg font-bold text-[#e0e0e0]">{formatCurrencyValueForDashboard(pointItem.projectedNetWorth)}</p>
-                              <p className={`text-xs font-semibold ${deltaClassName}`}>{deltaValue >= 0 ? '+' : ''}{formatCurrencyValueForDashboard(deltaValue)} vs current</p>
-                            </div>
-                            <div>
-                              <p className="text-[11px] text-[#71717a]">Projected Debt Balance</p>
-                              <p className="text-lg font-bold text-[#e0e0e0]">{formatCurrencyValueForDashboard(pointItem.projectedDebt)}</p>
-                              <p className={`text-xs font-semibold ${debtDeltaClassName}`}>{debtDeltaValue <= 0 ? '' : '+'}{formatCurrencyValueForDashboard(debtDeltaValue)} vs current</p>
-                            </div>
+                </div>
+                <div style={{ position: 'relative' }}>
+                  <svg
+                    viewBox={`0 0 ${svgW} ${svgH}`}
+                    style={{ display: 'block', width: '100%', height: 'auto', cursor: 'crosshair' }}
+                    onMouseMove={(e) => {
+                      const rect = e.currentTarget.getBoundingClientRect()
+                      const svgX = ((e.clientX - rect.left) / rect.width) * svgW
+                      const rawIdx = Math.round(((svgX - padL) / plotW) * (n - 1))
+                      setHoveredNetWorthChartPointIndex(Math.max(0, Math.min(n - 1, rawIdx)))
+                    }}
+                    onMouseLeave={() => setHoveredNetWorthChartPointIndex(null)}
+                  >
+                    {/* Vertical segment lines — 10 divisions */}
+                    {Array.from({ length: 11 }, (_, i) => (
+                      <line key={i} x1={(padL + (i / 10) * plotW).toFixed(1)} y1={padT} x2={(padL + (i / 10) * plotW).toFixed(1)} y2={padT + plotH} stroke='rgba(255,255,255,0.04)' strokeWidth='1' />
+                    ))}
+                    {/* Horizontal grid lines */}
+                    {yGridLines.map(({ y, val }, i) => (
+                      <React.Fragment key={i}>
+                        <line x1={padL} y1={y.toFixed(1)} x2={svgW - padR} y2={y.toFixed(1)} stroke='rgba(255,255,255,0.05)' strokeWidth='1' />
+                        <text x={(padL - 6).toFixed(1)} y={y.toFixed(1)} textAnchor='end' dominantBaseline='middle' fill='#52525b' fontSize='11' fontFamily='inherit'>{formatChartValue(val)}</text>
+                      </React.Fragment>
+                    ))}
+                    {/* Zero line */}
+                    {chartMin < 0 && chartMax > 0 ? (
+                      <line x1={padL} y1={yFor(0).toFixed(1)} x2={svgW - padR} y2={yFor(0).toFixed(1)} stroke='rgba(255,255,255,0.1)' strokeWidth='1' strokeDasharray='4,4' />
+                    ) : null}
+                    {/* S&P 500 volatility band */}
+                    <path d={sp500BandPath} fill='rgba(251,191,36,0.06)' />
+                    {/* HYSA area fill */}
+                    <path d={areaPath(hysaValues)} fill='rgba(56,189,248,0.05)' />
+                    {/* Debt area fill */}
+                    <path d={areaPath(debtValues)} fill='rgba(251,113,133,0.04)' />
+                    {/* S&P 500 band edges (bear/bull) */}
+                    <polyline points={polylinePoints(sp500BearValues)} fill='none' stroke='rgba(251,191,36,0.3)' strokeWidth='1' strokeDasharray='3,3' strokeLinejoin='round' />
+                    <polyline points={polylinePoints(sp500BullValues)} fill='none' stroke='rgba(251,191,36,0.3)' strokeWidth='1' strokeDasharray='3,3' strokeLinejoin='round' />
+                    {/* Main lines */}
+                    <polyline points={polylinePoints(hysaValues)} fill='none' stroke='#38bdf8' strokeWidth='2.5' strokeLinejoin='round' strokeLinecap='round' />
+                    <polyline points={polylinePoints(sp500Values)} fill='none' stroke='#fbbf24' strokeWidth='2.5' strokeLinejoin='round' strokeLinecap='round' />
+                    <polyline points={polylinePoints(debtValues)} fill='none' stroke='#fb7185' strokeWidth='1.5' strokeLinejoin='round' strokeLinecap='round' opacity='0.5' />
+                    {/* X-axis labels */}
+                    {chartLabels.map((labelText, idx) => (
+                      <text key={idx} x={xFor(idx).toFixed(1)} y={(padT + plotH + 16).toFixed(1)} textAnchor='middle' fill={hovIdx === idx ? '#d4d4d4' : '#52525b'} fontSize='11' fontFamily='inherit' fontWeight={hovIdx === idx ? '700' : '400'}>{labelText}</text>
+                    ))}
+                    {/* Hover crosshair + dots */}
+                    {hovIdx !== null ? (
+                      <React.Fragment>
+                        <line x1={xFor(hovIdx).toFixed(1)} y1={padT} x2={xFor(hovIdx).toFixed(1)} y2={padT + plotH} stroke='rgba(255,255,255,0.12)' strokeWidth='1' />
+                        <circle cx={xFor(hovIdx).toFixed(1)} cy={yFor(hysaValues[hovIdx]).toFixed(1)} r='5' fill='#38bdf8' stroke='#111' strokeWidth='2' />
+                        <circle cx={xFor(hovIdx).toFixed(1)} cy={yFor(sp500Values[hovIdx]).toFixed(1)} r='5' fill='#fbbf24' stroke='#111' strokeWidth='2' />
+                        <circle cx={xFor(hovIdx).toFixed(1)} cy={yFor(debtValues[hovIdx]).toFixed(1)} r='3.5' fill='#fb7185' stroke='#111' strokeWidth='1.5' />
+                      </React.Fragment>
+                    ) : (
+                      chartPoints.map((_, idx) => (
+                        <React.Fragment key={idx}>
+                          <circle cx={xFor(idx).toFixed(1)} cy={yFor(hysaValues[idx]).toFixed(1)} r='3' fill='#38bdf8' stroke='#111' strokeWidth='1.5' />
+                          <circle cx={xFor(idx).toFixed(1)} cy={yFor(sp500Values[idx]).toFixed(1)} r='3' fill='#fbbf24' stroke='#111' strokeWidth='1.5' />
+                        </React.Fragment>
+                      ))
+                    )}
+                  </svg>
+                  {/* Floating popover */}
+                  {hovIdx !== null ? (() => {
+                    const anchorPct = Math.min(Math.max(hovXPct, 8), 92)
+                    const transformX = anchorPct < 20 ? '0%' : anchorPct > 80 ? '-100%' : '-50%'
+                    return (
+                      <div style={{ position: 'absolute', bottom: '44px', left: `${anchorPct}%`, transform: `translateX(${transformX})`, zIndex: 20, pointerEvents: 'none', width: '240px', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(13,13,13,0.97)', backdropFilter: 'blur(16px)', boxShadow: '0 8px 32px rgba(0,0,0,0.6)', padding: '12px 14px' }}>
+                        <p style={{ margin: '0 0 10px', fontSize: '10px', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#a78bfa' }}>{hovLabel}</p>
+                        {/* HYSA row */}
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '6px' }}>
+                          <div>
+                            <span style={{ fontSize: '11px', fontWeight: 600, color: '#38bdf8' }}>HYSA 4.5%</span>
+                            <span style={{ marginLeft: '5px', fontSize: '10px', color: '#52525b' }}>stable</span>
                           </div>
-                        </article>
-                      )
-                    })}
-                  </React.Fragment>
-                )
-              })}
-            </div>
-          </React.Fragment>
-        ) : (
-          <p className="text-sm text-[#71717a]">Unable to build trajectory from current data.</p>
-        )}
+                          <div style={{ display: 'flex', alignItems: 'baseline', gap: '5px' }}>
+                            <span style={{ fontSize: '14px', fontWeight: 800, color: '#38bdf8', fontVariantNumeric: 'tabular-nums' }}>{formatCurrencyValueForDashboard(hovHysa)}</span>
+                            <span style={{ fontSize: '10px', fontWeight: 600, color: hovHysa - baselineNW >= 0 ? '#38bdf8' : '#fb7185', fontVariantNumeric: 'tabular-nums' }}>{hovHysa - baselineNW >= 0 ? '+' : ''}{formatCurrencyValueForDashboard(hovHysa - baselineNW)}</span>
+                          </div>
+                        </div>
+                        {/* S&P 500 row */}
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '4px' }}>
+                          <div>
+                            <span style={{ fontSize: '11px', fontWeight: 600, color: '#fbbf24' }}>S&amp;P 500 10%</span>
+                            <span style={{ marginLeft: '5px', fontSize: '10px', color: '#52525b' }}>avg</span>
+                          </div>
+                          <div style={{ display: 'flex', alignItems: 'baseline', gap: '5px' }}>
+                            <span style={{ fontSize: '14px', fontWeight: 800, color: '#fbbf24', fontVariantNumeric: 'tabular-nums' }}>{formatCurrencyValueForDashboard(hovSp500)}</span>
+                            <span style={{ fontSize: '10px', fontWeight: 600, color: hovSp500 - baselineNW >= 0 ? '#fbbf24' : '#fb7185', fontVariantNumeric: 'tabular-nums' }}>{hovSp500 - baselineNW >= 0 ? '+' : ''}{formatCurrencyValueForDashboard(hovSp500 - baselineNW)}</span>
+                          </div>
+                        </div>
+                        {/* S&P range */}
+                        <div style={{ marginBottom: '8px', display: 'flex', justifyContent: 'flex-end' }}>
+                          <span style={{ fontSize: '10px', color: '#71717a', fontVariantNumeric: 'tabular-nums' }}>range: {formatCurrencyValueForDashboard(hovBear)} – {formatCurrencyValueForDashboard(hovBull)}</span>
+                        </div>
+                        {/* Debt row */}
+                        <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                          <span style={{ fontSize: '11px', color: '#71717a' }}>Debt Balance</span>
+                          <div style={{ display: 'flex', alignItems: 'baseline', gap: '5px' }}>
+                            <span style={{ fontSize: '13px', fontWeight: 700, color: '#fb7185', fontVariantNumeric: 'tabular-nums' }}>{formatCurrencyValueForDashboard(hovDebt)}</span>
+                            <span style={{ fontSize: '10px', fontWeight: 600, color: hovDebt - baselineDebt <= 0 ? '#34d399' : '#fb7185', fontVariantNumeric: 'tabular-nums' }}>{hovDebt - baselineDebt <= 0 ? '' : '+'}{formatCurrencyValueForDashboard(hovDebt - baselineDebt)}</span>
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  })() : null}
+                </div>
+                <div style={{ padding: '8px 16px 12px', borderTop: '1px solid rgba(255,255,255,0.04)' }}>
+                  <p style={{ margin: 0, fontSize: '11px', color: '#3f3f46' }}>Includes monthly savings contributions. S&amp;P band shows 4–14% range. Past performance does not guarantee future results.</p>
+                </div>
+              </div>
+            </React.Fragment>
+          )
+        })()}
       </section>
 
-      <section id="emergency-fund" className="section-tight section-allows-popovers glass-panel-soft squircle-md z-layer-section mb-4 scroll-mt-40 p-4 md:mb-6 md:p-6" style={{ order: 14 }}>
+      <section id="emergency-fund" className="section-tight glass-panel-soft squircle-md z-layer-section mb-4 scroll-mt-40 p-4 md:mb-6 md:p-6" style={{ order: 14, borderTop: '2px solid #10b981' }}>
         {(() => {
           const coverageMonths = typeof emergencyFundSummary.totalCoverageMonths === 'number' ? emergencyFundSummary.totalCoverageMonths : 0
           const goal = typeof emergencyFundSummary.emergencyFundGoal === 'number' ? emergencyFundSummary.emergencyFundGoal : 0
@@ -3555,81 +3718,116 @@ export default function App() {
           const liquidGap = Math.max(0, liquidTarget - liquidAmount)
           const investedGap = Math.max(0, investedTarget - investedAmount)
           const coverageStatus = coverageMonths >= 6 ? 'good' : coverageMonths >= 3 ? 'watch' : 'risk'
-          const coverageBadgeClass = coverageStatus === 'good' ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-400' : coverageStatus === 'watch' ? 'border-amber-500/30 bg-amber-500/10 text-amber-400' : 'border-rose-500/40 bg-rose-500/10 text-rose-400'
-          const barFillColor = coverageStatus === 'good' ? '#10b981' : coverageStatus === 'watch' ? '#f59e0b' : '#f43f5e'
-          const liquidFillColor = liquidGap > 0 ? '#0ea5e9' : '#10b981'
-          const investedFillColor = investedGap > 0 ? '#8b5cf6' : '#10b981'
-          const milestone1Pct = goal > 0 ? Math.min(100, (monthlyObligation / goal) * 100) : 16.67
+          const statusColor = coverageStatus === 'good' ? '#10b981' : coverageStatus === 'watch' ? '#fbbf24' : '#fb7185'
+          const statusBg = coverageStatus === 'good' ? 'rgba(16,185,129,0.1)' : coverageStatus === 'watch' ? 'rgba(251,191,36,0.1)' : 'rgba(251,113,133,0.1)'
+          const statusBorder = coverageStatus === 'good' ? 'rgba(16,185,129,0.25)' : coverageStatus === 'watch' ? 'rgba(251,191,36,0.22)' : 'rgba(251,113,133,0.25)'
+          const milestone1Pct = goal > 0 ? Math.min(99, (monthlyObligation / goal) * 100) : 16.67
           const milestone3Pct = 50
           return (
             <React.Fragment>
-              <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-                <div className="flex flex-wrap items-center gap-2">
-                  <h2 className="text-lg font-bold text-[#ededed]">Emergency Fund</h2>
-                  <span className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold ${coverageBadgeClass}`}>{coverageMonths.toFixed(1)} mo. covered</span>
-                  <span className="rounded-full border border-white/[0.025] bg-[rgba(20,20,20,0.8)] px-2.5 py-0.5 text-xs font-semibold text-[#71717a]">Goal: 6 months</span>
+              {/* -- Header -- */}
+              <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: '10px', marginBottom: '16px' }}>
+                <div>
+                  <p style={{ margin: 0, fontSize: '10px', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#71717a' }}>Safety</p>
+                  <h2 style={{ margin: '2px 0 0', fontSize: '18px', fontWeight: 700, letterSpacing: '-0.01em', color: '#10b981' }}>Emergency Fund</h2>
                 </div>
-                <span className="text-sm font-bold text-[#d4d4d4]">{formatCurrencyValueForDashboard(totalFunds)} <span className="font-normal text-[#52525b]">of</span> {formatCurrencyValueForDashboard(goal)}</span>
-              </div>
-
-              <div className="mb-5">
-                <div className="relative h-3 overflow-hidden rounded-full bg-white/[0.08]">
-                  <div className="h-full rounded-full transition-all duration-700" style={{ width: `${overallFillPct}%`, backgroundColor: barFillColor }} />
-                  <div className="absolute inset-y-0 border-l border-white/[0.15]/60" style={{ left: `${milestone1Pct}%` }} />
-                  <div className="absolute inset-y-0 border-l border-white/[0.15]/60" style={{ left: `${milestone3Pct}%` }} />
-                </div>
-                <div className="relative mt-1 h-4">
-                  <span className="absolute -translate-x-1/2 text-[10px] text-[#52525b]" style={{ left: `${milestone1Pct}%` }}>1 mo</span>
-                  <span className="absolute -translate-x-1/2 text-[10px] text-[#52525b]" style={{ left: `${milestone3Pct}%` }}>3 mo</span>
-                  <span className="absolute right-0 text-[10px] text-[#52525b]">6 mo</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                  <span style={{ borderRadius: '999px', background: statusBg, border: `1px solid ${statusBorder}`, padding: '3px 10px', fontSize: '11px', fontWeight: 700, color: statusColor }}>{coverageMonths.toFixed(1)} mo covered</span>
+                  <span style={{ borderRadius: '999px', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)', padding: '3px 10px', fontSize: '11px', fontWeight: 600, color: '#52525b' }}>Goal: 6 months</span>
                 </div>
               </div>
-
-              <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <article className={`rounded-2xl border p-3 ${liquidGap > 0 ? 'border-white/[0.025] bg-[rgba(15,15,15,0.8)]' : 'border-emerald-500/30 bg-emerald-500/10'}`}>
-                  <div className="mb-2 flex items-center justify-between gap-2">
-                    <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[#71717a]">Liquid Cash</p>
-                    {liquidGap > 0 ? <span className="text-xs font-semibold text-rose-600">G��{formatCurrencyValueForDashboard(liquidGap)} gap</span> : <span className="text-xs font-semibold text-emerald-600">G�� Funded</span>}
+              {/* -- Stat bar -- */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', borderRadius: '12px', border: '1px solid rgba(16,185,129,0.1)', background: 'rgba(16,185,129,0.02)', overflow: 'hidden', marginBottom: '14px' }}>
+                {[
+                  ['Total Saved', formatCurrencyValueForDashboard(totalFunds), overallFillPct >= 100 ? '#10b981' : '#d4d4d4'],
+                  ['Goal', formatCurrencyValueForDashboard(goal), '#71717a'],
+                  ['Liquid Cash', formatCurrencyValueForDashboard(liquidAmount), '#38bdf8'],
+                  ['Invested', formatCurrencyValueForDashboard(investedAmount), '#a78bfa'],
+                ].map(([statLabel, statValue, statColor], statIdx, arr) => (
+                  <div key={statLabel} style={{ padding: '12px 14px', borderRight: statIdx < arr.length - 1 ? '1px solid rgba(255,255,255,0.04)' : 'none' }}>
+                    <p style={{ margin: '0 0 3px', fontSize: '9px', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#71717a' }}>{statLabel}</p>
+                    <p style={{ margin: 0, fontSize: '13px', fontWeight: 700, color: statColor, fontVariantNumeric: 'tabular-nums' }}>{statValue}</p>
                   </div>
-                  <div className="flex items-end justify-between gap-2">
-                    <p className="text-xl font-bold text-[#e0e0e0]">{formatCurrencyValueForDashboard(liquidAmount)}</p>
-                    <p className="text-xs text-[#71717a]">target {formatCurrencyValueForDashboard(liquidTarget)}</p>
+                ))}
+              </div>
+              {/* -- Overall progress bar -- */}
+              <div style={{ marginBottom: '14px' }}>
+                <div style={{ position: 'relative', height: '10px', borderRadius: '999px', background: 'rgba(255,255,255,0.06)', overflow: 'hidden' }}>
+                  <div style={{ height: '100%', borderRadius: '999px', background: statusColor, width: `${overallFillPct}%`, transition: 'width 0.6s ease' }} />
+                  {/* Milestone markers inside the bar */}
+                  <div style={{ position: 'absolute', top: 0, bottom: 0, left: `${milestone1Pct}%`, width: '1px', background: 'rgba(255,255,255,0.2)' }} />
+                  <div style={{ position: 'absolute', top: 0, bottom: 0, left: `${milestone3Pct}%`, width: '1px', background: 'rgba(255,255,255,0.2)' }} />
+                </div>
+                <div style={{ position: 'relative', marginTop: '5px', height: '14px' }}>
+                  <span style={{ position: 'absolute', left: `${milestone1Pct}%`, transform: 'translateX(-50%)', fontSize: '10px', color: '#52525b' }}>1 mo</span>
+                  <span style={{ position: 'absolute', left: `${milestone3Pct}%`, transform: 'translateX(-50%)', fontSize: '10px', color: '#52525b' }}>3 mo</span>
+                  <span style={{ position: 'absolute', right: 0, fontSize: '10px', color: '#52525b' }}>6 mo</span>
+                </div>
+              </div>
+              {/* -- Liquid + Invested cards -- */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '10px', marginBottom: '12px' }}>
+                {/* Liquid Cash card */}
+                <article style={{ padding: '14px 16px', borderRadius: '12px', border: liquidGap > 0 ? '1px solid rgba(56,189,248,0.15)' : '1px solid rgba(16,185,129,0.2)', background: liquidGap > 0 ? 'rgba(56,189,248,0.03)' : 'rgba(16,185,129,0.04)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
+                    <p style={{ margin: 0, fontSize: '10px', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#71717a' }}>Liquid Cash</p>
+                    {liquidGap > 0
+                      ? <span style={{ fontSize: '11px', fontWeight: 700, color: '#fb7185' }}>{formatCurrencyValueForDashboard(liquidGap)} gap</span>
+                      : <span style={{ fontSize: '11px', fontWeight: 700, color: '#10b981' }}>Funded</span>}
                   </div>
-                  <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/[0.08]">
-                    <div className="h-full rounded-full" style={{ width: `${liquidFillPct}%`, backgroundColor: liquidFillColor }} />
+                  <p style={{ margin: '0 0 2px', fontSize: '20px', fontWeight: 800, color: '#ededed', fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.02em' }}>{formatCurrencyValueForDashboard(liquidAmount)}</p>
+                  <p style={{ margin: '0 0 8px', fontSize: '11px', color: '#52525b', fontVariantNumeric: 'tabular-nums' }}>target {formatCurrencyValueForDashboard(liquidTarget)}</p>
+                  <div style={{ height: '5px', borderRadius: '999px', background: 'rgba(255,255,255,0.06)', overflow: 'hidden' }}>
+                    <div style={{ height: '100%', borderRadius: '999px', background: liquidGap > 0 ? '#38bdf8' : '#10b981', width: `${liquidFillPct}%` }} />
                   </div>
-                  {emergencyFundSourceLabels.liquidText !== 'None classified' && <p className="mt-2 text-[10px] text-[#52525b] truncate">Sources: {emergencyFundSourceLabels.liquidText}</p>}
+                  {emergencyFundSourceLabels.liquidText !== 'None classified' && (
+                    <p style={{ margin: '7px 0 0', fontSize: '10px', color: '#3f3f46', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>Sources: {emergencyFundSourceLabels.liquidText}</p>
+                  )}
                 </article>
-                <article className={`rounded-2xl border p-3 ${investedGap > 0 ? 'border-violet-500/30 bg-violet-500/10' : 'border-emerald-500/30 bg-emerald-500/10'}`}>
-                  <div className="mb-2 flex items-center justify-between gap-2">
-                    <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[#71717a]">Invested Assets</p>
-                    {investedGap > 0 ? <span className="text-xs font-semibold text-rose-600">G��{formatCurrencyValueForDashboard(investedGap)} gap</span> : <span className="text-xs font-semibold text-emerald-600">G�� Funded</span>}
+                {/* Invested Assets card */}
+                <article style={{ padding: '14px 16px', borderRadius: '12px', border: investedGap > 0 ? '1px solid rgba(167,139,250,0.15)' : '1px solid rgba(16,185,129,0.2)', background: investedGap > 0 ? 'rgba(167,139,250,0.04)' : 'rgba(16,185,129,0.04)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
+                    <p style={{ margin: 0, fontSize: '10px', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#71717a' }}>Invested Assets</p>
+                    {investedGap > 0
+                      ? <span style={{ fontSize: '11px', fontWeight: 700, color: '#fb7185' }}>{formatCurrencyValueForDashboard(investedGap)} gap</span>
+                      : <span style={{ fontSize: '11px', fontWeight: 700, color: '#10b981' }}>Funded</span>}
                   </div>
-                  <div className="flex items-end justify-between gap-2">
-                    <p className="text-xl font-bold text-[#e0e0e0]">{formatCurrencyValueForDashboard(investedAmount)}</p>
-                    <p className="text-xs text-[#71717a]">target {formatCurrencyValueForDashboard(investedTarget)}</p>
+                  <p style={{ margin: '0 0 2px', fontSize: '20px', fontWeight: 800, color: '#ededed', fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.02em' }}>{formatCurrencyValueForDashboard(investedAmount)}</p>
+                  <p style={{ margin: '0 0 8px', fontSize: '11px', color: '#52525b', fontVariantNumeric: 'tabular-nums' }}>target {formatCurrencyValueForDashboard(investedTarget)}</p>
+                  <div style={{ height: '5px', borderRadius: '999px', background: 'rgba(255,255,255,0.06)', overflow: 'hidden' }}>
+                    <div style={{ height: '100%', borderRadius: '999px', background: investedGap > 0 ? '#a78bfa' : '#10b981', width: `${investedFillPct}%` }} />
                   </div>
-                  <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/[0.08]">
-                    <div className="h-full rounded-full" style={{ width: `${investedFillPct}%`, backgroundColor: investedFillColor }} />
-                  </div>
-                  {emergencyFundSourceLabels.investedText !== 'None classified' && <p className="mt-2 text-[10px] text-[#52525b] truncate">Sources: {emergencyFundSourceLabels.investedText}</p>}
+                  {emergencyFundSourceLabels.investedText !== 'None classified' && (
+                    <p style={{ margin: '7px 0 0', fontSize: '10px', color: '#3f3f46', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>Sources: {emergencyFundSourceLabels.investedText}</p>
+                  )}
                 </article>
               </div>
-
+              {/* -- Monthly obligation breakdown -- */}
               {renderHoverMetadataBoxForElement({
                 label: 'Emergency Goal Expense Breakdown',
                 lines: emergencyGoalExpenseLines,
                 boxClassName: 'meta-hover-box-wide',
                 children: (
-                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1 rounded-2xl border border-white/[0.06] bg-[rgba(20,20,20,0.6)] px-3 py-2">
-                    <p className="text-xs text-[#71717a]">Monthly obligation: <span className="font-semibold text-[#d4d4d4]">{formatCurrencyValueForDashboard(monthlyObligation)}</span></p>
-                    <span className="hidden text-white/[0.2] sm:inline">|</span>
-                    <p className="text-xs text-[#71717a]">Expenses: <span className="font-semibold text-[#d4d4d4]">{formatCurrencyValueForDashboard(monthlyExpenses)}</span></p>
-                    <span className="hidden text-white/[0.2] sm:inline">+</span>
-                    <p className="text-xs text-[#71717a]">Debt minimums: <span className="font-semibold text-[#d4d4d4]">{formatCurrencyValueForDashboard(monthlyDebtMins)}</span></p>
-                    <span className="hidden text-white/[0.2] sm:inline">G��</span>
-                    <p className="text-xs text-[#71717a]">6+� goal: <span className="font-semibold text-[#d4d4d4]">{formatCurrencyValueForDashboard(goal)}</span></p>
-                    <span className="ml-auto text-[10px] text-[#52525b]">hover for breakdown</span>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '6px 16px', padding: '10px 14px', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.05)', background: 'rgba(255,255,255,0.015)' }}>
+                    <div>
+                      <span style={{ fontSize: '10px', color: '#52525b' }}>Monthly obligation </span>
+                      <span style={{ fontSize: '12px', fontWeight: 700, color: '#d4d4d4', fontVariantNumeric: 'tabular-nums' }}>{formatCurrencyValueForDashboard(monthlyObligation)}</span>
+                    </div>
+                    <span style={{ fontSize: '11px', color: '#3f3f46' }}>·</span>
+                    <div>
+                      <span style={{ fontSize: '10px', color: '#52525b' }}>Expenses </span>
+                      <span style={{ fontSize: '12px', fontWeight: 700, color: '#d4d4d4', fontVariantNumeric: 'tabular-nums' }}>{formatCurrencyValueForDashboard(monthlyExpenses)}</span>
+                    </div>
+                    <span style={{ fontSize: '11px', color: '#3f3f46' }}>+</span>
+                    <div>
+                      <span style={{ fontSize: '10px', color: '#52525b' }}>Debt mins </span>
+                      <span style={{ fontSize: '12px', fontWeight: 700, color: '#d4d4d4', fontVariantNumeric: 'tabular-nums' }}>{formatCurrencyValueForDashboard(monthlyDebtMins)}</span>
+                    </div>
+                    <span style={{ fontSize: '11px', color: '#3f3f46' }}>·</span>
+                    <div>
+                      <span style={{ fontSize: '10px', color: '#52525b' }}>6 mo goal </span>
+                      <span style={{ fontSize: '12px', fontWeight: 700, color: '#10b981', fontVariantNumeric: 'tabular-nums' }}>{formatCurrencyValueForDashboard(goal)}</span>
+                    </div>
+                    <span style={{ marginLeft: 'auto', fontSize: '10px', color: '#3f3f46' }}>hover for breakdown</span>
                   </div>
                 )
               })}
@@ -3638,21 +3836,31 @@ export default function App() {
         })()}
       </section>
 
-      <section id="risks" className="section-tight glass-panel-soft squircle-md z-layer-section mb-4 scroll-mt-40 p-4 md:mb-6 md:p-6" style={{ order: 11 }}>
-        <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-          <div className="flex flex-wrap items-center gap-3">
-            <h2 className="text-lg font-bold text-[#ededed]">Financial Risk Flags</h2>
+      <section id="risks" className="section-tight glass-panel-soft squircle-md z-layer-section mb-4 scroll-mt-40 p-4 md:mb-6 md:p-6" style={{ order: 11, borderTop: '2px solid #fb7185' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px', marginBottom: '16px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
+            <div>
+              <p style={{ margin: 0, fontSize: '10px', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#71717a' }}>Analysis</p>
+              <h2 style={{ margin: '2px 0 0', fontSize: '18px', fontWeight: 700, letterSpacing: '-0.01em', color: '#fb7185' }}>Risk Flags</h2>
+            </div>
             {!isRiskLoading && riskFindings.length > 0 && (
-              <span className="flex items-center gap-1.5 text-xs font-semibold">
-                {riskFindings.filter((f) => f.severity === 'high').length > 0 && <span className="rounded-full bg-rose-500/15 px-2 py-0.5 text-rose-400">{riskFindings.filter((f) => f.severity === 'high').length} high</span>}
-                {riskFindings.filter((f) => f.severity === 'medium').length > 0 && <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-amber-400">{riskFindings.filter((f) => f.severity === 'medium').length} medium</span>}
-                {riskFindings.filter((f) => f.severity === 'low').length > 0 && <span className="rounded-full bg-[#1a1a1a] px-2 py-0.5 text-[#a1a1aa]">{riskFindings.filter((f) => f.severity === 'low').length} low</span>}
-              </span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                {riskFindings.filter((f) => f.severity === 'high').length > 0 && (
+                  <span style={{ borderRadius: '999px', background: 'rgba(251,113,133,0.12)', border: '1px solid rgba(251,113,133,0.25)', padding: '2px 10px', fontSize: '11px', fontWeight: 700, color: '#fb7185' }}>{riskFindings.filter((f) => f.severity === 'high').length} high</span>
+                )}
+                {riskFindings.filter((f) => f.severity === 'medium').length > 0 && (
+                  <span style={{ borderRadius: '999px', background: 'rgba(251,191,36,0.1)', border: '1px solid rgba(251,191,36,0.22)', padding: '2px 10px', fontSize: '11px', fontWeight: 700, color: '#fbbf24' }}>{riskFindings.filter((f) => f.severity === 'medium').length} medium</span>
+                )}
+                {riskFindings.filter((f) => f.severity === 'low').length > 0 && (
+                  <span style={{ borderRadius: '999px', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)', padding: '2px 10px', fontSize: '11px', fontWeight: 700, color: '#71717a' }}>{riskFindings.filter((f) => f.severity === 'low').length} low</span>
+                )}
+              </div>
             )}
           </div>
-          <div className="flex items-center gap-2">
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span style={{ fontSize: '11px', color: '#71717a' }}>{isRiskLoading ? 'running checks...' : `${riskFindings.length} active`}</span>
             <button
-              className="rounded-xl border border-white/[0.06] bg-[rgba(20,20,20,0.85)] p-2 text-[#d4d4d4] transition hover:bg-[#1a1a1a] disabled:cursor-not-allowed disabled:opacity-40"
+              style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '32px', height: '32px', borderRadius: '9px', border: '1px solid rgba(255,255,255,0.07)', background: 'rgba(255,255,255,0.03)', color: '#71717a', cursor: 'pointer' }}
               type="button"
               onClick={() => { void recomputeRiskFindingsFromCollectionsState(safeCollections) }}
               disabled={isRiskLoading}
@@ -3661,70 +3869,79 @@ export default function App() {
             >
               <IconRefresh className={isRiskLoading ? 'animate-spin' : ''} />
             </button>
-            <span className="text-xs text-[#71717a]">{isRiskLoading ? 'running checks...' : `${riskFindings.length} active`}</span>
           </div>
         </div>
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
           {riskFindings.map((findingItem, findingIndex) => {
             const severityName = typeof findingItem.severity === 'string' ? findingItem.severity : 'medium'
-            const severityClassName = severityName === 'high'
-              ? 'risk-flag-card-high'
-              : (severityName === 'low' ? 'risk-flag-card-low' : 'risk-flag-card-medium')
-            const severityBadgeClassName = severityName === 'high'
-              ? 'risk-flag-severity-high'
-              : (severityName === 'low' ? 'risk-flag-severity-low' : 'risk-flag-severity-medium')
+            const isHigh = severityName === 'high'
+            const isMedium = severityName === 'medium'
+            const accentColor = isHigh ? '#fb7185' : isMedium ? '#fbbf24' : '#71717a'
+            const cardBorderColor = isHigh ? 'rgba(251,113,133,0.18)' : isMedium ? 'rgba(251,191,36,0.15)' : 'rgba(255,255,255,0.06)'
+            const cardBg = isHigh ? 'rgba(251,113,133,0.04)' : isMedium ? 'rgba(251,191,36,0.03)' : 'rgba(255,255,255,0.015)'
+            const badgeBg = isHigh ? 'rgba(251,113,133,0.1)' : isMedium ? 'rgba(251,191,36,0.08)' : 'rgba(255,255,255,0.04)'
+            const badgeBorder = isHigh ? 'rgba(251,113,133,0.22)' : isMedium ? 'rgba(251,191,36,0.2)' : 'rgba(255,255,255,0.07)'
             return (
-            <button
-              key={findingItem.id}
-              className={`risk-flag-card risk-card-enter-smooth rounded-2xl border p-3 text-left transition duration-500 ${isRiskCardsFadingOut ? 'opacity-0' : 'opacity-100'} hover:-translate-y-[1px] hover:shadow-md ${severityClassName}`}
-              style={{ animationDelay: `${Math.min(findingIndex * 60, 420)}ms` }}
-              onClick={() => setSelectedRiskFinding(findingItem)}
-              type="button"
-            >
-              <div className="flex items-start justify-between gap-2">
-                <p className="font-semibold leading-snug text-[#ededed]">{findingItem.title}</p>
-                <p className={`risk-flag-severity shrink-0 text-xs font-semibold uppercase tracking-[0.14em] ${severityBadgeClassName}`}>{findingItem.severity}</p>
-              </div>
-              <p className="mt-1 text-sm text-[#a1a1aa]">{findingItem.detail}</p>
-            </button>
+              <button
+                key={findingItem.id}
+                className={`risk-card-enter-smooth text-left transition duration-500 ${isRiskCardsFadingOut ? 'opacity-0' : 'opacity-100'}`}
+                style={{ display: 'block', width: '100%', padding: '14px 16px', borderRadius: '12px', border: `1px solid ${cardBorderColor}`, background: cardBg, cursor: 'pointer', animationDelay: `${Math.min(findingIndex * 60, 420)}ms`, borderLeft: `3px solid ${accentColor}` }}
+                onClick={() => setSelectedRiskFinding(findingItem)}
+                type="button"
+              >
+                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '10px', marginBottom: '6px' }}>
+                  <p style={{ margin: 0, fontSize: '13px', fontWeight: 700, color: '#ededed', lineHeight: 1.35 }}>{findingItem.title}</p>
+                  <span style={{ flexShrink: 0, borderRadius: '999px', background: badgeBg, border: `1px solid ${badgeBorder}`, padding: '2px 8px', fontSize: '10px', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: accentColor }}>{findingItem.severity}</span>
+                </div>
+                <p style={{ margin: 0, fontSize: '12px', color: '#a1a1aa', lineHeight: 1.5 }}>{findingItem.detail}</p>
+              </button>
             )
           })}
         </div>
       </section>
 
-      <section id="goals" className="section-tight glass-panel-soft squircle-md z-layer-section mb-4 scroll-mt-40 p-4 md:mb-6 md:p-6" style={{ order: 12 }}>
-        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-          <div className="flex flex-wrap items-center gap-2">
-            <h2 className="text-lg font-bold text-[#ededed]">Goals</h2>
+      <section id="goals" className="section-tight glass-panel-soft squircle-md z-layer-section mb-4 scroll-mt-40 p-4 md:mb-6 md:p-6" style={{ order: 12, borderTop: '2px solid #34d399' }}>
+        {/* -- Header -- */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px', marginBottom: '16px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+            <div>
+              <p style={{ margin: 0, fontSize: '10px', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#71717a' }}>Planning</p>
+              <h2 style={{ margin: '2px 0 0', fontSize: '18px', fontWeight: 700, letterSpacing: '-0.01em', color: '#34d399' }}>Goals</h2>
+            </div>
             {powerGoalsFormulaSummary.completionRatePercent > 0 && (
-              <span className="rounded-full border border-emerald-500/40 bg-emerald-500/10 px-2.5 py-0.5 text-xs font-semibold text-emerald-400">{powerGoalsFormulaSummary.completionRatePercent.toFixed(0)}% complete</span>
+              <span style={{ borderRadius: '999px', background: 'rgba(52,211,153,0.1)', border: '1px solid rgba(52,211,153,0.22)', padding: '2px 10px', fontSize: '11px', fontWeight: 700, color: '#34d399' }}>{powerGoalsFormulaSummary.completionRatePercent.toFixed(0)}% complete</span>
             )}
           </div>
-          <button className="inline-flex items-center gap-2 rounded-2xl bg-[#1a1a1a] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#1a1a1a]" onClick={() => { setGoalEntryFormState(buildInitialGoalEntryFormState()); setEditingGoalId(''); setIsAddGoalModalOpen(true) }} type="button"><IconPlus /> Add Goal</button>
+          <button style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', padding: '6px 12px', borderRadius: '9px', border: '1px solid rgba(52,211,153,0.3)', background: 'rgba(52,211,153,0.1)', color: '#34d399', fontSize: '12px', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }} onClick={() => { setGoalEntryFormState(buildInitialGoalEntryFormState()); setEditingGoalId(''); setIsAddGoalModalOpen(true) }} type="button"><IconPlus /> Add Goal</button>
         </div>
-        <div className="mb-4 flex flex-wrap items-center gap-2">
-          <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/40 bg-emerald-500/10 px-2.5 py-0.5 text-xs font-semibold text-emerald-400">G�� {powerGoalsFormulaSummary.completedCount} Completed</span>
-          <span className="inline-flex items-center gap-1 rounded-full border border-amber-500/40/80 bg-amber-500/10 px-2.5 py-0.5 text-xs font-semibold text-amber-300">G�� {powerGoalsFormulaSummary.inProgressCount} In Progress</span>
-          <span className="inline-flex items-center gap-1 rounded-full border border-white/[0.06] bg-[#1a1a1a] px-2.5 py-0.5 text-xs font-semibold text-[#a1a1aa]">G�� {powerGoalsFormulaSummary.notStartedCount} Not Started</span>
+        {/* -- Summary chips -- */}
+        <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '6px', marginBottom: '14px' }}>
+          <span style={{ borderRadius: '999px', background: 'rgba(52,211,153,0.08)', border: '1px solid rgba(52,211,153,0.18)', padding: '3px 10px', fontSize: '11px', fontWeight: 700, color: '#34d399' }}>{powerGoalsFormulaSummary.completedCount} Completed</span>
+          <span style={{ borderRadius: '999px', background: 'rgba(251,191,36,0.08)', border: '1px solid rgba(251,191,36,0.18)', padding: '3px 10px', fontSize: '11px', fontWeight: 700, color: '#fbbf24' }}>{powerGoalsFormulaSummary.inProgressCount} In Progress</span>
+          <span style={{ borderRadius: '999px', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', padding: '3px 10px', fontSize: '11px', fontWeight: 700, color: '#71717a' }}>{powerGoalsFormulaSummary.notStartedCount} Not Started</span>
           {powerGoalsFormulaSummary.averageTimeframeMonths > 0 && (
-            <span className="inline-flex items-center gap-1 rounded-full border border-white/[0.025]/70 bg-[#0f0f0f] px-2.5 py-0.5 text-xs font-semibold text-[#a1a1aa]">GŦ {powerGoalsFormulaSummary.averageTimeframeMonths.toFixed(0)} mo. avg</span>
+            <span style={{ borderRadius: '999px', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', padding: '3px 10px', fontSize: '11px', fontWeight: 600, color: '#52525b' }}>{powerGoalsFormulaSummary.averageTimeframeMonths.toFixed(0)} mo. avg</span>
           )}
         </div>
-        <div className="mb-3 flex flex-wrap items-center gap-1.5">
-          <span className="mr-1 text-[11px] font-semibold uppercase tracking-[0.1em] text-[#52525b]">Sort</span>
+        {/* -- Sort controls -- */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap', marginBottom: '14px' }}>
+          <span style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#52525b', marginRight: '2px' }}>Sort</span>
           {[{ key: 'timeframeMonths', label: 'Timeframe' }, { key: 'status', label: 'Status' }, { key: 'title', label: 'Title' }].map(({ key, label }) => {
             const isActive = tableSortState.goals.key === key
+            const dir = tableSortState.goals.direction
             return (
-              <button key={key} type="button" onClick={() => updateTableSortingForTableName('goals', key)} className={`rounded-full border px-2.5 py-0.5 text-xs font-semibold transition ${isActive ? 'border-amber-500 bg-amber-500 text-black' : 'border-white/[0.025] bg-[rgba(20,20,20,0.8)] text-[#a1a1aa] hover:border-white/[0.06]'}`}>
-                {label}{isActive ? (tableSortState.goals.direction === 'asc' ? ' G��' : ' G��') : ''}
+              <button key={key} type="button" onClick={() => updateTableSortingForTableName('goals', key)}
+                style={{ borderRadius: '999px', border: `1px solid ${isActive ? '#fbbf24' : 'rgba(255,255,255,0.07)'}`, background: isActive ? '#fbbf24' : 'rgba(255,255,255,0.03)', color: isActive ? '#000' : '#71717a', padding: '3px 10px', fontSize: '11px', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
+                {label}{isActive ? (dir === 'asc' ? ' ↑' : ' ↓') : ''}
               </button>
             )
           })}
         </div>
+        {/* -- Cards -- */}
         {goalRowsSortedByTimeframeAndStatus.length === 0 ? (
-          <div className="rounded-2xl border border-white/[0.06] bg-[rgba(20,20,20,0.6)] py-10 text-center">
-            <p className="text-[#52525b]">No goals recorded yet</p>
-            <button className="mt-3 inline-flex items-center gap-1.5 rounded-2xl bg-[#1a1a1a] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#1a1a1a]" onClick={() => { setGoalEntryFormState(buildInitialGoalEntryFormState()); setEditingGoalId(''); setIsAddGoalModalOpen(true) }} type="button"><IconPlus /> Add your first goal</button>
+          <div style={{ padding: '40px 16px', textAlign: 'center', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.05)', background: 'rgba(255,255,255,0.01)' }}>
+            <p style={{ margin: '0 0 12px', color: '#52525b', fontSize: '13px' }}>No goals recorded yet</p>
+            <button style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', padding: '8px 14px', borderRadius: '9px', border: '1px solid rgba(52,211,153,0.3)', background: 'rgba(52,211,153,0.1)', color: '#34d399', fontSize: '12px', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }} onClick={() => { setGoalEntryFormState(buildInitialGoalEntryFormState()); setEditingGoalId(''); setIsAddGoalModalOpen(true) }} type="button"><IconPlus /> Add your first goal</button>
           </div>
         ) : (
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -3737,31 +3954,30 @@ export default function App() {
               const isCompleted = status === 'completed'
               const isInProgress = status === 'in progress'
               const isUrgent = isInProgress && Number.isFinite(timeframeMonths) && timeframeMonths > 0 && timeframeMonths <= 3
-              const cardBg = isCompleted
-                ? 'border-emerald-500/30 bg-emerald-500/10'
-                : isInProgress
-                  ? 'border-amber-500/30 bg-amber-500/10'
-                  : 'border-white/[0.06] bg-[rgba(15,15,15,0.7)]'
-              const statusBadgeClass = isCompleted
-                ? 'border-emerald-500/40 bg-emerald-500/15 text-emerald-400'
-                : isInProgress
-                  ? 'border-amber-500/40 bg-amber-500/15 text-amber-400'
-                  : 'border-white/[0.06] bg-[#1a1a1a] text-[#a1a1aa]'
+              const accentColor = isCompleted ? '#34d399' : isInProgress ? '#fbbf24' : '#52525b'
+              const cardBorderColor = isCompleted ? 'rgba(52,211,153,0.18)' : isInProgress ? 'rgba(251,191,36,0.15)' : 'rgba(255,255,255,0.06)'
+              const cardBg = isCompleted ? 'rgba(52,211,153,0.04)' : isInProgress ? 'rgba(251,191,36,0.03)' : 'rgba(255,255,255,0.01)'
+              const badgeBg = isCompleted ? 'rgba(52,211,153,0.1)' : isInProgress ? 'rgba(251,191,36,0.08)' : 'rgba(255,255,255,0.04)'
+              const badgeBorder = isCompleted ? 'rgba(52,211,153,0.22)' : isInProgress ? 'rgba(251,191,36,0.18)' : 'rgba(255,255,255,0.08)'
               const statusLabel = isCompleted ? 'Completed' : isInProgress ? 'In Progress' : 'Not Started'
               return (
-                <article key={stableKey} className={`group relative rounded-2xl border p-3 transition duration-150 ${cardBg}`}>
-                  <div className="mb-2 flex items-center justify-between gap-2">
-                    <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] ${statusBadgeClass}`}>{statusLabel}</span>
-                    {isUrgent && <span className="inline-flex items-center rounded-full border border-rose-500/40 bg-rose-500/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-rose-400">Urgent</span>}
-                  </div>
-                  <p className="text-sm font-bold text-[#e0e0e0]">{title}</p>
-                  {description ? <p className="mt-1 text-xs text-[#71717a]">{description}</p> : null}
-                  <div className="mt-3 flex items-center justify-between gap-2">
-                    <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold ${Number.isFinite(timeframeMonths) && timeframeMonths > 0 ? 'border-white/[0.025]/70 bg-[#0f0f0f] text-[#a1a1aa]' : 'border-white/[0.025] bg-[rgba(20,20,20,0.4)] text-[#52525b]'}`}>{Number.isFinite(timeframeMonths) && timeframeMonths > 0 ? `${timeframeMonths} mo.` : 'No timeframe'}</span>
-                    <div className="flex items-center gap-1 pointer-events-none opacity-0 transition-opacity duration-150 group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100">
-                      <button aria-label="Edit goal" className="rounded-lg border border-white/[0.06] bg-[rgba(20,20,20,0.8)] px-2 py-1 text-xs font-semibold text-[#d4d4d4]" onClick={() => openEditGoalModal(goalItem)} title="Edit" type="button"><IconEdit /></button>
-                      <button aria-label="Delete goal" className="rounded-lg border border-rose-500/40 bg-rose-500/10 px-2 py-1 text-xs font-semibold text-rose-400" onClick={() => { void deleteGoalRecordById(String(goalItem.id ?? '')) }} title="Delete" type="button"><IconTrash /></button>
+                <article key={stableKey} className="group" style={{ position: 'relative', borderRadius: '12px', border: `1px solid ${cardBorderColor}`, borderLeft: `3px solid ${accentColor}`, background: cardBg, padding: '14px 16px', transition: 'border-color 0.15s' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', marginBottom: '8px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                      <span style={{ borderRadius: '999px', background: badgeBg, border: `1px solid ${badgeBorder}`, padding: '2px 8px', fontSize: '10px', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: accentColor }}>{statusLabel}</span>
+                      {isUrgent && <span style={{ borderRadius: '999px', background: 'rgba(251,113,133,0.1)', border: '1px solid rgba(251,113,133,0.22)', padding: '2px 8px', fontSize: '10px', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#fb7185' }}>Urgent</span>}
                     </div>
+                    <div className="pointer-events-none opacity-0 transition-opacity duration-150 group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100" style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      <button aria-label="Edit goal" style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '28px', height: '28px', borderRadius: '7px', border: '1px solid rgba(255,255,255,0.07)', background: 'rgba(255,255,255,0.04)', color: '#a1a1aa', cursor: 'pointer' }} onClick={() => openEditGoalModal(goalItem)} title="Edit" type="button"><IconEdit /></button>
+                      <button aria-label="Delete goal" style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '28px', height: '28px', borderRadius: '7px', border: '1px solid rgba(251,113,133,0.2)', background: 'rgba(251,113,133,0.06)', color: '#fb7185', cursor: 'pointer' }} onClick={() => { void deleteGoalRecordById(String(goalItem.id ?? '')) }} title="Delete" type="button"><IconTrash /></button>
+                    </div>
+                  </div>
+                  <p style={{ margin: '0 0 4px', fontSize: '13px', fontWeight: 700, color: '#ededed', lineHeight: 1.35 }}>{title}</p>
+                  {description ? <p style={{ margin: 0, fontSize: '12px', color: '#71717a', lineHeight: 1.5 }}>{description}</p> : null}
+                  <div style={{ marginTop: '12px' }}>
+                    <span style={{ borderRadius: '999px', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', padding: '2px 8px', fontSize: '10px', fontWeight: 600, color: Number.isFinite(timeframeMonths) && timeframeMonths > 0 ? '#a1a1aa' : '#52525b' }}>
+                      {Number.isFinite(timeframeMonths) && timeframeMonths > 0 ? `${timeframeMonths} mo.` : 'No timeframe'}
+                    </span>
                   </div>
                 </article>
               )
@@ -3770,25 +3986,29 @@ export default function App() {
         )}
       </section>
 
-      <section id="debts" className="section-tight glass-panel-soft squircle-md z-layer-section mb-4 scroll-mt-40 p-4 md:mb-6 md:p-6" style={{ order: 2 }}>
-        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-          <h2 className="text-lg font-bold text-[#ededed]">Debts / Loans</h2>
-          <div className="flex items-center gap-3">
-            <span className="text-sm font-semibold text-rose-400">{formatCurrencyValueForDashboard(debtRows.reduce((t, d) => t + (typeof d.amount === 'number' ? d.amount : 0), 0))}</span>
-            <button className="inline-flex items-center gap-1.5 rounded-xl border border-white/30 bg-amber-500 px-3 py-2 text-xs font-semibold text-white" onClick={() => openAddRecordModalWithPresetTypeAndCategory('debt', 'Debt Payment')} type="button"><IconPlus /> Add Debt</button>
+      <section id="debts" className="section-tight glass-panel-soft squircle-md z-layer-section mb-4 scroll-mt-40 p-4 md:mb-6 md:p-6" style={{ order: 2, borderTop: '2px solid #fb7185' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px', marginBottom: '16px' }}>
+          <div>
+            <p style={{ margin: 0, fontSize: '10px', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#71717a' }}>Liabilities</p>
+            <h2 style={{ margin: '2px 0 0', fontSize: '18px', fontWeight: 700, letterSpacing: '-0.01em', color: '#fb7185' }}>Debts / Loans</h2>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <span style={{ fontSize: '14px', fontWeight: 700, color: '#fb7185' }}>{formatCurrencyValueForDashboard(debtRows.reduce((t, d) => t + (typeof d.amount === 'number' ? d.amount : 0), 0))}</span>
+            <button style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', padding: '6px 12px', borderRadius: '9px', border: '1px solid rgba(251,113,133,0.3)', background: 'rgba(251,113,133,0.1)', color: '#fb7185', fontSize: '12px', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }} onClick={() => openAddRecordModalWithPresetTypeAndCategory('debt', 'Debt Payment')} type="button"><IconPlus /> Add Debt</button>
           </div>
         </div>
-        <div className="table-scroll-region rounded-lg border border-white/[0.03] backdrop-blur">
-          <table className="w-full min-w-[640px] border-collapse text-sm">
-            <thead className="bg-[#1a1a1a] text-[#a1a1aa]">
-              <tr>
+        {/* -- Table -- */}
+        <div className="table-scroll-region -mx-4 md:-mx-6">
+          <table className="w-full min-w-[640px] border-collapse">
+            <thead>
+              <tr className="border-b border-white/[0.03]">
                 {renderSortableHeaderCell('debts', 'person', 'Person')}
                 {renderSortableHeaderCell('debts', 'item', 'Item')}
                 {renderSortableHeaderCell('debts', 'amount', 'Balance', true)}
                 {renderSortableHeaderCell('debts', 'minimumPayment', 'Min. Payment', true)}
                 {renderSortableHeaderCell('debts', 'interestRatePercent', 'Rate', true)}
-                <th className="px-3 py-2 text-right font-semibold">Payoff Date</th>
-                <th className="px-3 py-2 text-right font-semibold">Actions</th>
+                <th className="px-4 py-3.5 text-right text-[12px] font-semibold uppercase tracking-[0.06em] text-[#71717a]">Payoff Date</th>
+                <th className="w-24 px-4 py-3.5" />
               </tr>
             </thead>
             <tbody>
@@ -3806,14 +4026,14 @@ export default function App() {
                 const payoffMonthsForProjection = remainingPayments > 0 ? remainingPayments : Number(calculatedPaybackMonths ?? 0)
                 const projectedPayoffDate = formatProjectedPayoffDateFromMonthsOffset(payoffMonthsForProjection)
                 return (
-                  <tr key={stableKey} className="group border-t border-white/[0.025] bg-[#141414]">
-                    <td className="px-3 py-2 text-[#d4d4d4]">{formatPersonaLabelWithEmoji(person, personaEmojiByName)}</td>
-                    <td className="px-3 py-2 text-[#d4d4d4]">{item}</td>
-                    <td className="px-3 py-2 text-right font-semibold text-rose-400"><span className="inline-flex items-center gap-1">{formatCurrencyValueForDashboard(value)}{renderStaleUpdateIconIfNeeded(debtItem)}</span></td>
-                    <td className="px-3 py-2 text-right font-semibold text-[#d4d4d4]">{formatCurrencyValueForDashboard(perMonth)}</td>
-                    <td className="px-3 py-2 text-right font-semibold text-[#d4d4d4]">{interestRatePercent.toFixed(2)}%</td>
-                    <td className="px-3 py-2 text-right font-semibold text-[#d4d4d4]">{projectedPayoffDate}</td>
-                    <td className="px-3 py-2 text-right">{renderRecordActionsWithIconButtons(String(debtItem.__collectionName), debtItem)}</td>
+                  <tr key={stableKey} className="records-row group border-t border-white/[0.025]">
+                    <td className="px-4 py-3 text-xs text-[#71717a] md:px-5">{formatPersonaLabelWithEmoji(person, personaEmojiByName)}</td>
+                    <td className="px-4 py-3 text-xs font-medium text-[#d4d4d4]">{item}</td>
+                    <td className="px-4 py-3 text-right text-xs font-semibold tabular-nums" style={{ color: '#fb7185' }}><span className="inline-flex items-center gap-1">{formatCurrencyValueForDashboard(value)}{renderStaleUpdateIconIfNeeded(debtItem)}</span></td>
+                    <td className="px-4 py-3 text-right text-xs font-semibold tabular-nums text-[#d4d4d4]">{formatCurrencyValueForDashboard(perMonth)}</td>
+                    <td className="px-4 py-3 text-right text-xs font-semibold tabular-nums" style={{ color: interestRatePercent >= 20 ? '#fb7185' : interestRatePercent >= 10 ? '#fbbf24' : '#a1a1aa' }}>{interestRatePercent.toFixed(2)}%</td>
+                    <td className="px-4 py-3 text-right text-xs tabular-nums text-[#52525b]">{projectedPayoffDate}</td>
+                    <td className="px-4 py-3 pr-4 text-right md:pr-5">{renderRecordActionsWithIconButtons(String(debtItem.__collectionName), debtItem)}</td>
                   </tr>
                 )
               })}
@@ -3822,28 +4042,32 @@ export default function App() {
         </div>
       </section>
 
-      <section id="credit" className="section-tight glass-panel-soft squircle-md z-layer-section mb-4 scroll-mt-40 p-4 md:mb-6 md:p-6" style={{ order: 3 }}>
-        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-          <h2 className="text-lg font-bold text-[#ededed]">Credit Accounts</h2>
-          <div className="flex items-center gap-3">
-            <span className="text-sm font-semibold text-rose-400">{formatCurrencyValueForDashboard(creditCardSummary.totalCurrent)}</span>
-            <span className="text-sm font-semibold text-violet-300">{creditCardSummary.totalUtilizationPercent.toFixed(1)}% util.</span>
-            <button className="inline-flex items-center gap-1.5 rounded-xl border border-white/30 bg-rose-600 px-3 py-2 text-xs font-semibold text-white" onClick={() => openAddRecordModalWithPresetTypeAndCategory('credit_card', 'Credit Card')} type="button"><IconPlus /> Add Card</button>
+      <section id="credit" className="section-tight glass-panel-soft squircle-md z-layer-section mb-4 scroll-mt-40 p-4 md:mb-6 md:p-6" style={{ order: 3, borderTop: '2px solid #a78bfa' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px', marginBottom: '16px' }}>
+          <div>
+            <p style={{ margin: 0, fontSize: '10px', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#71717a' }}>Credit</p>
+            <h2 style={{ margin: '2px 0 0', fontSize: '18px', fontWeight: 700, letterSpacing: '-0.01em', color: '#a78bfa' }}>Credit Accounts</h2>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <span style={{ fontSize: '14px', fontWeight: 700, color: '#fb7185' }}>{formatCurrencyValueForDashboard(creditCardSummary.totalCurrent)}</span>
+            <span style={{ fontSize: '13px', fontWeight: 600, color: '#a78bfa' }}>{creditCardSummary.totalUtilizationPercent.toFixed(1)}% util.</span>
+            <button style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', padding: '6px 12px', borderRadius: '9px', border: '1px solid rgba(167,139,250,0.3)', background: 'rgba(167,139,250,0.1)', color: '#a78bfa', fontSize: '12px', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }} onClick={() => openAddRecordModalWithPresetTypeAndCategory('credit_card', 'Credit Card')} type="button"><IconPlus /> Add Card</button>
           </div>
         </div>
-        <div className="table-scroll-region mb-4 rounded-2xl border border-white/[0.06] bg-[rgba(20,20,20,0.6)] backdrop-blur">
-          <table className="w-full min-w-[760px] border-collapse text-sm">
-            <thead className="bg-[#1a1a1a] text-[#a1a1aa]">
-              <tr>
+        {/* -- Credit cards table -- */}
+        <div className="table-scroll-region -mx-4 md:-mx-6">
+          <table className="w-full min-w-[760px] border-collapse">
+            <thead>
+              <tr className="border-b border-white/[0.03]">
                 {renderSortableHeaderCell('credit', 'person', 'Person')}
                 {renderSortableHeaderCell('credit', 'item', 'Account')}
                 {renderSortableHeaderCell('credit', 'currentBalance', 'Balance', true)}
                 {renderSortableHeaderCell('credit', 'maxCapacity', 'Limit', true)}
                 {renderSortableHeaderCell('credit', 'interestRatePercent', 'APR', true)}
-                <th className="px-3 py-2 text-right font-semibold">Util%</th>
+                <th className="px-4 py-3.5 text-right text-[12px] font-semibold uppercase tracking-[0.06em] text-[#71717a]">Util%</th>
                 {renderSortableHeaderCell('credit', 'monthlyPayment', 'Monthly Pmt', true)}
-                <th className="px-3 py-2 text-right font-semibold">Payoff Date</th>
-                <th className="px-3 py-2 text-right font-semibold">Actions</th>
+                <th className="px-4 py-3.5 text-right text-[12px] font-semibold uppercase tracking-[0.06em] text-[#71717a]">Payoff Date</th>
+                <th className="w-24 px-4 py-3.5" />
               </tr>
             </thead>
             <tbody>
@@ -3858,143 +4082,224 @@ export default function App() {
                 const monthlyPayment = typeof creditCardItem.monthlyPayment === 'number' ? creditCardItem.monthlyPayment : 0
                 const interestRatePercent = typeof creditCardItem.interestRatePercent === 'number' ? creditCardItem.interestRatePercent : 0
                 const utilizationPercent = maxCapacity > 0 ? (currentBalance / maxCapacity) * 100 : 0
-                const utilColor = utilizationPercent <= 30 ? '#15803d' : utilizationPercent <= 70 ? '#b45309' : '#be123c'
+                const utilColor = utilizationPercent <= 30 ? '#34d399' : utilizationPercent <= 70 ? '#fbbf24' : '#fb7185'
                 const [paybackMonths] = calculateEstimatedPayoffMonthsFromBalancePaymentAndInterestRate(currentBalance, monthlyPayment, interestRatePercent)
                 const projectedPayoffDate = formatProjectedPayoffDateFromMonthsOffset(Number(paybackMonths ?? 0))
                 return (
-                  <tr key={stableKey} className="group border-t border-white/[0.025] bg-[#141414]">
-                    <td className="px-3 py-2 text-[#d4d4d4]">{formatPersonaLabelWithEmoji(person, personaEmojiByName)}</td>
-                    <td className="px-3 py-2 text-[#d4d4d4]">{item}</td>
-                    <td className="px-3 py-2 text-right font-semibold text-rose-400"><span className="inline-flex items-center gap-1">{formatCurrencyValueForDashboard(currentBalance)}{renderStaleUpdateIconIfNeeded(creditCardItem)}</span></td>
-                    <td className="px-3 py-2 text-right font-semibold text-[#d4d4d4]">{formatCurrencyValueForDashboard(maxCapacity)}</td>
-                    <td className="px-3 py-2 text-right font-semibold text-[#d4d4d4]">{interestRatePercent.toFixed(2)}%</td>
-                    <td className="px-3 py-2 text-right font-semibold" style={{ color: utilColor }}>{utilizationPercent.toFixed(1)}%</td>
-                    <td className="px-3 py-2 text-right font-semibold text-[#d4d4d4]">{formatCurrencyValueForDashboard(monthlyPayment)}</td>
-                    <td className="px-3 py-2 text-right font-semibold text-[#d4d4d4]">{projectedPayoffDate}</td>
-                    <td className="px-3 py-2 text-right">{renderRecordActionsWithIconButtons('creditCards', creditCardItem)}</td>
+                  <tr key={stableKey} className="records-row group border-t border-white/[0.025]">
+                    <td className="px-4 py-3 text-xs text-[#71717a] md:px-5">{formatPersonaLabelWithEmoji(person, personaEmojiByName)}</td>
+                    <td className="px-4 py-3 text-xs font-medium text-[#d4d4d4]">{item}</td>
+                    <td className="px-4 py-3 text-right text-xs font-semibold tabular-nums" style={{ color: '#fb7185' }}><span className="inline-flex items-center gap-1">{formatCurrencyValueForDashboard(currentBalance)}{renderStaleUpdateIconIfNeeded(creditCardItem)}</span></td>
+                    <td className="px-4 py-3 text-right text-xs font-semibold tabular-nums text-[#d4d4d4]">{formatCurrencyValueForDashboard(maxCapacity)}</td>
+                    <td className="px-4 py-3 text-right text-xs font-semibold tabular-nums" style={{ color: interestRatePercent >= 20 ? '#fb7185' : interestRatePercent >= 10 ? '#fbbf24' : '#a1a1aa' }}>{interestRatePercent.toFixed(2)}%</td>
+                    <td className="px-4 py-3 text-right text-xs font-semibold tabular-nums" style={{ color: utilColor }}>{utilizationPercent.toFixed(1)}%</td>
+                    <td className="px-4 py-3 text-right text-xs font-semibold tabular-nums text-[#d4d4d4]">{formatCurrencyValueForDashboard(monthlyPayment)}</td>
+                    <td className="px-4 py-3 text-right text-xs tabular-nums text-[#52525b]">{projectedPayoffDate}</td>
+                    <td className="px-4 py-3 pr-4 text-right md:pr-5">{renderRecordActionsWithIconButtons('creditCards', creditCardItem)}</td>
                   </tr>
                 )
               })}
             </tbody>
           </table>
         </div>
-        <div className="rounded-2xl border border-white/[0.06] bg-[rgba(20,20,20,0.6)] backdrop-blur">
-          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/[0.06] px-4 py-3">
-            <h3 className="text-sm font-bold text-[#e0e0e0]">Payment Recommendation</h3>
-            <div className="flex items-center gap-4">
-              <span className="text-xs text-[#71717a]">{creditCardRecommendations.strategy}</span>
-              <span className="text-xs font-semibold text-[#a1a1aa]">Now: <span className="text-[#e0e0e0]">{formatCurrencyValueForDashboard(creditCardRecommendations.currentTotalMonthlyPayment)}</span></span>
-              <span className="text-xs font-semibold text-[#a1a1aa]">Recommended: <span className="text-amber-400">{formatCurrencyValueForDashboard(creditCardRecommendations.recommendedTotalMonthlyPayment)}</span></span>
-              {Math.max(0, creditCardRecommendations.weightedPayoffMonthsCurrent - creditCardRecommendations.weightedPayoffMonthsRecommended) > 0 ? (
-                <span className="text-xs font-semibold text-[#a1a1aa]">{Math.max(0, creditCardRecommendations.weightedPayoffMonthsCurrent - creditCardRecommendations.weightedPayoffMonthsRecommended).toFixed(1)} mo. faster</span>
-              ) : null}
-            </div>
-          </div>
-          <div className="table-scroll-region rounded-b-2xl">
-            <table className="w-full min-w-[480px] border-collapse text-sm">
-              <thead className="bg-[#1a1a1a] text-[#a1a1aa]">
-                <tr>
-                  <th className="px-3 py-2 text-left font-semibold">Account</th>
-                  <th className="px-3 py-2 text-right font-semibold">Current Pmt</th>
-                  <th className="px-3 py-2 text-right font-semibold">Recommended</th>
-                  <th className="px-3 py-2 text-right font-semibold">Payoff Date</th>
-                  <th className="px-3 py-2 text-right font-semibold">Now vs. Reco</th>
-                  <th className="px-3 py-2 text-left font-semibold">Reason</th>
-                </tr>
-              </thead>
-              <tbody>
-                {creditCardRecommendations.rows.map((rowItem) => {
-                  const recoPayoffDate = formatProjectedPayoffDateFromMonthsOffset(Number(rowItem.estimatedMonthsRecommended ?? 0))
-                  return (
-                    <tr key={rowItem.id} className="border-t border-white/[0.025] bg-[#141414]">
-                      <td className="px-3 py-2 text-[#d4d4d4]">{rowItem.item}</td>
-                      <td className="px-3 py-2 text-right font-semibold text-[#d4d4d4]">{formatCurrencyValueForDashboard(rowItem.currentMonthlyPayment)}</td>
-                      <td className="px-3 py-2 text-right font-semibold text-amber-400">{formatCurrencyValueForDashboard(rowItem.recommendedMonthlyPayment)}</td>
-                      <td className="px-3 py-2 text-right font-semibold text-[#a1a1aa]">{recoPayoffDate}</td>
-                      <td className="px-3 py-2 text-right font-semibold text-[#d4d4d4]">
-                        <span className="text-[#52525b]">{Math.round(rowItem.estimatedMonthsCurrent)}mo</span>
-                        <span className="mx-1 text-white/[0.2]">G��</span>
-                        <span className="text-[#a1a1aa]">{Math.round(rowItem.estimatedMonthsRecommended)}mo</span>
-                      </td>
-                      <td className="px-3 py-2 text-[#71717a]">{rowItem.recommendationReason}</td>
+        {/* -- Payment recommendation sub-panel -- */}
+        {(() => {
+          const moFaster = Math.max(0, creditCardRecommendations.weightedPayoffMonthsCurrent - creditCardRecommendations.weightedPayoffMonthsRecommended)
+          const totalPaymentIncrease = creditCardRecommendations.recommendedTotalMonthlyPayment - creditCardRecommendations.currentTotalMonthlyPayment
+          return (
+            <div style={{ marginTop: '20px', borderRadius: '14px', border: '1px solid rgba(167,139,250,0.14)', background: 'rgba(167,139,250,0.025)', overflow: 'hidden' }}>
+              {/* Summary stat bar */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                <div style={{ padding: '14px 16px', borderRight: '1px solid rgba(255,255,255,0.05)' }}>
+                  <p style={{ margin: '0 0 5px', fontSize: '10px', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#71717a' }}>Strategy</p>
+                  <p style={{ margin: 0, fontSize: '13px', fontWeight: 700, color: '#a78bfa' }}>{creditCardRecommendations.strategy}</p>
+                </div>
+                <div style={{ padding: '14px 16px', borderRight: '1px solid rgba(255,255,255,0.05)' }}>
+                  <p style={{ margin: '0 0 5px', fontSize: '10px', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#71717a' }}>Paying Now</p>
+                  <p style={{ margin: 0, fontSize: '13px', fontWeight: 700, color: '#d4d4d4', fontVariantNumeric: 'tabular-nums' }}>
+                    {formatCurrencyValueForDashboard(creditCardRecommendations.currentTotalMonthlyPayment)}
+                    <span style={{ fontSize: '10px', fontWeight: 500, color: '#71717a', marginLeft: '2px' }}>/mo</span>
+                  </p>
+                </div>
+                <div style={{ padding: '14px 16px', borderRight: '1px solid rgba(255,255,255,0.05)' }}>
+                  <p style={{ margin: '0 0 5px', fontSize: '10px', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#71717a' }}>Recommended</p>
+                  <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px' }}>
+                    <p style={{ margin: 0, fontSize: '13px', fontWeight: 700, color: '#fbbf24', fontVariantNumeric: 'tabular-nums' }}>
+                      {formatCurrencyValueForDashboard(creditCardRecommendations.recommendedTotalMonthlyPayment)}
+                      <span style={{ fontSize: '10px', fontWeight: 500, color: '#71717a', marginLeft: '2px' }}>/mo</span>
+                    </p>
+                    {totalPaymentIncrease > 0 && (
+                      <span style={{ fontSize: '10px', fontWeight: 600, color: '#fbbf24', background: 'rgba(251,191,36,0.1)', borderRadius: '4px', padding: '1px 6px' }}>+{formatCurrencyValueForDashboard(totalPaymentIncrease)}</span>
+                    )}
+                  </div>
+                </div>
+                <div style={{ padding: '14px 16px' }}>
+                  <p style={{ margin: '0 0 5px', fontSize: '10px', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#71717a' }}>Time Saved</p>
+                  <p style={{ margin: 0, fontSize: '13px', fontWeight: 700, color: moFaster > 0 ? '#34d399' : '#71717a', fontVariantNumeric: 'tabular-nums' }}>
+                    {moFaster > 0 ? `${moFaster.toFixed(1)} mo` : '—'}
+                  </p>
+                </div>
+              </div>
+              {/* Per-account rows */}
+              <div className="table-scroll-region">
+                <table className="w-full min-w-[600px] border-collapse">
+                  <thead>
+                    <tr className="border-b border-white/[0.03]">
+                      <th className="px-4 py-3.5 text-left text-[12px] font-semibold uppercase tracking-[0.06em] text-[#71717a]">Account</th>
+                      <th className="px-4 py-3.5 text-right text-[12px] font-semibold uppercase tracking-[0.06em] text-[#71717a]">Balance</th>
+                      <th className="px-4 py-3.5 text-right text-[12px] font-semibold uppercase tracking-[0.06em] text-[#71717a]">APR</th>
+                      <th className="px-4 py-3.5 text-right text-[12px] font-semibold uppercase tracking-[0.06em] text-[#71717a]">Payment</th>
+                      <th className="px-4 py-3.5 text-right text-[12px] font-semibold uppercase tracking-[0.06em] text-[#71717a]">Payoff</th>
+                      <th className="px-4 py-3.5 text-left text-[12px] font-semibold uppercase tracking-[0.06em] text-[#71717a]">Reason</th>
                     </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </section>
-
-      <section id="savings" className="section-tight glass-panel-soft squircle-md z-layer-section mb-4 scroll-mt-40 p-4 md:mb-6 md:p-6" style={{ order: 4 }}>
-        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-          <h2 className="text-lg font-bold text-[#ededed]">Monthly Savings Storage</h2>
-          <div className="flex items-center gap-3">
-            <span className={`text-sm font-semibold ${monthlySavingsStorageSummary.monthlySavingsAmount >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>{formatCurrencyValueForDashboard(monthlySavingsStorageSummary.monthlySavingsAmount)}</span>
-            <span className={`text-sm font-semibold ${resolveSavingsRateToneClasses(monthlySavingsStorageSummary.monthlySavingsRatePercent).valueClassName}`}>{monthlySavingsStorageSummary.monthlySavingsRatePercent.toFixed(1)}% rate</span>
-            <button className="inline-flex items-center gap-1.5 rounded-xl border border-white/30 bg-emerald-600 px-3 py-2 text-xs font-semibold text-white" onClick={() => openAddRecordModalWithPresetTypeAndCategory('savings', 'Savings')} type="button"><IconPlus /> Add</button>
-          </div>
-        </div>
-        <div className="rounded-2xl border border-white/[0.06] bg-[rgba(20,20,20,0.6)] backdrop-blur">
-          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/[0.06] px-4 py-3">
-            <h3 className="text-sm font-bold text-[#e0e0e0]">Recommended Target</h3>
-            <div className="flex flex-wrap items-center gap-4">
-              <span className="text-xs text-[#71717a]">{savingsRecommendation.recommendationReason}</span>
-              <span className="text-xs font-semibold text-[#a1a1aa]">Recommended: <span className="text-emerald-400">{formatCurrencyValueForDashboard(savingsRecommendation.recommendedMonthlySavings)}</span> ({savingsRecommendation.recommendedSavingsRatePercent.toFixed(1)}%)</span>
-              <span className="text-xs font-semibold text-[#a1a1aa]">Range: <span className="text-[#e0e0e0]">{formatCurrencyValueForDashboard(savingsRecommendation.minimumRecommendedSavings)}G��{formatCurrencyValueForDashboard(savingsRecommendation.stretchRecommendedSavings)}</span></span>
-              <span className={`text-xs font-semibold ${savingsRecommendation.gapToRecommendedSavings <= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>Gap: {formatCurrencyValueForDashboard(savingsRecommendation.gapToRecommendedSavings)}</span>
+                  </thead>
+                  <tbody>
+                    {creditCardRecommendations.rows.map((rowItem) => {
+                      const recoPayoffDate = formatProjectedPayoffDateFromMonthsOffset(Number(rowItem.estimatedMonthsRecommended ?? 0))
+                      const paymentDelta = rowItem.recommendedMonthlyPayment - rowItem.currentMonthlyPayment
+                      const isPaymentOptimal = paymentDelta === 0
+                      return (
+                        <tr key={rowItem.id} className="records-row group border-t border-white/[0.025]">
+                          <td className="px-4 py-3 text-xs font-medium text-[#d4d4d4]">{rowItem.item}</td>
+                          <td className="px-4 py-3 text-right text-xs font-semibold tabular-nums" style={{ color: '#fb7185' }}>{formatCurrencyValueForDashboard(rowItem.currentBalance)}</td>
+                          <td className="px-4 py-3 text-right text-xs font-semibold tabular-nums" style={{ color: rowItem.interestRatePercent >= 20 ? '#fb7185' : rowItem.interestRatePercent >= 10 ? '#fbbf24' : '#a1a1aa' }}>{rowItem.interestRatePercent.toFixed(2)}%</td>
+                          <td className="px-4 py-3 text-right text-xs">
+                            <div style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
+                              <span style={{ color: '#a1a1aa', fontVariantNumeric: 'tabular-nums' }}>{formatCurrencyValueForDashboard(rowItem.currentMonthlyPayment)}</span>
+                              <span style={{ color: 'rgba(255,255,255,0.25)' }}>→</span>
+                              <span style={{ fontWeight: 700, fontVariantNumeric: 'tabular-nums', color: isPaymentOptimal ? '#a1a1aa' : '#fbbf24' }}>{formatCurrencyValueForDashboard(rowItem.recommendedMonthlyPayment)}</span>
+                              {paymentDelta > 0 && (
+                                <span style={{ fontSize: '10px', fontWeight: 600, color: '#fbbf24', background: 'rgba(251,191,36,0.1)', borderRadius: '4px', padding: '1px 5px' }}>+{formatCurrencyValueForDashboard(paymentDelta)}</span>
+                              )}
+                              {isPaymentOptimal && (
+                                <span style={{ fontSize: '10px', fontWeight: 600, color: '#34d399', background: 'rgba(52,211,153,0.08)', borderRadius: '4px', padding: '1px 5px' }}>optimal</span>
+                              )}
+                            </div>
+                          </td>
+                          <td className="px-4 py-3 text-right text-xs tabular-nums" style={{ color: '#71717a' }}>{recoPayoffDate}</td>
+                          <td className="px-4 py-3 text-xs" style={{ color: '#a1a1aa' }}>{rowItem.recommendationReason}</td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
             </div>
+          )
+        })()}
+      </section>
+
+      <section id="savings" className="section-tight glass-panel-soft squircle-md z-layer-section mb-4 scroll-mt-40 p-4 md:mb-6 md:p-6" style={{ order: 4, borderTop: '2px solid #34d399' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px', marginBottom: '16px' }}>
+          <div>
+            <p style={{ margin: 0, fontSize: '10px', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#71717a' }}>Monthly</p>
+            <h2 style={{ margin: '2px 0 0', fontSize: '18px', fontWeight: 700, letterSpacing: '-0.01em', color: '#34d399' }}>Savings Storage</h2>
           </div>
-          <div className="table-scroll-region rounded-b-2xl">
-            <table className="w-full min-w-[560px] border-collapse text-sm">
-              <thead className="bg-[#1a1a1a] text-[#a1a1aa]">
-                <tr>
-                  {renderSortableHeaderCell('savings', 'person', 'Person')}
-                  {renderSortableHeaderCell('savings', 'location', 'Storage')}
-                  {renderSortableHeaderCell('savings', 'balance', 'Balance', true)}
-                  {renderSortableHeaderCell('savings', 'allocationPercent', 'Allocation', true)}
-                  {renderSortableHeaderCell('savings', 'description', 'Description')}
-                  <th className="px-3 py-2 text-right font-semibold">Actions</th>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <span style={{ fontSize: '14px', fontWeight: 700, color: monthlySavingsStorageSummary.monthlySavingsAmount >= 0 ? '#34d399' : '#fb7185' }}>{formatCurrencyValueForDashboard(monthlySavingsStorageSummary.monthlySavingsAmount)}</span>
+            <span style={{ fontSize: '13px', fontWeight: 600, color: resolveSavingsRateToneClasses(monthlySavingsStorageSummary.monthlySavingsRatePercent).valueClassName.includes('emerald') ? '#34d399' : resolveSavingsRateToneClasses(monthlySavingsStorageSummary.monthlySavingsRatePercent).valueClassName.includes('amber') ? '#fbbf24' : '#fb7185' }}>{monthlySavingsStorageSummary.monthlySavingsRatePercent.toFixed(1)}% rate</span>
+            <button style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', padding: '6px 12px', borderRadius: '9px', border: '1px solid rgba(52,211,153,0.3)', background: 'rgba(52,211,153,0.1)', color: '#34d399', fontSize: '12px', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }} onClick={() => openAddRecordModalWithPresetTypeAndCategory('savings', 'Savings')} type="button"><IconPlus /> Add</button>
+          </div>
+        </div>
+        {/* -- Recommended target stat bar -- */}
+        {(() => {
+          const isOnTrack = savingsRecommendation.gapToRecommendedSavings <= 0
+          const gapColor = isOnTrack ? '#34d399' : '#fb7185'
+          return (
+            <div style={{ marginBottom: '16px', borderRadius: '14px', border: '1px solid rgba(52,211,153,0.14)', background: 'rgba(52,211,153,0.025)', overflow: 'hidden' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                <div style={{ padding: '14px 16px', borderRight: '1px solid rgba(255,255,255,0.05)' }}>
+                  <p style={{ margin: '0 0 5px', fontSize: '10px', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#71717a' }}>Saving Now</p>
+                  <p style={{ margin: 0, fontSize: '13px', fontWeight: 700, fontVariantNumeric: 'tabular-nums', color: monthlySavingsStorageSummary.monthlySavingsAmount >= 0 ? '#34d399' : '#fb7185' }}>
+                    {formatCurrencyValueForDashboard(savingsRecommendation.currentMonthlySavings)}
+                    <span style={{ fontSize: '10px', fontWeight: 500, color: '#71717a', marginLeft: '2px' }}>/mo</span>
+                  </p>
+                </div>
+                <div style={{ padding: '14px 16px', borderRight: '1px solid rgba(255,255,255,0.05)' }}>
+                  <p style={{ margin: '0 0 5px', fontSize: '10px', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#71717a' }}>Recommended</p>
+                  <p style={{ margin: 0, fontSize: '13px', fontWeight: 700, fontVariantNumeric: 'tabular-nums', color: '#34d399' }}>
+                    {formatCurrencyValueForDashboard(savingsRecommendation.recommendedMonthlySavings)}
+                    <span style={{ fontSize: '10px', fontWeight: 500, color: '#71717a', marginLeft: '2px' }}>({savingsRecommendation.recommendedSavingsRatePercent.toFixed(1)}%)</span>
+                  </p>
+                </div>
+                <div style={{ padding: '14px 16px', borderRight: '1px solid rgba(255,255,255,0.05)' }}>
+                  <p style={{ margin: '0 0 5px', fontSize: '10px', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#71717a' }}>Target Range</p>
+                  <p style={{ margin: 0, fontSize: '13px', fontWeight: 700, fontVariantNumeric: 'tabular-nums', color: '#d4d4d4' }}>
+                    {formatCurrencyValueForDashboard(savingsRecommendation.minimumRecommendedSavings)}
+                    <span style={{ color: 'rgba(255,255,255,0.2)', margin: '0 4px' }}>–</span>
+                    {formatCurrencyValueForDashboard(savingsRecommendation.stretchRecommendedSavings)}
+                  </p>
+                </div>
+                <div style={{ padding: '14px 16px' }}>
+                  <p style={{ margin: '0 0 5px', fontSize: '10px', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#71717a' }}>{isOnTrack ? 'Surplus' : 'Gap'}</p>
+                  <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px' }}>
+                    <p style={{ margin: 0, fontSize: '13px', fontWeight: 700, fontVariantNumeric: 'tabular-nums', color: gapColor }}>
+                      {formatCurrencyValueForDashboard(Math.abs(savingsRecommendation.gapToRecommendedSavings))}
+                    </p>
+                    <span style={{ fontSize: '10px', fontWeight: 600, color: gapColor, background: isOnTrack ? 'rgba(52,211,153,0.1)' : 'rgba(251,113,133,0.1)', borderRadius: '4px', padding: '1px 6px' }}>{isOnTrack ? 'on track' : 'short'}</span>
+                  </div>
+                </div>
+              </div>
+              <div style={{ padding: '10px 16px' }}>
+                <p style={{ margin: 0, fontSize: '11px', color: '#71717a' }}>{savingsRecommendation.recommendationReason}</p>
+              </div>
+            </div>
+          )
+        })()}
+        {/* -- Savings storage table -- */}
+        <div className="table-scroll-region -mx-4 md:-mx-6">
+          <table className="w-full min-w-[560px] border-collapse">
+            <thead>
+              <tr className="border-b border-white/[0.03]">
+                {renderSortableHeaderCell('savings', 'person', 'Person')}
+                {renderSortableHeaderCell('savings', 'location', 'Storage')}
+                {renderSortableHeaderCell('savings', 'balance', 'Balance', true)}
+                {renderSortableHeaderCell('savings', 'allocationPercent', 'Allocation', true)}
+                {renderSortableHeaderCell('savings', 'description', 'Description')}
+                <th className="w-24 px-4 py-3.5" />
+              </tr>
+            </thead>
+            <tbody>
+              {savingsStorageRowsSorted.length === 0 ? (
+                <tr><td colSpan={6} className="px-4 py-8 text-center text-[#52525b]">No savings storage recorded yet</td></tr>
+              ) : savingsStorageRowsSorted.map((rowItem) => (
+                <tr key={rowItem.id} className="records-row group border-t border-white/[0.025]">
+                  <td className="px-4 py-3 text-xs text-[#71717a] md:px-5">{formatPersonaLabelWithEmoji(rowItem.person, personaEmojiByName)}</td>
+                  <td className="px-4 py-3 text-xs font-medium text-[#d4d4d4]">{rowItem.location}</td>
+                  <td className="px-4 py-3 text-right text-xs font-semibold tabular-nums" style={{ color: '#34d399' }}>{formatCurrencyValueForDashboard(rowItem.balance)}</td>
+                  <td className="px-4 py-3 text-right text-xs font-semibold tabular-nums text-[#a1a1aa]">{rowItem.allocationPercent.toFixed(1)}%</td>
+                  <td className="px-4 py-3 text-xs text-[#71717a]">{rowItem.description}</td>
+                  <td className="px-4 py-3 pr-4 text-right md:pr-5">{renderRecordActionsWithIconButtons('assets', rowItem)}</td>
                 </tr>
-              </thead>
-              <tbody>
-                {savingsStorageRowsSorted.length === 0 ? (
-                  <tr><td colSpan={6} className="px-4 py-8 text-center text-[#52525b]">No savings storage recorded yet</td></tr>
-                ) : savingsStorageRowsSorted.map((rowItem) => (
-                  <tr key={rowItem.id} className="group border-t border-white/[0.025] bg-[#141414]">
-                    <td className="px-3 py-2 text-[#d4d4d4]">{formatPersonaLabelWithEmoji(rowItem.person, personaEmojiByName)}</td>
-                    <td className="px-3 py-2 text-[#d4d4d4]">{rowItem.location}</td>
-                    <td className="px-3 py-2 text-right font-semibold text-emerald-400">{formatCurrencyValueForDashboard(rowItem.balance)}</td>
-                    <td className="px-3 py-2 text-right font-semibold text-[#d4d4d4]">{rowItem.allocationPercent.toFixed(1)}%</td>
-                    <td className="px-3 py-2 text-[#71717a]">{rowItem.description}</td>
-                    <td className="px-3 py-2 text-right">{renderRecordActionsWithIconButtons('assets', rowItem)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+              ))}
+            </tbody>
+          </table>
         </div>
       </section>
 
-      <section id="assets" className="section-tight glass-panel-soft squircle-md z-layer-section mb-4 scroll-mt-40 p-4 md:mb-6 md:p-6" style={{ order: 1 }}>
-        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-          <h2 className="text-lg font-bold text-[#ededed]">Assets</h2>
-          <div className="flex items-center gap-3">
-            <span className={`text-sm font-semibold ${totalAssetHoldingsValue >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>{formatCurrencyValueForDashboard(totalAssetHoldingsValue)}</span>
-            <button className="inline-flex items-center gap-1.5 rounded-xl border border-white/30 bg-cyan-600 px-3 py-2 text-xs font-semibold text-white" onClick={() => setIsAddAssetModalOpen(true)} type="button"><IconPlus /> Add Asset</button>
+      <section id="assets" className="section-tight glass-panel-soft squircle-md z-layer-section mb-4 scroll-mt-40 p-4 md:mb-6 md:p-6" style={{ order: 1, borderTop: '2px solid #fbbf24' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px', marginBottom: '16px' }}>
+          <div>
+            <p style={{ margin: 0, fontSize: '10px', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#71717a' }}>Holdings</p>
+            <h2 style={{ margin: '2px 0 0', fontSize: '18px', fontWeight: 700, letterSpacing: '-0.01em', color: '#fbbf24' }}>Assets</h2>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <span style={{ fontSize: '14px', fontWeight: 700, color: totalAssetHoldingsValue >= 0 ? '#34d399' : '#fb7185', tabularNums: true }}>{formatCurrencyValueForDashboard(totalAssetHoldingsValue)}</span>
+            <button style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', padding: '6px 12px', borderRadius: '9px', border: '1px solid rgba(251,191,36,0.3)', background: 'rgba(251,191,36,0.1)', color: '#fbbf24', fontSize: '12px', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }} onClick={() => setIsAddAssetModalOpen(true)} type="button"><IconPlus /> Add Asset</button>
           </div>
         </div>
-        <div className="table-scroll-region rounded-lg border border-white/[0.03] backdrop-blur">
-          <table className="w-full min-w-[620px] border-collapse text-sm">
-            <thead className="bg-[#1a1a1a] text-[#a1a1aa]">
-              <tr>
+        {/* -- Table -- */}
+        <div className="table-scroll-region -mx-4 md:-mx-6">
+          <table className="w-full min-w-[620px] border-collapse">
+            <thead>
+              <tr className="border-b border-white/[0.03]">
                 {renderSortableHeaderCell('assets', 'person', 'Person')}
                 {renderSortableHeaderCell('assets', 'item', 'Item')}
                 {renderSortableHeaderCell('assets', 'assetMarketValue', 'Market Value', true)}
                 {renderSortableHeaderCell('assets', 'assetValueOwed', 'Owed', true)}
                 {renderSortableHeaderCell('assets', 'value', 'Equity', true)}
-                <th className="px-3 py-2 text-right font-semibold">LTV</th>
-                <th className="px-3 py-2 text-right font-semibold">Actions</th>
+                <th className="px-4 py-3.5 text-right text-[12px] font-semibold uppercase tracking-[0.06em] text-[#71717a]">LTV</th>
+                <th className="w-24 px-4 py-3.5" />
               </tr>
             </thead>
             <tbody>
@@ -4006,16 +4311,16 @@ export default function App() {
                 const owed = typeof rowItem.assetValueOwed === 'number' ? rowItem.assetValueOwed : 0
                 const equity = typeof rowItem.value === 'number' ? rowItem.value : (marketValue - owed)
                 const ltvPercent = marketValue > 0 ? Math.min(100, Math.round((owed / marketValue) * 100)) : 0
-                const ltvColor = ltvPercent <= 50 ? '#10b981' : ltvPercent <= 80 ? '#f59e0b' : '#f43f5e'
+                const ltvColor = ltvPercent <= 50 ? '#34d399' : ltvPercent <= 80 ? '#fbbf24' : '#fb7185'
                 return (
-                  <tr key={stableKey} className="group border-t border-white/[0.025] bg-[#141414]">
-                    <td className="px-3 py-2 text-[#d4d4d4]">{formatPersonaLabelWithEmoji(String(rowItem.person ?? ''), personaEmojiByName)}</td>
-                    <td className="px-3 py-2 text-[#d4d4d4]"><span className="inline-flex items-center gap-1">{String(rowItem.item ?? 'G��')}{renderStaleUpdateIconIfNeeded(rowItem)}</span></td>
-                    <td className="px-3 py-2 text-right font-semibold text-[#d4d4d4]">{formatCurrencyValueForDashboard(marketValue)}</td>
-                    <td className="px-3 py-2 text-right font-semibold text-[#d4d4d4]">{owed > 0 ? formatCurrencyValueForDashboard(owed) : 'G��'}</td>
-                    <td className="px-3 py-2 text-right font-semibold" style={{ color: equity >= 0 ? '#15803d' : '#be123c' }}>{formatCurrencyValueForDashboard(equity)}</td>
-                    <td className="px-3 py-2 text-right font-semibold" style={{ color: ltvColor }}>{owed > 0 ? `${ltvPercent}%` : 'G��'}</td>
-                    <td className="px-3 py-2 text-right">{renderRecordActionsWithIconButtons('assetHoldings', rowItem)}</td>
+                  <tr key={stableKey} className="records-row group border-t border-white/[0.025]">
+                    <td className="px-4 py-3 text-xs text-[#71717a] md:px-5">{formatPersonaLabelWithEmoji(String(rowItem.person ?? ''), personaEmojiByName)}</td>
+                    <td className="px-4 py-3 text-xs font-medium text-[#d4d4d4]"><span className="inline-flex items-center gap-1">{String(rowItem.item ?? '—')}{renderStaleUpdateIconIfNeeded(rowItem)}</span></td>
+                    <td className="px-4 py-3 text-right text-xs font-semibold tabular-nums text-[#d4d4d4]">{formatCurrencyValueForDashboard(marketValue)}</td>
+                    <td className="px-4 py-3 text-right text-xs font-semibold tabular-nums" style={{ color: owed > 0 ? '#fb7185' : '#52525b' }}>{owed > 0 ? formatCurrencyValueForDashboard(owed) : '—'}</td>
+                    <td className="px-4 py-3 text-right text-xs font-semibold tabular-nums" style={{ color: equity >= 0 ? '#34d399' : '#fb7185' }}>{formatCurrencyValueForDashboard(equity)}</td>
+                    <td className="px-4 py-3 text-right text-xs font-semibold tabular-nums" style={{ color: ltvColor }}>{owed > 0 ? `${ltvPercent}%` : '—'}</td>
+                    <td className="px-4 py-3 pr-4 text-right md:pr-5">{renderRecordActionsWithIconButtons('assetHoldings', rowItem)}</td>
                   </tr>
                 )
               })}
@@ -4129,100 +4434,131 @@ export default function App() {
         </div>
       </section>) : null}
 
-      <section id="loan-calculator" className="section-tight glass-panel-soft squircle-md z-layer-section mb-4 scroll-mt-40 p-4 md:mb-6 md:p-6" style={{ order: 10 }}>
-        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+      <section id="loan-calculator" className="section-tight glass-panel-soft squircle-md z-layer-section mb-4 scroll-mt-40 p-4 md:mb-6 md:p-6" style={{ order: 10, borderTop: '2px solid #818cf8' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px', marginBottom: '16px' }}>
           <div>
-            <h2 className="text-lg font-bold text-[#ededed]">Loan Payoff Calculator</h2>
-            <p className="text-xs text-[#71717a]">Base vs. base + extra payment G�� months and interest saved.</p>
+            <p style={{ margin: 0, fontSize: '10px', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#71717a' }}>Tool</p>
+            <h2 style={{ margin: '2px 0 0', fontSize: '18px', fontWeight: 700, letterSpacing: '-0.01em', color: '#818cf8' }}>Loan Payoff Calculator</h2>
           </div>
         </div>
-        <div className="rounded-2xl border border-white/[0.06] bg-[rgba(20,20,20,0.6)] backdrop-blur">
-          <div className="grid grid-cols-1 gap-3 border-b border-white/[0.06] p-4 sm:grid-cols-2 lg:grid-cols-5">
-            <label className="text-sm font-medium text-[#d4d4d4] sm:col-span-2 lg:col-span-1">Existing Debt<select className="mt-1 h-11 w-full rounded-2xl border border-white/[0.06] bg-[rgba(15,15,15,0.8)] px-3 text-[#ededed] outline-none transition focus:border-amber-500 focus:bg-[#141414]" value={loanCalculatorFormState.selectedLoanKey} onChange={(event) => selectLoanRecordForCalculatorByKey(event.target.value)}><option value="">Manual entry...</option>{loanCalculatorSourceRows.map((rowItem) => <option key={rowItem.key} value={rowItem.key}>{rowItem.label}</option>)}</select></label>
-            <label className="text-sm font-medium text-[#d4d4d4]">Balance<input className="mt-1 h-11 w-full rounded-2xl border border-white/[0.06] bg-[rgba(15,15,15,0.8)] px-3 text-[#ededed] outline-none transition focus:border-amber-500 focus:bg-[#141414]" min="0" step="0.01" type="number" value={loanCalculatorFormState.principalBalance} onChange={(event) => updateLoanCalculatorFormFieldValue('principalBalance', event.target.value)} /></label>
-            <label className="text-sm font-medium text-[#d4d4d4]">APR %<input className="mt-1 h-11 w-full rounded-2xl border border-white/[0.06] bg-[rgba(15,15,15,0.8)] px-3 text-[#ededed] outline-none transition focus:border-amber-500 focus:bg-[#141414]" min="0" step="0.01" type="number" value={loanCalculatorFormState.annualInterestRatePercent} onChange={(event) => updateLoanCalculatorFormFieldValue('annualInterestRatePercent', event.target.value)} /></label>
-            <label className="text-sm font-medium text-[#d4d4d4]">Base Payment<input className="mt-1 h-11 w-full rounded-2xl border border-white/[0.06] bg-[rgba(15,15,15,0.8)] px-3 text-[#ededed] outline-none transition focus:border-amber-500 focus:bg-[#141414]" min="0" step="0.01" type="number" value={loanCalculatorFormState.baseMonthlyPayment} onChange={(event) => updateLoanCalculatorFormFieldValue('baseMonthlyPayment', event.target.value)} /></label>
-            <label className="text-sm font-medium text-[#d4d4d4]">Extra Payment<input className="mt-1 h-11 w-full rounded-2xl border border-white/[0.06] bg-[rgba(15,15,15,0.8)] px-3 text-[#ededed] outline-none transition focus:border-amber-500 focus:bg-[#141414]" min="0" step="0.01" type="number" value={loanCalculatorFormState.extraMonthlyPayment} onChange={(event) => updateLoanCalculatorFormFieldValue('extraMonthlyPayment', event.target.value)} /></label>
-          </div>
-          {loanCalculatorResult.error ? (
-            <div className="px-4 py-3 text-sm font-semibold text-rose-400">Unable to calculate G�� check all fields are valid numbers.</div>
-          ) : (
-            <div className="flex flex-wrap divide-x divide-slate-200/70">
-              <div className="flex min-w-[130px] flex-1 flex-col gap-0.5 px-4 py-3">
-                <span className="text-xs font-semibold uppercase tracking-wide text-[#52525b]">Base Payoff</span>
-                <span className="text-base font-bold text-[#e0e0e0]">{loanCalculatorResult.comparison.baseMonths >= 9999 ? 'Not reachable' : `${loanCalculatorResult.comparison.baseMonths.toFixed(1)} mo`}</span>
-              </div>
-              <div className="flex min-w-[130px] flex-1 flex-col gap-0.5 px-4 py-3">
-                <span className="text-xs font-semibold uppercase tracking-wide text-[#52525b]">With Extra</span>
-                <span className="text-base font-bold text-[#a1a1aa]">{loanCalculatorResult.comparison.acceleratedMonths >= 9999 ? 'Not reachable' : `${loanCalculatorResult.comparison.acceleratedMonths.toFixed(1)} mo`}</span>
-              </div>
-              <div className="flex min-w-[130px] flex-1 flex-col gap-0.5 px-4 py-3">
-                <span className="text-xs font-semibold uppercase tracking-wide text-[#52525b]">Months Saved</span>
-                <span className="text-base font-bold text-emerald-400">{loanCalculatorResult.comparison.monthsSaved.toFixed(1)}</span>
-              </div>
-              <div className="flex min-w-[130px] flex-1 flex-col gap-0.5 px-4 py-3">
-                <span className="text-xs font-semibold uppercase tracking-wide text-[#52525b]">Interest (Base)</span>
-                <span className="text-base font-bold text-[#d4d4d4]">{Number.isFinite(loanCalculatorResult.comparison.baseInterestPaid) ? formatCurrencyValueForDashboard(loanCalculatorResult.comparison.baseInterestPaid) : 'G��'}</span>
-              </div>
-              <div className="flex min-w-[130px] flex-1 flex-col gap-0.5 px-4 py-3">
-                <span className="text-xs font-semibold uppercase tracking-wide text-[#52525b]">Interest (w/ Extra)</span>
-                <span className="text-base font-bold text-[#a1a1aa]">{Number.isFinite(loanCalculatorResult.comparison.acceleratedInterestPaid) ? formatCurrencyValueForDashboard(loanCalculatorResult.comparison.acceleratedInterestPaid) : 'G��'}</span>
-              </div>
-              <div className="flex min-w-[130px] flex-1 flex-col gap-0.5 px-4 py-3">
-                <span className="text-xs font-semibold uppercase tracking-wide text-[#52525b]">Interest Saved</span>
-                <span className="text-base font-bold text-emerald-400">{formatCurrencyValueForDashboard(loanCalculatorResult.comparison.interestSaved)}</span>
-              </div>
+        {/* -- Input fields -- */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '10px', marginBottom: '16px' }}>
+          <label style={{ display: 'flex', flexDirection: 'column', gap: '6px', fontSize: '11px', fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: '#71717a' }}>
+            Existing Debt
+            <select style={{ height: '40px', padding: '0 10px', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.07)', background: 'rgba(255,255,255,0.03)', color: '#ededed', fontSize: '13px', fontWeight: 500, outline: 'none', fontFamily: 'inherit' }} value={loanCalculatorFormState.selectedLoanKey} onChange={(event) => selectLoanRecordForCalculatorByKey(event.target.value)}>
+              <option value="">Manual entry...</option>
+              {loanCalculatorSourceRows.map((rowItem) => <option key={rowItem.key} value={rowItem.key}>{rowItem.label}</option>)}
+            </select>
+          </label>
+          <label style={{ display: 'flex', flexDirection: 'column', gap: '6px', fontSize: '11px', fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: '#71717a' }}>
+            Balance
+            <input style={{ height: '40px', padding: '0 10px', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.07)', background: 'rgba(255,255,255,0.03)', color: '#ededed', fontSize: '13px', fontWeight: 600, outline: 'none', fontFamily: 'inherit', fontVariantNumeric: 'tabular-nums' }} min="0" step="0.01" type="number" value={loanCalculatorFormState.principalBalance} onChange={(event) => updateLoanCalculatorFormFieldValue('principalBalance', event.target.value)} />
+          </label>
+          <label style={{ display: 'flex', flexDirection: 'column', gap: '6px', fontSize: '11px', fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: '#71717a' }}>
+            APR %
+            <input style={{ height: '40px', padding: '0 10px', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.07)', background: 'rgba(255,255,255,0.03)', color: '#ededed', fontSize: '13px', fontWeight: 600, outline: 'none', fontFamily: 'inherit', fontVariantNumeric: 'tabular-nums' }} min="0" step="0.01" type="number" value={loanCalculatorFormState.annualInterestRatePercent} onChange={(event) => updateLoanCalculatorFormFieldValue('annualInterestRatePercent', event.target.value)} />
+          </label>
+          <label style={{ display: 'flex', flexDirection: 'column', gap: '6px', fontSize: '11px', fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: '#71717a' }}>
+            Base Payment
+            <input style={{ height: '40px', padding: '0 10px', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.07)', background: 'rgba(255,255,255,0.03)', color: '#ededed', fontSize: '13px', fontWeight: 600, outline: 'none', fontFamily: 'inherit', fontVariantNumeric: 'tabular-nums' }} min="0" step="0.01" type="number" value={loanCalculatorFormState.baseMonthlyPayment} onChange={(event) => updateLoanCalculatorFormFieldValue('baseMonthlyPayment', event.target.value)} />
+          </label>
+          <label style={{ display: 'flex', flexDirection: 'column', gap: '6px', fontSize: '11px', fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: '#71717a' }}>
+            Extra Payment
+            <input style={{ height: '40px', padding: '0 10px', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.07)', background: 'rgba(255,255,255,0.03)', color: '#fbbf24', fontSize: '13px', fontWeight: 600, outline: 'none', fontFamily: 'inherit', fontVariantNumeric: 'tabular-nums' }} min="0" step="0.01" type="number" value={loanCalculatorFormState.extraMonthlyPayment} onChange={(event) => updateLoanCalculatorFormFieldValue('extraMonthlyPayment', event.target.value)} />
+          </label>
+        </div>
+        {/* -- Results stat bar -- */}
+        {loanCalculatorResult.error ? (
+          <div style={{ padding: '12px 14px', borderRadius: '10px', background: 'rgba(251,113,133,0.07)', border: '1px solid rgba(251,113,133,0.15)', fontSize: '12px', fontWeight: 600, color: '#fb7185' }}>Unable to calculate — check all fields are valid numbers.</div>
+        ) : (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', borderRadius: '14px', border: '1px solid rgba(129,140,248,0.14)', background: 'rgba(129,140,248,0.025)', overflow: 'hidden' }}>
+            <div style={{ padding: '14px 16px', borderRight: '1px solid rgba(255,255,255,0.05)', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+              <p style={{ margin: '0 0 5px', fontSize: '10px', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#71717a' }}>Base Payoff</p>
+              <p style={{ margin: 0, fontSize: '13px', fontWeight: 700, color: '#d4d4d4', fontVariantNumeric: 'tabular-nums' }}>{loanCalculatorResult.comparison.baseMonths >= 9999 ? 'Not reachable' : `${loanCalculatorResult.comparison.baseMonths.toFixed(1)} mo`}</p>
             </div>
-          )}
-        </div>
+            <div style={{ padding: '14px 16px', borderRight: '1px solid rgba(255,255,255,0.05)', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+              <p style={{ margin: '0 0 5px', fontSize: '10px', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#71717a' }}>With Extra</p>
+              <p style={{ margin: 0, fontSize: '13px', fontWeight: 700, color: '#818cf8', fontVariantNumeric: 'tabular-nums' }}>{loanCalculatorResult.comparison.acceleratedMonths >= 9999 ? 'Not reachable' : `${loanCalculatorResult.comparison.acceleratedMonths.toFixed(1)} mo`}</p>
+            </div>
+            <div style={{ padding: '14px 16px', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+              <p style={{ margin: '0 0 5px', fontSize: '10px', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#71717a' }}>Months Saved</p>
+              <p style={{ margin: 0, fontSize: '13px', fontWeight: 700, color: loanCalculatorResult.comparison.monthsSaved > 0 ? '#34d399' : '#71717a', fontVariantNumeric: 'tabular-nums' }}>{loanCalculatorResult.comparison.monthsSaved.toFixed(1)}</p>
+            </div>
+            <div style={{ padding: '14px 16px', borderRight: '1px solid rgba(255,255,255,0.05)' }}>
+              <p style={{ margin: '0 0 5px', fontSize: '10px', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#71717a' }}>Interest (Base)</p>
+              <p style={{ margin: 0, fontSize: '13px', fontWeight: 700, color: '#fb7185', fontVariantNumeric: 'tabular-nums' }}>{Number.isFinite(loanCalculatorResult.comparison.baseInterestPaid) ? formatCurrencyValueForDashboard(loanCalculatorResult.comparison.baseInterestPaid) : '—'}</p>
+            </div>
+            <div style={{ padding: '14px 16px', borderRight: '1px solid rgba(255,255,255,0.05)' }}>
+              <p style={{ margin: '0 0 5px', fontSize: '10px', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#71717a' }}>Interest (w/ Extra)</p>
+              <p style={{ margin: 0, fontSize: '13px', fontWeight: 700, color: '#a1a1aa', fontVariantNumeric: 'tabular-nums' }}>{Number.isFinite(loanCalculatorResult.comparison.acceleratedInterestPaid) ? formatCurrencyValueForDashboard(loanCalculatorResult.comparison.acceleratedInterestPaid) : '—'}</p>
+            </div>
+            <div style={{ padding: '14px 16px' }}>
+              <p style={{ margin: '0 0 5px', fontSize: '10px', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#71717a' }}>Interest Saved</p>
+              <p style={{ margin: 0, fontSize: '13px', fontWeight: 700, color: loanCalculatorResult.comparison.interestSaved > 0 ? '#34d399' : '#71717a', fontVariantNumeric: 'tabular-nums' }}>{formatCurrencyValueForDashboard(loanCalculatorResult.comparison.interestSaved)}</p>
+            </div>
+          </div>
+        )}
       </section>
 
-      <section id="details" className="section-tight glass-panel-soft squircle-md z-layer-section mb-4 scroll-mt-40 p-4 md:mb-6 md:p-6" style={{ order: 6 }}>
-        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-          <h2 className="text-lg font-bold text-[#ededed]">Detailed Dashboard Metrics</h2>
-          <span className="rounded-full bg-[rgba(26,26,26,0.9)] px-3 py-1 text-xs font-semibold text-[#a1a1aa] backdrop-blur">{detailedRowsSorted.length} metrics</span>
+      <section id="details" className="section-tight glass-panel-soft squircle-md z-layer-section mb-4 scroll-mt-40 p-4 md:mb-6 md:p-6" style={{ order: 6, borderTop: '2px solid #71717a' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px', marginBottom: '16px' }}>
+          <div>
+            <p style={{ margin: 0, fontSize: '10px', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#71717a' }}>Derived</p>
+            <h2 style={{ margin: '2px 0 0', fontSize: '18px', fontWeight: 700, letterSpacing: '-0.01em', color: '#d4d4d4' }}>Dashboard Metrics</h2>
+          </div>
+          <span style={{ borderRadius: '999px', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)', padding: '3px 12px', fontSize: '11px', fontWeight: 600, color: '#71717a' }}>{detailedRowsSorted.length} metrics</span>
         </div>
-        <div className="table-scroll-region rounded-lg border border-white/[0.03] backdrop-blur">
-          <table className="w-full min-w-[640px] border-collapse text-sm">
-            <thead className="bg-[#1a1a1a] text-[#a1a1aa]"><tr>{renderSortableHeaderCell('detailed', 'metric', 'Metric')}{renderSortableHeaderCell('detailed', 'value', 'Value', true)}{renderSortableHeaderCell('detailed', 'description', 'Description')}</tr></thead>
-            <tbody>{detailedRowsSorted.map((rowItem) => {
-              const isCurrency = rowItem.valueFormat === 'currency'
-              const isDuration = rowItem.valueFormat === 'duration'
-              const isPercent = rowItem.valueFormat === 'percent'
-              const numVal = typeof rowItem.value === 'number' ? rowItem.value : 0
-              const valueColorClass = isCurrency
-                ? (numVal > 0 ? 'text-emerald-400' : numVal < 0 ? 'text-rose-400' : 'text-[#a1a1aa]')
-                : (isPercent || isDuration ? 'text-[#d4d4d4]' : 'text-[#d4d4d4]')
-              const formattedValue = isCurrency
-                ? formatCurrencyValueForDashboard(numVal)
-                : (isDuration
-                    ? (Number.isFinite(numVal) && numVal > 0 ? `${numVal.toFixed(1)} mo` : 'G��')
-                    : formatPlainNumericValueForDashboard(numVal, rowItem.valueFormat) + (isPercent ? '%' : ''))
-              return (
-                <tr key={rowItem.metric} className="border-t border-white/[0.025] bg-[#141414]">
-                  <td className="px-3 py-2 font-semibold text-[#e0e0e0]">{rowItem.metric}</td>
-                  <td className={`px-3 py-2 text-right font-semibold tabular-nums ${valueColorClass}`}>{formattedValue}</td>
-                  <td className="px-3 py-2 text-[#71717a]">{rowItem.description}</td>
-                </tr>
-              )
-            })}</tbody>
+        <div className="table-scroll-region -mx-4 md:-mx-6">
+          <table className="w-full min-w-[640px] border-collapse">
+            <thead>
+              <tr className="border-b border-white/[0.03]">
+                {renderSortableHeaderCell('detailed', 'metric', 'Metric')}
+                {renderSortableHeaderCell('detailed', 'value', 'Value', true)}
+                {renderSortableHeaderCell('detailed', 'description', 'Description')}
+              </tr>
+            </thead>
+            <tbody>
+              {detailedRowsSorted.map((rowItem) => {
+                const isCurrency = rowItem.valueFormat === 'currency'
+                const isDuration = rowItem.valueFormat === 'duration'
+                const isPercent = rowItem.valueFormat === 'percent'
+                const numVal = typeof rowItem.value === 'number' ? rowItem.value : 0
+                const valueColor = numVal < 0 ? '#fb7185' : (numVal === 0 ? '#71717a' : '#d4d4d4')
+                const formattedValue = isCurrency
+                  ? formatCurrencyValueForDashboard(numVal)
+                  : (isDuration
+                      ? (Number.isFinite(numVal) && numVal !== 0 ? `${numVal.toFixed(1)} mo` : '—')
+                      : formatPlainNumericValueForDashboard(numVal, rowItem.valueFormat) + (isPercent ? '%' : ''))
+                return (
+                  <tr key={rowItem.metric} className="records-row group border-t border-white/[0.025]">
+                    <td className="px-4 py-3 text-xs font-semibold text-[#d4d4d4]">{rowItem.metric}</td>
+                    <td className="px-4 py-3 text-right text-xs font-semibold tabular-nums" style={{ color: valueColor }}>{formattedValue}</td>
+                    <td className="px-4 py-3 text-xs text-[#71717a]">{rowItem.description}</td>
+                  </tr>
+                )
+              })}
+            </tbody>
           </table>
         </div>
       </section>
 
-      <section id="records" className="section-tight glass-panel-soft squircle-md z-layer-section mb-4 scroll-mt-40 p-4 md:mb-6 md:p-5" style={{ order: 5 }}>
+      <section id="records" className="section-tight glass-panel-soft squircle-md z-layer-section mb-4 scroll-mt-40 p-4 md:mb-6 md:p-5" style={{ order: 5, borderTop: '2px solid #818cf8' }}>
         {/* -- Header -- */}
-        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <h2 className="text-sm font-bold tracking-wide text-[#ededed]">Records</h2>
-            <span className="h-3.5 w-px bg-white/[0.1]" aria-hidden="true" />
-            <span className="tabular-nums text-sm font-bold" style={{ color: '#34d399' }}>+{formatCurrencyValueForDashboard(recordsFlowSummary.totalIn)}</span>
-            <span className="tabular-nums text-sm font-bold" style={{ color: '#fb7185' }}>-{formatCurrencyValueForDashboard(recordsFlowSummary.totalOut)}</span>
-            <span className="tabular-nums text-sm font-bold" style={{ color: recordsFlowSummary.diff > 0 ? '#34d399' : (recordsFlowSummary.diff < 0 ? '#fb7185' : '#52525b') }}>
-              ={recordsFlowSummary.diff > 0 ? '+' : ''}{formatCurrencyValueForDashboard(recordsFlowSummary.diff)}
-            </span>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px', marginBottom: '16px' }}>
+          <div style={{ display: 'flex', alignItems: 'flex-end', gap: '12px', flexWrap: 'wrap' }}>
+            <div>
+              <p style={{ margin: 0, fontSize: '10px', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#71717a' }}>Transactions</p>
+              <h2 style={{ margin: '2px 0 0', fontSize: '18px', fontWeight: 700, letterSpacing: '-0.01em', color: '#818cf8' }}>Records</h2>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', paddingBottom: '2px' }}>
+              <span style={{ width: '1px', height: '14px', background: 'rgba(255,255,255,0.08)' }} aria-hidden="true" />
+              <span style={{ fontVariantNumeric: 'tabular-nums', fontSize: '13px', fontWeight: 700, color: '#34d399' }}>+{formatCurrencyValueForDashboard(recordsFlowSummary.totalIn)}</span>
+              <span style={{ fontVariantNumeric: 'tabular-nums', fontSize: '13px', fontWeight: 700, color: '#fb7185' }}>-{formatCurrencyValueForDashboard(recordsFlowSummary.totalOut)}</span>
+              <span style={{ fontVariantNumeric: 'tabular-nums', fontSize: '13px', fontWeight: 700, color: recordsFlowSummary.diff > 0 ? '#34d399' : (recordsFlowSummary.diff < 0 ? '#fb7185' : '#52525b') }}>={recordsFlowSummary.diff > 0 ? '+' : ''}{formatCurrencyValueForDashboard(recordsFlowSummary.diff)}</span>
+              <span style={{ fontSize: '11px', color: '#52525b', marginLeft: '2px' }}>{incomeAndExpenseRows.length}</span>
+            </div>
           </div>
-          <div className="flex items-center gap-1.5">
+          <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
             <button className="records-quick-btn records-quick-btn-income" onClick={() => openAddRecordModalWithPresetTypeAndCategory('income', 'Income')} type="button">+ Income</button>
             <button className="records-quick-btn records-quick-btn-expense" onClick={() => openAddRecordModalWithPresetTypeAndCategory('expense', 'Miscellaneous')} type="button">+ Expense</button>
             <button className="records-quick-btn records-quick-btn-savings" onClick={() => openAddRecordModalWithPresetTypeAndCategory('savings', 'Savings')} type="button">+ Savings</button>
@@ -4233,7 +4569,6 @@ export default function App() {
               type="button"
               title="Undo"
             ><IconRefresh /></button>
-            <span className="ml-1 text-[11px] text-[#52525b]">{incomeAndExpenseRows.length}</span>
           </div>
         </div>
 
@@ -4445,17 +4780,84 @@ export default function App() {
       ) : null}
 
       {isAddGoalModalOpen ? (
-        <section className="fixed inset-0 z-[5000] flex items-center justify-center p-3 sm:p-4" role="dialog" aria-modal="true" aria-label="Add Goal Modal">
-          <button className="absolute inset-0 bg-black/55 backdrop-blur-sm" onClick={closeGoalModalAndResetForm} type="button" aria-label="Close add goal modal backdrop" />
-          <div className="relative z-[5001] w-full max-w-2xl rounded-3xl border border-white/40 bg-[#141414] p-4 shadow-2xl sm:p-6">
-            <div className="mb-4 flex items-center justify-between gap-3"><h3 className="text-lg font-bold text-[#ededed]">{editingGoalId ? 'Edit Goal' : 'Add Goal'}</h3><button className="inline-flex items-center gap-1.5 rounded-xl border border-white/[0.025] px-3 py-2 text-sm font-semibold text-[#d4d4d4]" onClick={closeGoalModalAndResetForm} type="button"><IconX /> Close</button></div>
-            <form className="grid grid-cols-1 gap-4 sm:grid-cols-2" onSubmit={submitNewGoalRecord}>
-              <label className="text-sm font-medium text-[#d4d4d4] sm:col-span-2">Item<input className="mt-1 h-11 w-full rounded-2xl border border-white/[0.06] bg-[rgba(15,15,15,0.8)] px-3 text-[#ededed] outline-none transition focus:border-amber-500 focus:bg-[#141414]" type="text" value={goalEntryFormState.title} onChange={(event) => updateGoalEntryFormFieldValue('title', event.target.value)} /></label>
-              <label className="text-sm font-medium text-[#d4d4d4]">Status<select className="mt-1 h-11 w-full rounded-2xl border border-white/[0.06] bg-[rgba(15,15,15,0.8)] px-3 text-[#ededed] outline-none transition focus:border-amber-500 focus:bg-[#141414]" value={goalEntryFormState.status} onChange={(event) => updateGoalEntryFormFieldValue('status', event.target.value)}><option value="not started">Not started</option><option value="in progress">In progress</option><option value="completed">Completed</option></select></label>
-              <label className="text-sm font-medium text-[#d4d4d4]">Timeframe(months)<input className="mt-1 h-11 w-full rounded-2xl border border-white/[0.06] bg-[rgba(15,15,15,0.8)] px-3 text-[#ededed] outline-none transition focus:border-amber-500 focus:bg-[#141414]" type="number" min="0" step="1" value={goalEntryFormState.timeframeMonths} onChange={(event) => updateGoalEntryFormFieldValue('timeframeMonths', event.target.value)} /></label>
-              <label className="text-sm font-medium text-[#d4d4d4] sm:col-span-2">Description<textarea className="mt-1 min-h-[90px] w-full rounded-2xl border border-white/[0.06] bg-[rgba(15,15,15,0.8)] px-3 py-2 text-[#ededed] outline-none transition focus:border-amber-500 focus:bg-[#141414]" value={goalEntryFormState.description} onChange={(event) => updateGoalEntryFormFieldValue('description', event.target.value)} /></label>
-              <div className="sm:col-span-2 flex flex-wrap justify-end gap-2"><button className="inline-flex items-center gap-1.5 rounded-2xl border border-white/[0.025] px-4 py-2 text-sm font-semibold text-[#d4d4d4]" onClick={closeGoalModalAndResetForm} type="button"><IconX /> Cancel</button>{editingGoalId ? <button className="inline-flex items-center gap-1.5 rounded-2xl border border-rose-500/40 bg-rose-500/10 px-4 py-2 text-sm font-semibold text-rose-400" onClick={() => { void deleteGoalRecordById(editingGoalId) }} type="button"><IconTrash /> Delete Goal</button> : null}<button className="rounded-2xl bg-[#1a1a1a] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#1a1a1a] inline-flex items-center gap-1.5" type="submit"><IconCheck /> {editingGoalId ? 'Save Changes' : 'Save Goal'}</button></div>
-            </form>
+        <section style={{ position: 'fixed', inset: 0, zIndex: 5000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }} role="dialog" aria-modal="true" aria-label="Add Goal Modal">
+          <button style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(12px)', border: 'none', cursor: 'pointer' }} onClick={closeGoalModalAndResetForm} type="button" aria-label="Close add goal modal backdrop" />
+          <div style={{ position: 'relative', zIndex: 5001, width: '100%', maxWidth: '560px', borderRadius: '24px', background: 'rgba(17,17,17,0.97)', backdropFilter: 'blur(24px)', border: '1px solid rgba(52,211,153,0.15)', overflow: 'hidden', boxShadow: '0 24px 64px rgba(0,0,0,0.6)' }}>
+            {/* colored top bar */}
+            <div style={{ height: '3px', background: 'linear-gradient(90deg, #34d399 0%, #059669 100%)' }} />
+            <div style={{ padding: '20px 24px 24px' }}>
+              {/* Header */}
+              <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '12px', marginBottom: '20px' }}>
+                <div>
+                  <p style={{ margin: 0, fontSize: '10px', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#71717a' }}>Planning</p>
+                  <h3 style={{ margin: '3px 0 0', fontSize: '20px', fontWeight: 700, letterSpacing: '-0.01em', color: '#34d399' }}>{editingGoalId ? 'Edit Goal' : 'Add Goal'}</h3>
+                </div>
+                <button style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', padding: '6px 12px', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.07)', background: 'rgba(255,255,255,0.03)', color: '#71717a', fontSize: '12px', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }} onClick={closeGoalModalAndResetForm} type="button"><IconX /> Close</button>
+              </div>
+              {/* Form */}
+              <form style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }} onSubmit={submitNewGoalRecord}>
+                {/* Title — full width */}
+                <label style={{ gridColumn: '1 / -1', display: 'flex', flexDirection: 'column', gap: '5px', fontSize: '11px', fontWeight: 600, letterSpacing: '0.04em', textTransform: 'uppercase', color: '#71717a' }}>
+                  Goal Title
+                  <input
+                    style={{ height: '42px', width: '100%', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.07)', background: 'rgba(255,255,255,0.03)', padding: '0 12px', color: '#ededed', fontSize: '13px', fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box' }}
+                    type="text"
+                    value={goalEntryFormState.title}
+                    onChange={(event) => updateGoalEntryFormFieldValue('title', event.target.value)}
+                    onFocus={(e) => { e.currentTarget.style.borderColor = 'rgba(52,211,153,0.5)' }}
+                    onBlur={(e) => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.07)' }}
+                  />
+                </label>
+                {/* Status */}
+                <label style={{ display: 'flex', flexDirection: 'column', gap: '5px', fontSize: '11px', fontWeight: 600, letterSpacing: '0.04em', textTransform: 'uppercase', color: '#71717a' }}>
+                  Status
+                  <select
+                    style={{ height: '42px', width: '100%', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.07)', background: 'rgba(255,255,255,0.03)', padding: '0 12px', color: '#ededed', fontSize: '13px', fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box' }}
+                    value={goalEntryFormState.status}
+                    onChange={(event) => updateGoalEntryFormFieldValue('status', event.target.value)}
+                    onFocus={(e) => { e.currentTarget.style.borderColor = 'rgba(52,211,153,0.5)' }}
+                    onBlur={(e) => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.07)' }}
+                  >
+                    <option value="not started">Not started</option>
+                    <option value="in progress">In progress</option>
+                    <option value="completed">Completed</option>
+                  </select>
+                </label>
+                {/* Timeframe */}
+                <label style={{ display: 'flex', flexDirection: 'column', gap: '5px', fontSize: '11px', fontWeight: 600, letterSpacing: '0.04em', textTransform: 'uppercase', color: '#71717a' }}>
+                  Timeframe (months)
+                  <input
+                    style={{ height: '42px', width: '100%', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.07)', background: 'rgba(255,255,255,0.03)', padding: '0 12px', color: '#ededed', fontSize: '13px', fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box' }}
+                    type="number"
+                    min="0"
+                    step="1"
+                    value={goalEntryFormState.timeframeMonths}
+                    onChange={(event) => updateGoalEntryFormFieldValue('timeframeMonths', event.target.value)}
+                    onFocus={(e) => { e.currentTarget.style.borderColor = 'rgba(52,211,153,0.5)' }}
+                    onBlur={(e) => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.07)' }}
+                  />
+                </label>
+                {/* Description — full width */}
+                <label style={{ gridColumn: '1 / -1', display: 'flex', flexDirection: 'column', gap: '5px', fontSize: '11px', fontWeight: 600, letterSpacing: '0.04em', textTransform: 'uppercase', color: '#71717a' }}>
+                  Description
+                  <textarea
+                    style={{ minHeight: '80px', width: '100%', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.07)', background: 'rgba(255,255,255,0.03)', padding: '10px 12px', color: '#ededed', fontSize: '13px', fontFamily: 'inherit', outline: 'none', resize: 'vertical', boxSizing: 'border-box' }}
+                    value={goalEntryFormState.description}
+                    onChange={(event) => updateGoalEntryFormFieldValue('description', event.target.value)}
+                    onFocus={(e) => { e.currentTarget.style.borderColor = 'rgba(52,211,153,0.5)' }}
+                    onBlur={(e) => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.07)' }}
+                  />
+                </label>
+                {/* Footer actions */}
+                <div style={{ gridColumn: '1 / -1', display: 'flex', flexWrap: 'wrap', justifyContent: 'flex-end', gap: '8px', paddingTop: '4px', borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+                  <button style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', padding: '8px 14px', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.07)', background: 'transparent', color: '#71717a', fontSize: '12px', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }} onClick={closeGoalModalAndResetForm} type="button"><IconX /> Cancel</button>
+                  {editingGoalId ? (
+                    <button style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', padding: '8px 14px', borderRadius: '10px', border: '1px solid rgba(251,113,133,0.3)', background: 'rgba(251,113,133,0.08)', color: '#fb7185', fontSize: '12px', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }} onClick={() => { void deleteGoalRecordById(editingGoalId) }} type="button"><IconTrash /> Delete Goal</button>
+                  ) : null}
+                  <button style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', padding: '8px 16px', borderRadius: '10px', border: '1px solid rgba(52,211,153,0.35)', background: 'rgba(52,211,153,0.12)', color: '#34d399', fontSize: '12px', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }} type="submit"><IconCheck /> {editingGoalId ? 'Save Changes' : 'Save Goal'}</button>
+                </div>
+              </form>
+            </div>
           </div>
         </section>
       ) : null}
@@ -4588,42 +4990,72 @@ export default function App() {
       ) : null}
 
       {selectedRiskFinding && selectedRiskTemplate ? (
-        <section className="fixed inset-0 z-[5000] flex items-center justify-center p-3 sm:p-4" role="dialog" aria-modal="true" aria-label="Risk Flag Detail Modal">
-          <button className="absolute inset-0 bg-black/55 backdrop-blur-sm" onClick={() => setSelectedRiskFinding(null)} type="button" aria-label="Close risk detail modal backdrop" />
-          <div className="relative z-[5001] w-full max-w-2xl rounded-3xl border border-white/40 bg-[#141414] p-4 shadow-2xl sm:p-6">
-            <div className="mb-4 flex items-center justify-between gap-3">
-              <h3 className="text-lg font-bold text-[#ededed]">Risk Flag Guidance</h3>
-              <button className="rounded-xl border border-white/[0.025] px-3 py-2 text-sm font-semibold text-[#d4d4d4] inline-flex items-center gap-1.5" onClick={() => setSelectedRiskFinding(null)} type="button"><IconX /> Close</button>
-            </div>
-            <div className="space-y-4">
-              <article className={`risk-modal-selected rounded-2xl border p-3 ${
-                selectedRiskFinding.severity === 'high'
-                  ? 'border-rose-500/30 bg-rose-500/10'
-                  : (selectedRiskFinding.severity === 'low' ? 'border-emerald-500/30 bg-emerald-500/10' : 'border-amber-500/30 bg-amber-500/10')
-              }`}>
-                <p className={`risk-flag-severity text-xs font-semibold uppercase tracking-[0.12em] ${
-                  selectedRiskFinding.severity === 'high'
-                    ? 'risk-flag-severity-high'
-                    : (selectedRiskFinding.severity === 'low' ? 'risk-flag-severity-low' : 'risk-flag-severity-medium')
-                }`}>Selected Risk</p>
-                <p className="mt-1 text-sm font-semibold text-[#e0e0e0]">{selectedRiskTemplate.title}</p>
-              </article>
-              <article className="risk-modal-panel rounded-2xl border border-white/[0.06] bg-[rgba(15,15,15,0.8)] p-3">
-                <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[#71717a]">What it means</p>
-                <p className="mt-1 text-sm text-[#d4d4d4]">{selectedRiskTemplate.meaningText}</p>
-              </article>
-              <article className="risk-modal-panel rounded-2xl border border-white/[0.06] bg-[rgba(15,15,15,0.8)] p-3">
-                <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[#71717a]">How it affects personas</p>
-                <p className="mt-1 text-sm text-[#d4d4d4]">{selectedRiskTemplate.impactText}</p>
-              </article>
-              <article className="risk-modal-panel rounded-2xl border border-white/[0.06] bg-[rgba(15,15,15,0.8)] p-3">
-                <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[#71717a]">How to fix it</p>
-                <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-[#d4d4d4]">
-                  {selectedRiskTemplate.fixChecklist.map((fixItem) => <li key={fixItem}>{fixItem}</li>)}
-                </ul>
-              </article>
-            </div>
-          </div>
+        <section style={{ position: 'fixed', inset: 0, zIndex: 5000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }} role="dialog" aria-modal="true" aria-label="Risk Flag Detail Modal">
+          <button style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)' }} onClick={() => setSelectedRiskFinding(null)} type="button" aria-label="Close risk detail modal backdrop" />
+          {(() => {
+            const severityName = typeof selectedRiskFinding.severity === 'string' ? selectedRiskFinding.severity : 'medium'
+            const isHigh = severityName === 'high'
+            const isMedium = severityName === 'medium'
+            const accentColor = isHigh ? '#fb7185' : isMedium ? '#fbbf24' : '#a1a1aa'
+            const gradientBar = isHigh
+              ? 'linear-gradient(90deg,#fb7185,#f43f5e)'
+              : isMedium
+                ? 'linear-gradient(90deg,#fbbf24,#d97706)'
+                : 'linear-gradient(90deg,#71717a,#52525b)'
+            const borderColor = isHigh
+              ? 'rgba(251,113,133,0.2)'
+              : isMedium
+                ? 'rgba(251,191,36,0.18)'
+                : 'rgba(255,255,255,0.08)'
+            const badgeBg = isHigh ? 'rgba(251,113,133,0.1)' : isMedium ? 'rgba(251,191,36,0.08)' : 'rgba(255,255,255,0.05)'
+            const badgeBorder = isHigh ? 'rgba(251,113,133,0.22)' : isMedium ? 'rgba(251,191,36,0.2)' : 'rgba(255,255,255,0.1)'
+            return (
+              <div style={{ position: 'relative', zIndex: 5001, width: '100%', maxWidth: '560px', overflow: 'hidden', borderRadius: '24px', boxShadow: '0 25px 60px rgba(0,0,0,0.6)', background: 'rgba(17,17,17,0.97)', backdropFilter: 'blur(24px)', WebkitBackdropFilter: 'blur(24px)', border: `1px solid ${borderColor}` }}>
+                <div style={{ height: '3px', background: gradientBar }} />
+                <div style={{ padding: '20px 24px 24px' }}>
+                  {/* Header */}
+                  <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '16px', marginBottom: '20px' }}>
+                    <div>
+                      <p style={{ margin: 0, fontSize: '10px', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#71717a' }}>Risk Flag</p>
+                      <h3 style={{ margin: '2px 0 0', fontSize: '20px', fontWeight: 700, letterSpacing: '-0.01em', color: accentColor }}>{selectedRiskTemplate.title}</h3>
+                    </div>
+                    <button style={{ flexShrink: 0, width: '32px', height: '32px', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.08)', background: 'rgba(255,255,255,0.03)', color: '#71717a', cursor: 'pointer' }} onClick={() => setSelectedRiskFinding(null)} type="button" aria-label="Close"><IconX /></button>
+                  </div>
+                  {/* Severity badge + detail */}
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', marginBottom: '20px', padding: '12px 14px', borderRadius: '12px', border: `1px solid ${badgeBorder}`, background: badgeBg }}>
+                    <span style={{ flexShrink: 0, borderRadius: '999px', background: badgeBg, border: `1px solid ${badgeBorder}`, padding: '2px 10px', fontSize: '10px', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: accentColor }}>{severityName}</span>
+                    <p style={{ margin: 0, fontSize: '13px', color: '#d4d4d4', lineHeight: 1.55 }}>{selectedRiskFinding.detail}</p>
+                  </div>
+                  {/* Content panels */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                    <div style={{ padding: '14px 16px', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.05)', background: 'rgba(255,255,255,0.02)' }}>
+                      <p style={{ margin: '0 0 8px', fontSize: '10px', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#71717a' }}>What it means</p>
+                      <p style={{ margin: 0, fontSize: '13px', color: '#d4d4d4', lineHeight: 1.6 }}>{selectedRiskTemplate.meaningText}</p>
+                    </div>
+                    <div style={{ padding: '14px 16px', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.05)', background: 'rgba(255,255,255,0.02)' }}>
+                      <p style={{ margin: '0 0 8px', fontSize: '10px', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#71717a' }}>How it affects you</p>
+                      <p style={{ margin: 0, fontSize: '13px', color: '#d4d4d4', lineHeight: 1.6 }}>{selectedRiskTemplate.impactText}</p>
+                    </div>
+                    <div style={{ padding: '14px 16px', borderRadius: '12px', border: `1px solid ${isHigh ? 'rgba(251,113,133,0.1)' : isMedium ? 'rgba(251,191,36,0.08)' : 'rgba(255,255,255,0.05)'}`, background: isHigh ? 'rgba(251,113,133,0.03)' : isMedium ? 'rgba(251,191,36,0.025)' : 'rgba(255,255,255,0.02)' }}>
+                      <p style={{ margin: '0 0 10px', fontSize: '10px', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#71717a' }}>How to fix it</p>
+                      <ul style={{ margin: 0, padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                        {selectedRiskTemplate.fixChecklist.map((fixItem) => (
+                          <li key={fixItem} style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', fontSize: '13px', color: '#d4d4d4', lineHeight: 1.55 }}>
+                            <span style={{ flexShrink: 0, marginTop: '4px', width: '6px', height: '6px', borderRadius: '50%', background: accentColor }} />
+                            {fixItem}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  </div>
+                  {/* Footer */}
+                  <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '20px' }}>
+                    <button style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '9px 18px', fontSize: '13px', fontWeight: 600, borderRadius: '10px', border: '1px solid rgba(255,255,255,0.07)', background: 'rgba(255,255,255,0.04)', color: '#a1a1aa', cursor: 'pointer' }} onClick={() => setSelectedRiskFinding(null)} type="button"><IconX /> Dismiss</button>
+                  </div>
+                </div>
+              </div>
+            )
+          })()}
         </section>
       ) : null}
 

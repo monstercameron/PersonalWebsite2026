@@ -39,7 +39,6 @@
  * @typedef {Object} DetailedDashboardDatapointRowsPrecomputedSummaryInputs
  * @property {Record<string, number>} [healthMetrics] Previously calculated dashboard health metrics keyed by metric identifier.
  * @property {{totalIncome: number, totalExpenses: number, monthlySurplusDeficit: number, savingsRatePercent: number}} [monthlySummary] Previously calculated monthly income and expense summary for the same collections snapshot.
- * @property {{income: {currentMonth: number, previousMonth: number, delta: number}, expenses: {currentMonth: number, previousMonth: number, delta: number}, assets: {currentMonth: number, previousMonth: number, delta: number}, liabilities: {currentMonth: number, previousMonth: number, delta: number}, netWorth: {currentMonth: number, previousMonth: number, delta: number}}} [sourceBreakdown] Previously calculated source breakdown comparing current and previous month totals.
  * @property {{monthlySavingsAmount: number, monthlySavingsRatePercent: number, totalStoredSavings: number, storageRows: Array<{id: string, person: string, location: string, balance: number, allocationPercent: number, description: string}>}} [monthlySavingsStorageSummary] Previously calculated savings storage summary for the same collections snapshot.
  * @property {{monthlyExpenses: number, totalRecordedExpenses: number, monthlyDebtMinimums: number, monthlyObligations: number, emergencyFundGoal: number, liquidTarget: number, investedTarget: number, liquidAmount: number, investedAmount: number, totalEmergencyFundAmount: number, missingTotalAmount: number, missingLiquidAmount: number, liquidCoverageMonths: number, totalCoverageMonths: number, recurringExpenseRows: Array<Record<string, unknown>>, debtMinimumRows: Array<Record<string, unknown>>, liquidSources: Array<Record<string, unknown>>, investedSources: Array<Record<string, unknown>>}} [emergencyFundSummary] Previously calculated emergency fund tracking summary.
  * @property {{completedCount: number, inProgressCount: number, notStartedCount: number, averageTimeframeMonths: number, completionRatePercent: number, shortTermNotStartedCount: number}} [goalStatusSummary] Previously calculated goal status summary.
@@ -520,7 +519,7 @@ export function buildSortedAndFilteredCollectionFromRecordsUsingCriteria(records
  * @returns {Result<Record<string, number>>}
  */
 export function calculateTwentyDashboardHealthMetricsFromFinancialCollections(financialCollections) {
-  const { income, expenses, assets, assetHoldings, debts, loans, credit } = deriveNamedCollectionsFromState(financialCollections)
+  const { income, expenses, assets, assetHoldings, debts, loans, credit, creditCards } = deriveNamedCollectionsFromState(financialCollections)
   const goals = Array.isArray(financialCollections.goals) ? financialCollections.goals : []
 
   /**
@@ -547,7 +546,13 @@ export function calculateTwentyDashboardHealthMetricsFromFinancialCollections(fi
   // Critical path: overview net worth should be driven only by explicit asset datasets.
   const totalAssets = totalDirectAssets + totalAssetHoldingNetValue
   const totalDebts = sumAmountsFromCollection(debts, 'amount')
-  const totalCreditBalance = sumAmountsFromCollection(credit, 'amount')
+  const normalizedCreditRows = creditCards.length > 0
+    ? creditCards.map((creditCardRow) => ({
+      amount: typeof creditCardRow.currentBalance === 'number' ? creditCardRow.currentBalance : 0,
+      creditLimit: typeof creditCardRow.maxCapacity === 'number' ? creditCardRow.maxCapacity : 0
+    }))
+    : credit
+  const totalCreditBalance = sumAmountsFromCollection(normalizedCreditRows, 'amount')
   const totalLoanBalance = sumAmountsFromCollection(loans, 'amount')
   const totalLiabilities = totalDebts + totalCreditBalance + totalLoanBalance
   const monthlySurplus = totalIncome - totalExpenses
@@ -558,13 +563,13 @@ export function calculateTwentyDashboardHealthMetricsFromFinancialCollections(fi
   const safeExpenseDivisor = totalExpenses > 0 ? totalExpenses : 1
   const safeAssetDivisor = totalAssets > 0 ? totalAssets : 1
 
-  const averageCreditUtilization = credit.length === 0
+  const averageCreditUtilization = normalizedCreditRows.length === 0
     ? 0
-    : credit.reduce((runningUtilization, creditRecord) => {
+    : normalizedCreditRows.reduce((runningUtilization, creditRecord) => {
       const balance = typeof creditRecord.amount === 'number' ? creditRecord.amount : 0
       const creditLimit = typeof creditRecord.creditLimit === 'number' && creditRecord.creditLimit > 0 ? creditRecord.creditLimit : 1
       return runningUtilization + balance / creditLimit
-    }, 0) / credit.length
+    }, 0) / normalizedCreditRows.length
 
   const totalGoalTarget = sumAmountsFromCollection(goals, 'targetAmount')
   const totalGoalCurrent = sumAmountsFromCollection(goals, 'currentAmount')
@@ -1924,6 +1929,22 @@ export function calculateCurrentAndPreviousMonthSourceBreakdownFromCollectionsSt
   }
 
   /**
+   * Extracts a UTC timestamp from a record date or updatedAt field.
+   * @param {Record<string, unknown>} recordItem
+   * @returns {number|null}
+   */
+  const readRecordTimestamp = (recordItem) => {
+    const dateCandidate = typeof recordItem.date === 'string' ? recordItem.date : ''
+    const updatedAtCandidate = typeof recordItem.updatedAt === 'string' ? recordItem.updatedAt : ''
+    const sourceDate = dateCandidate || updatedAtCandidate
+    if (!sourceDate) return null
+
+    const parsedTimestamp = new Date(sourceDate).getTime()
+    if (Number.isNaN(parsedTimestamp)) return null
+    return parsedTimestamp
+  }
+
+  /**
    * Sums amount values for one collection in one target year/month.
    * @param {Array<Record<string, unknown>>} collectionItems
    * @param {number} targetYear
@@ -1944,21 +1965,58 @@ export function calculateCurrentAndPreviousMonthSourceBreakdownFromCollectionsSt
       return runningTotal + amountValue
     }, 0)
 
+  /**
+   * Sums the latest known balance snapshot as of a target month-end.
+   * Rows without date metadata are treated as long-lived current balances and included in every month.
+   * @param {Array<Record<string, unknown>>} collectionItems
+   * @param {number} targetYear
+   * @param {number} targetMonth
+   * @param {string} [fieldName='amount']
+   * @returns {number}
+   */
+  const sumLatestSnapshotAmountAsOfTargetMonth = (collectionItems, targetYear, targetMonth, fieldName = 'amount') => {
+    const targetMonthEndTimestamp = Date.UTC(targetYear, targetMonth, 0, 23, 59, 59, 999)
+    const latestSnapshotByStableKey = new Map()
+
+    for (const [collectionIndex, collectionItem] of collectionItems.entries()) {
+      const amountCandidate = collectionItem[fieldName]
+      const amountValue = typeof amountCandidate === 'number' ? amountCandidate : 0
+      const stableKey = typeof collectionItem.id === 'string' && collectionItem.id.trim().length > 0
+        ? collectionItem.id
+        : `snapshot-row-${collectionIndex + 1}`
+      const snapshotTimestamp = readRecordTimestamp(collectionItem)
+      const comparableTimestamp = snapshotTimestamp === null ? Number.NEGATIVE_INFINITY : snapshotTimestamp
+      if (snapshotTimestamp !== null && snapshotTimestamp > targetMonthEndTimestamp) continue
+
+      const previousSnapshot = latestSnapshotByStableKey.get(stableKey)
+      if (!previousSnapshot || comparableTimestamp >= previousSnapshot.comparableTimestamp) {
+        latestSnapshotByStableKey.set(stableKey, {
+          comparableTimestamp,
+          amountValue
+        })
+      }
+    }
+
+    return [...latestSnapshotByStableKey.values()].reduce((runningTotal, snapshotRow) => (
+      runningTotal + snapshotRow.amountValue
+    ), 0)
+  }
+
   const incomeCurrentMonth = sumCollectionAmountForTargetMonth(income, referenceYear, referenceMonth)
   const incomePreviousMonth = sumCollectionAmountForTargetMonth(income, previousYear, previousMonth)
 
   const expensesCurrentMonth = sumCollectionAmountForTargetMonth(expenses, referenceYear, referenceMonth)
   const expensesPreviousMonth = sumCollectionAmountForTargetMonth(expenses, previousYear, previousMonth)
 
-  const directAssetsCurrentMonth = sumCollectionAmountForTargetMonth(assets, referenceYear, referenceMonth)
-  const directAssetsPreviousMonth = sumCollectionAmountForTargetMonth(assets, previousYear, previousMonth)
-  const collateralAssetsCurrentMonth = sumCollectionAmountForTargetMonth(
+  const directAssetsCurrentMonth = sumLatestSnapshotAmountAsOfTargetMonth(assets, referenceYear, referenceMonth)
+  const directAssetsPreviousMonth = sumLatestSnapshotAmountAsOfTargetMonth(assets, previousYear, previousMonth)
+  const collateralAssetsCurrentMonth = sumLatestSnapshotAmountAsOfTargetMonth(
     [...debts, ...loans],
     referenceYear,
     referenceMonth,
     'collateralAssetMarketValue'
   )
-  const collateralAssetsPreviousMonth = sumCollectionAmountForTargetMonth(
+  const collateralAssetsPreviousMonth = sumLatestSnapshotAmountAsOfTargetMonth(
     [...debts, ...loans],
     previousYear,
     previousMonth,
@@ -1967,12 +2025,12 @@ export function calculateCurrentAndPreviousMonthSourceBreakdownFromCollectionsSt
   const assetsCurrentMonth = directAssetsCurrentMonth + collateralAssetsCurrentMonth
   const assetsPreviousMonth = directAssetsPreviousMonth + collateralAssetsPreviousMonth
 
-  const debtCurrentMonth = sumCollectionAmountForTargetMonth(debts, referenceYear, referenceMonth)
-  const debtPreviousMonth = sumCollectionAmountForTargetMonth(debts, previousYear, previousMonth)
-  const creditCurrentMonth = sumCollectionAmountForTargetMonth(creditRowsForLiabilityBreakdown, referenceYear, referenceMonth)
-  const creditPreviousMonth = sumCollectionAmountForTargetMonth(creditRowsForLiabilityBreakdown, previousYear, previousMonth)
-  const loanCurrentMonth = sumCollectionAmountForTargetMonth(loans, referenceYear, referenceMonth)
-  const loanPreviousMonth = sumCollectionAmountForTargetMonth(loans, previousYear, previousMonth)
+  const debtCurrentMonth = sumLatestSnapshotAmountAsOfTargetMonth(debts, referenceYear, referenceMonth)
+  const debtPreviousMonth = sumLatestSnapshotAmountAsOfTargetMonth(debts, previousYear, previousMonth)
+  const creditCurrentMonth = sumLatestSnapshotAmountAsOfTargetMonth(creditRowsForLiabilityBreakdown, referenceYear, referenceMonth)
+  const creditPreviousMonth = sumLatestSnapshotAmountAsOfTargetMonth(creditRowsForLiabilityBreakdown, previousYear, previousMonth)
+  const loanCurrentMonth = sumLatestSnapshotAmountAsOfTargetMonth(loans, referenceYear, referenceMonth)
+  const loanPreviousMonth = sumLatestSnapshotAmountAsOfTargetMonth(loans, previousYear, previousMonth)
 
   const liabilitiesCurrentMonth = debtCurrentMonth + creditCurrentMonth + loanCurrentMonth
   const liabilitiesPreviousMonth = debtPreviousMonth + creditPreviousMonth + loanPreviousMonth
@@ -2102,8 +2160,8 @@ export function calculateMonthlySavingsStorageSummaryFromCollectionsState(curren
     }
   })
 
-  // Critical path: the savings section is driven by current savings storage rows, not inferred contribution history.
-  const monthlySavingsAmount = totalStoredSavings
+  // Critical path: monthly savings is a flow, while stored savings is a balance.
+  const monthlySavingsAmount = monthlySummary.monthlySurplusDeficit
   const monthlySavingsRatePercent = monthlySummary.totalIncome > 0
     ? (monthlySavingsAmount / monthlySummary.totalIncome) * 100
     : 0
@@ -2587,7 +2645,7 @@ export function calculateNetWorthProjectionProfilesUsingThreeAggressionLayers(cu
  * Returns an error when required collections are missing.
  * Each optional precomputed input mirrors a nested pure helper call that would otherwise rerun inside this function.
  * @param {{income: Array<Record<string, unknown>>, expenses: Array<Record<string, unknown>>, assets: Array<Record<string, unknown>>, debts: Array<Record<string, unknown>>, credit: Array<Record<string, unknown>>, loans: Array<Record<string, unknown>>, goals: Array<Record<string, unknown>>}} currentCollectionsState
- * @param {DetailedDashboardDatapointRowsPrecomputedSummaryInputs | null} [precomputedSummaryInputs] Optional cached summaries from the same collections snapshot, used to avoid recomputing shared health, monthly, source-breakdown, and goal summary work.
+ * @param {DetailedDashboardDatapointRowsPrecomputedSummaryInputs | null} [precomputedSummaryInputs] Optional cached summaries from the same collections snapshot, used to avoid recomputing shared health, monthly, and goal summary work.
  * @returns {Result<Array<{metric: string, value: number, valueFormat: 'currency'|'percent'|'count'|'duration', description: string}>>}
  */
 export function calculateDetailedDashboardDatapointRowsFromCurrentCollectionsState(currentCollectionsState, precomputedSummaryInputs = null) {
@@ -2617,23 +2675,6 @@ export function calculateDetailedDashboardDatapointRowsFromCurrentCollectionsSta
     return [null, errorValue]
   }
 
-  const [sourceBreakdown, sourceBreakdownError] = hasPrecomputedSummaryInputs && precomputedSummaryInputs.sourceBreakdown
-    ? [precomputedSummaryInputs.sourceBreakdown, null]
-    : calculateCurrentAndPreviousMonthSourceBreakdownFromCollectionsState(currentCollectionsState)
-  if (sourceBreakdownError) return [null, sourceBreakdownError]
-  if (!sourceBreakdown) {
-    const [errorValue, createErrorFailure] = buildValidationApplicationErrorForCondition(
-      'source breakdown is unexpectedly empty',
-      {
-        parentFunctionUseHint: 'Used to calculate detailed dashboard datapoint rows from current collections state.',
-        errorDetailsHint: 'The current-versus-previous month source breakdown helper returned an empty result unexpectedly.',
-        errorSeverityHint: 'high',
-        applicationErrorCode: 'SOURCE_BREAKDOWN_RETURNED_EMPTY_UNEXPECTEDLY'
-      }
-    )
-    if (createErrorFailure) return [null, createErrorFailure]
-    return [null, errorValue]
-  }
   const [monthlySavingsStorageSummary, monthlySavingsStorageSummaryError] = hasPrecomputedSummaryInputs && precomputedSummaryInputs.monthlySavingsStorageSummary
     ? [precomputedSummaryInputs.monthlySavingsStorageSummary, null]
     : calculateMonthlySavingsStorageSummaryFromCollectionsState(currentCollectionsState)
@@ -2672,24 +2713,57 @@ export function calculateDetailedDashboardDatapointRowsFromCurrentCollectionsSta
 
   const creditCardInformationCollection = derivedCreditCards
   const hasCreditCardInformationRows = creditCardInformationCollection.length > 0
+  const normalizedCreditRowsForDebtPayments = hasCreditCardInformationRows
+    ? creditCardInformationCollection.map((creditCardItem) => ({
+      ...creditCardItem,
+      minimumPayment: typeof creditCardItem.minimumPayment === 'number'
+        ? creditCardItem.minimumPayment
+        : (typeof creditCardItem.monthlyPayment === 'number' ? creditCardItem.monthlyPayment : 0),
+      currentPaymentPace: typeof creditCardItem.monthlyPayment === 'number'
+        ? creditCardItem.monthlyPayment
+        : (typeof creditCardItem.minimumPayment === 'number' ? creditCardItem.minimumPayment : 0)
+    }))
+    : derivedCredit.map((creditItem) => ({
+      ...creditItem,
+      minimumPayment: typeof creditItem.minimumPayment === 'number' ? creditItem.minimumPayment : 0,
+      currentPaymentPace: typeof creditItem.monthlyPayment === 'number'
+        ? creditItem.monthlyPayment
+        : (typeof creditItem.minimumPayment === 'number' ? creditItem.minimumPayment : 0)
+    }))
   const totalCreditCapacity = hasCreditCardInformationRows
     ? sumNumericFieldFromCollectionItems(creditCardInformationCollection, 'maxCapacity')
     : sumNumericFieldFromCollectionItems(derivedCredit, 'creditLimit')
   const totalCreditCardDebt = hasCreditCardInformationRows
     ? sumNumericFieldFromCollectionItems(creditCardInformationCollection, 'currentBalance')
     : sumNumericFieldFromCollectionItems(derivedCredit, 'amount')
-  const totalCreditMonthlyPayment = hasCreditCardInformationRows
-    ? sumNumericFieldFromCollectionItems(creditCardInformationCollection, 'monthlyPayment')
-    : sumNumericFieldFromCollectionItems(derivedCredit, 'minimumPayment')
+  const availableCreditRemaining = Math.max(0, totalCreditCapacity - totalCreditCardDebt)
+  const totalCreditMinimumPayment = sumNumericFieldFromCollectionItems(normalizedCreditRowsForDebtPayments, 'minimumPayment')
+  const totalCreditCurrentPaymentPace = sumNumericFieldFromCollectionItems(normalizedCreditRowsForDebtPayments, 'currentPaymentPace')
   // Critical path: missing limits should degrade to 0% utilization, not invalid numeric state.
   const creditUtilizationPercent = totalCreditCapacity > 0 ? (totalCreditCardDebt / totalCreditCapacity) * 100 : 0
 
-  const totalMonthlyDebtPayback = sumNumericFieldFromCollectionItems(derivedDebts, 'minimumPayment') +
-    totalCreditMonthlyPayment +
-    sumNumericFieldFromCollectionItems(derivedLoans, 'minimumPayment')
+  const sumRequiredDebtPaymentFromCollectionItems = (collectionItems) => collectionItems.reduce((runningTotal, collectionItem) => {
+    const requiredPayment = typeof collectionItem.minimumPayment === 'number'
+      ? collectionItem.minimumPayment
+      : (typeof collectionItem.monthlyPayment === 'number' ? collectionItem.monthlyPayment : 0)
+    return runningTotal + requiredPayment
+  }, 0)
+  const sumCurrentDebtPaymentPaceFromCollectionItems = (collectionItems) => collectionItems.reduce((runningTotal, collectionItem) => {
+    const currentPaymentPace = typeof collectionItem.monthlyPayment === 'number'
+      ? collectionItem.monthlyPayment
+      : (typeof collectionItem.minimumPayment === 'number' ? collectionItem.minimumPayment : 0)
+    return runningTotal + currentPaymentPace
+  }, 0)
+
+  const totalMonthlyDebtMinimums = sumRequiredDebtPaymentFromCollectionItems(derivedDebts) +
+    totalCreditMinimumPayment +
+    sumRequiredDebtPaymentFromCollectionItems(derivedLoans)
+  const totalMonthlyDebtPaybackPace = sumCurrentDebtPaymentPaceFromCollectionItems(derivedDebts) +
+    totalCreditCurrentPaymentPace +
+    sumCurrentDebtPaymentPaceFromCollectionItems(derivedLoans)
 
   const debtToIncomeRatioPercent = monthlySummary.totalIncome > 0
-    ? (totalMonthlyDebtPayback / monthlySummary.totalIncome) * 100
+    ? (totalMonthlyDebtMinimums / monthlySummary.totalIncome) * 100
     : 0
 
   const [emergencyFundSummary, emergencyFundSummaryError] = hasPrecomputedSummaryInputs && precomputedSummaryInputs.emergencyFundSummary
@@ -2711,10 +2785,6 @@ export function calculateDetailedDashboardDatapointRowsFromCurrentCollectionsSta
   }
   const emergencyFundGoal = emergencyFundSummary.emergencyFundGoal
   const emergencyFundsCurrent = emergencyFundSummary.totalEmergencyFundAmount
-  const emergencyFundGoalProgressPercent = emergencyFundGoal > 0
-    ? (emergencyFundsCurrent / emergencyFundGoal) * 100
-    : 0
-
   const [goalStatusSummary, goalStatusSummaryError] = hasPrecomputedSummaryInputs && precomputedSummaryInputs.goalStatusSummary
     ? [precomputedSummaryInputs.goalStatusSummary, null]
     : calculatePowerGoalsStatusFormulaSummaryFromGoalCollection(derivedGoals)
@@ -2743,6 +2813,7 @@ export function calculateDetailedDashboardDatapointRowsFromCurrentCollectionsSta
     return targetAmount > 0 && currentAmount >= targetAmount
   }).length
   const travelGoalsOnBucketList = travelGoals.length
+  const travelGoalCompletionRatePercent = travelGoalsOnBucketList > 0 ? (travelGoalsCompleted / travelGoalsOnBucketList) * 100 : 0
 
   const totalDebtBalance = sumNumericFieldFromCollectionItems(derivedDebts, 'amount') +
     totalCreditCardDebt +
@@ -2774,35 +2845,42 @@ export function calculateDetailedDashboardDatapointRowsFromCurrentCollectionsSta
     : 0
   const [monthsUntilDebtFree, monthsUntilDebtFreeError] = calculateEstimatedPayoffMonthsFromBalancePaymentAndInterestRate(
     totalDebtBalance,
-    totalMonthlyDebtPayback,
+    totalMonthlyDebtPaybackPace,
     weightedAverageInterestRatePercent
   )
   if (monthsUntilDebtFreeError) return [null, monthsUntilDebtFreeError]
-  const incomeAfterDebtMinimums = monthlySummary.totalIncome - totalMonthlyDebtPayback
+  const incomeAfterDebtMinimums = monthlySummary.totalIncome - totalMonthlyDebtMinimums
   const monthlySurplus = monthlySummary.monthlySurplusDeficit
-  const projectedNetWorthThreeMonths = healthMetrics.netWorth + (monthlySurplus * 3)
-  const projectedNetWorthSixMonths = healthMetrics.netWorth + (monthlySurplus * 6)
-  const projectedNetWorthTwelveMonths = healthMetrics.netWorth + (monthlySurplus * 12)
+  const annualizedSurplusDeficit = monthlySurplus * 12
   const emergencyFundGap = Math.max(0, emergencyFundGoal - emergencyFundsCurrent)
+  const liquidEmergencyFundMonthsCovered = emergencyFundSummary.liquidCoverageMonths
   const emergencyFundMonthsCovered = emergencyFundSummary.totalCoverageMonths
-  const debtCoverageByAssetsPercent = totalDebtBalance > 0 ? (healthMetrics.totalAssets / totalDebtBalance) * 100 : 0
-  const liabilitiesAsPercentOfAssets = healthMetrics.totalAssets > 0 ? (totalDebtBalance / healthMetrics.totalAssets) * 100 : 0
-  const debtBalanceWithoutMortgage = Math.max(0, totalDebtBalance - derivedDebts.reduce((runningTotal, debtItem) => {
+  const goalCompletionRatePercent = goalStatusSummary.completionRatePercent
+  const shortTermGoalsNotStarted = goalStatusSummary.shortTermNotStartedCount
+  const debtRowsEligibleForMortgageDetection = [...derivedDebts, ...derivedLoans]
+  const mortgageBalance = debtRowsEligibleForMortgageDetection.reduce((runningTotal, debtItem) => {
     const isMortgage = typeof debtItem.item === 'string' && debtItem.item.toLowerCase().includes('mortgage')
     return runningTotal + (isMortgage && typeof debtItem.amount === 'number' ? debtItem.amount : 0)
-  }, 0))
-  const mortgageBalance = totalDebtBalance - debtBalanceWithoutMortgage
+  }, 0)
+  const debtBalanceWithoutMortgage = Math.max(0, totalDebtBalance - mortgageBalance)
   const mortgageShareOfLiabilitiesPercent = totalDebtBalance > 0 ? (mortgageBalance / totalDebtBalance) * 100 : 0
-  const debtMinimumsAsPercentOfExpenses = monthlySummary.totalExpenses > 0 ? (totalMonthlyDebtPayback / monthlySummary.totalExpenses) * 100 : 0
-  const discretionaryAfterEssentialsAndDebt = monthlySummary.totalIncome - monthlySummary.totalExpenses - totalMonthlyDebtPayback
-  const monthlyBurnAfterDebt = monthlySummary.totalExpenses + totalMonthlyDebtPayback
+  const debtMinimumsAsPercentOfExpenses = monthlySummary.totalExpenses > 0 ? (totalMonthlyDebtMinimums / monthlySummary.totalExpenses) * 100 : 0
+  const debtServiceExpenseKeywords = ['debt payment', 'credit card', 'loan payment', 'minimum payment', 'mortgage']
+  const debtServiceExpenseAmountAlreadyRecorded = (Array.isArray(currentCollectionsState.expenses) ? currentCollectionsState.expenses : deriveNamedCollectionsFromState(currentCollectionsState).expenses).reduce((runningTotal, expenseItem) => {
+    const category = typeof expenseItem.category === 'string' ? expenseItem.category.trim().toLowerCase() : ''
+    const item = typeof expenseItem.item === 'string' ? expenseItem.item.trim().toLowerCase() : ''
+    const description = typeof expenseItem.description === 'string' ? expenseItem.description.trim().toLowerCase() : ''
+    const combinedText = `${category} ${item} ${description}`.trim()
+    if (!debtServiceExpenseKeywords.some((keyword) => combinedText.includes(keyword))) return runningTotal
+    const amount = typeof expenseItem.amount === 'number' ? expenseItem.amount : 0
+    return runningTotal + amount
+  }, 0)
+  const monthlyNonDebtExpenses = Math.max(0, monthlySummary.totalExpenses - debtServiceExpenseAmountAlreadyRecorded)
+  const discretionaryAfterEssentialsAndDebt = monthlySummary.totalIncome - monthlyNonDebtExpenses - totalMonthlyDebtMinimums
+  const monthlyBurnAfterDebt = monthlyNonDebtExpenses + totalMonthlyDebtMinimums
   const cashRunwayAfterDebtMonths = monthlyBurnAfterDebt > 0 ? emergencyFundsCurrent / monthlyBurnAfterDebt : 0
-  const incomeChangeMonthOverMonth = sourceBreakdown.income.delta
-  const expenseChangeMonthOverMonth = sourceBreakdown.expenses.delta
-  const liabilitiesChangeMonthOverMonth = sourceBreakdown.liabilities.delta
-  const netWorthChangeMonthOverMonth = sourceBreakdown.netWorth.delta
-  const debtPaydownVelocityPercent = totalDebtBalance > 0 ? (totalMonthlyDebtPayback / totalDebtBalance) * 100 : 0
-  const annualDebtService = totalMonthlyDebtPayback * 12
+  const debtPaydownVelocityPercent = totalDebtBalance > 0 ? (totalMonthlyDebtMinimums / totalDebtBalance) * 100 : 0
+  const annualDebtService = totalMonthlyDebtMinimums * 12
   const securedDebtRows = [...derivedDebts, ...derivedLoans].filter((rowItem) => {
     const collateralAssetMarketValue = typeof rowItem.collateralAssetMarketValue === 'number' ? rowItem.collateralAssetMarketValue : 0
     return collateralAssetMarketValue > 0
@@ -2813,6 +2891,158 @@ export function calculateDetailedDashboardDatapointRowsFromCurrentCollectionsSta
     ? (totalSecuredDebtBalance / totalSecuredCollateralMarketValue) * 100
     : 0
   const securedEquityValue = totalSecuredCollateralMarketValue - totalSecuredDebtBalance
+  const normalizeFiniteMetricValueForDisplay = (rawMetricValue) => Number.isFinite(rawMetricValue) ? rawMetricValue : 0
+  const buildNegativeDisplayValueFromMetricValue = (rawMetricValue) => -Math.abs(normalizeFiniteMetricValueForDisplay(rawMetricValue))
+  const buildSignedDisplayValueFromMetricValueUsingMaximumHealthyThreshold = (rawMetricValue, maximumHealthyThreshold) => {
+    const absoluteMetricValue = Math.abs(normalizeFiniteMetricValueForDisplay(rawMetricValue))
+    if (absoluteMetricValue === 0) return 0
+    return absoluteMetricValue <= maximumHealthyThreshold ? absoluteMetricValue : -absoluteMetricValue
+  }
+  const buildSignedDisplayValueFromMetricValueUsingMinimumHealthyThreshold = (rawMetricValue, minimumHealthyThreshold) => {
+    const absoluteMetricValue = Math.abs(normalizeFiniteMetricValueForDisplay(rawMetricValue))
+    if (absoluteMetricValue === 0) return 0
+    return absoluteMetricValue >= minimumHealthyThreshold ? absoluteMetricValue : -absoluteMetricValue
+  }
+
+  const buildAvailableCreditRemainingDescriptionFromDerivedValues = (availableCreditAmount, totalCapacityAmount) => {
+    if (totalCapacityAmount <= 0) return 'No credit limit data yet. Add card limits to make this useful.'
+    const availableCreditPercent = (availableCreditAmount / totalCapacityAmount) * 100
+    if (availableCreditPercent >= 70) return 'Plenty of unused room. Healthy buffer.'
+    if (availableCreditPercent >= 40) return 'Still workable, but keep an eye on balances.'
+    if (availableCreditPercent > 0) return 'Running tight. One surprise charge could hurt flexibility.'
+    return 'No available room left. Highest-risk state.'
+  }
+
+  const buildCreditUtilizationDescriptionFromDerivedValues = (utilizationPercentValue) => {
+    if (utilizationPercentValue <= 0) return 'No card balance. Cleanest state.'
+    if (utilizationPercentValue < 10) return 'Very low usage. Excellent.'
+    if (utilizationPercentValue < 30) return 'Healthy range. Usually credit-friendly.'
+    if (utilizationPercentValue < 50) return 'Manageable, but getting elevated.'
+    return 'High utilization. Paydown should be a priority.'
+  }
+
+  const buildDebtToIncomeDescriptionFromDerivedValues = (debtToIncomePercentValue) => {
+    if (debtToIncomePercentValue <= 0) return 'No required debt payments against income.'
+    if (debtToIncomePercentValue < 20) return 'Low payment burden. Strong flexibility.'
+    if (debtToIncomePercentValue < 36) return 'Reasonable range for most budgets.'
+    if (debtToIncomePercentValue < 43) return 'Tightening. New debt should be cautious.'
+    return 'Heavy debt load. Budget resilience is likely weak.'
+  }
+
+  const buildGoalCompletionRateDescriptionFromDerivedValues = (completionPercentValue, goalsInProgressCount) => {
+    if (completionPercentValue >= 75) return 'Most tracked goals are landing.'
+    if (completionPercentValue >= 40) return goalsInProgressCount > 0 ? 'Mixed progress, but momentum exists.' : 'Mixed completion and little current momentum.'
+    return goalsInProgressCount > 0 ? 'Completion is low, but active work is underway.' : 'Low completion and no active momentum.'
+  }
+
+  const buildShortTermGoalsNotStartedDescriptionFromDerivedValues = (shortTermCountValue) => {
+    if (shortTermCountValue === 0) return 'No stalled near-term goals.'
+    if (shortTermCountValue <= 2) return 'A few near-term goals need a kickoff.'
+    return 'Several near-term goals are idle. Prioritization is probably drifting.'
+  }
+
+  const buildMonthsUntilDebtFreeDescriptionFromDerivedValues = (monthsValue) => {
+    if (monthsValue <= 0) return 'Nothing left to pay off.'
+    if (monthsValue <= 24) return 'Short runway. Payoff is in sight.'
+    if (monthsValue <= 60) return 'Manageable multi-year payoff path.'
+    if (monthsValue < 9999) return 'Long payoff horizon. Extra payments would help.'
+    return 'Current payment pace barely covers interest.'
+  }
+
+  const buildWeightedInterestRateDescriptionFromDerivedValues = (interestRatePercentValue) => {
+    if (interestRatePercentValue <= 0) return 'No effective borrowing cost recorded.'
+    if (interestRatePercentValue < 5) return 'Low-cost debt mix.'
+    if (interestRatePercentValue < 10) return 'Moderate borrowing cost.'
+    if (interestRatePercentValue < 18) return 'Expensive enough to watch closely.'
+    return 'High-cost debt. Aggressive payoff likely matters.'
+  }
+
+  const buildSavingsRateDescriptionFromDerivedValues = (savingsRatePercentValue) => {
+    if (savingsRatePercentValue < 0) return 'Negative savings rate. Spending is outpacing income.'
+    if (savingsRatePercentValue < 10) return 'Positive, but still thin.'
+    if (savingsRatePercentValue < 20) return 'Solid baseline saving.'
+    return 'Strong savings pace.'
+  }
+
+  const buildTravelGoalCompletionRateDescriptionFromDerivedValues = (completionPercentValue, travelGoalCountValue) => {
+    if (travelGoalCountValue === 0) return 'No travel goals tracked yet.'
+    if (completionPercentValue >= 60) return 'Travel plans are turning into actual trips.'
+    if (completionPercentValue > 0) return 'Some travel goals are landing, but the list is outrunning execution.'
+    return 'Travel ambitions are tracked, but none are landing yet.'
+  }
+
+  const buildAnnualizedSurplusDeficitDescriptionFromDerivedValues = (annualizedSurplusValue) => {
+    if (annualizedSurplusValue > 0) return 'If this pace holds, the year ends positive.'
+    if (annualizedSurplusValue === 0) return 'Break-even pace.'
+    return 'If this pace holds, the year ends in the red.'
+  }
+
+  const buildIncomeAfterDebtMinimumsDescriptionFromDerivedValues = (incomeAfterDebtValue, monthlyIncomeValue) => {
+    if (monthlyIncomeValue <= 0) return 'No income base recorded yet.'
+    const remainingIncomePercent = (incomeAfterDebtValue / monthlyIncomeValue) * 100
+    if (remainingIncomePercent >= 80) return 'Debt minimums barely dent income.'
+    if (remainingIncomePercent >= 60) return 'Still plenty of room after debt service.'
+    if (remainingIncomePercent >= 40) return 'Debt service is meaningful, but still workable.'
+    return 'Debt minimums are consuming a large share of income.'
+  }
+
+  const buildMonthlySurplusDeficitDescriptionFromDerivedValues = (monthlySurplusValue) => {
+    if (monthlySurplusValue > 0) return 'Positive month. Extra cash can build reserves or speed up goals.'
+    if (monthlySurplusValue === 0) return 'Break-even month. Stable, but no margin.'
+    return 'Negative month. Spending needs attention.'
+  }
+
+  const buildEmergencyFundGapDescriptionFromDerivedValues = (gapValue) => {
+    if (gapValue <= 0) return 'Goal fully funded.'
+    return 'Still short of target. Lower is better.'
+  }
+
+  const buildEmergencyFundCoverageDescriptionFromDerivedValues = (coverageMonthsValue) => {
+    if (coverageMonthsValue >= 6) return 'Strong reserve buffer.'
+    if (coverageMonthsValue >= 3) return 'Decent baseline cushion.'
+    if (coverageMonthsValue > 0) return 'Some buffer exists, but it is thin.'
+    return 'No real emergency coverage yet.'
+  }
+
+  const buildLiquidEmergencyCoverageDescriptionFromDerivedValues = (coverageMonthsValue) => {
+    if (coverageMonthsValue >= 3) return 'Liquid reserves alone can absorb a real shock.'
+    if (coverageMonthsValue > 0) return 'Some liquid cushion exists, but it may run out fast.'
+    return 'Little to no liquid emergency cushion.'
+  }
+
+  const buildDebtMinimumsAsPercentOfExpensesDescriptionFromDerivedValues = (debtMinimumsPercentValue) => {
+    if (debtMinimumsPercentValue < 10) return 'Debt minimums take a small share of spending.'
+    if (debtMinimumsPercentValue < 20) return 'Debt is noticeable, but manageable.'
+    return 'Debt minimums are crowding the budget.'
+  }
+
+  const buildDiscretionaryAfterExpensesAndDebtDescriptionFromDerivedValues = (discretionaryAmountValue) => {
+    if (discretionaryAmountValue > 0) return 'True free cash remains after obligations.'
+    if (discretionaryAmountValue === 0) return 'No flex room after obligations.'
+    return 'Core obligations are exceeding income.'
+  }
+
+  const buildCashRunwayAfterDebtServiceDescriptionFromDerivedValues = (runwayMonthsValue) => {
+    if (runwayMonthsValue >= 6) return 'Healthy runway. A shock is survivable.'
+    if (runwayMonthsValue >= 3) return 'Reasonable runway, but not deep.'
+    if (runwayMonthsValue > 0) return 'Short runway. Fragile if income slips.'
+    return 'No meaningful runway.'
+  }
+
+  const buildDebtServiceRateDescriptionFromDerivedValues = (debtServicePercentValue) => {
+    if (debtServicePercentValue <= 0) return 'No recurring debt service recorded.'
+    if (debtServicePercentValue < 2) return 'Slow required paydown pace.'
+    if (debtServicePercentValue < 5) return 'Moderate paydown pace.'
+    return 'Fast paydown pace, but cash flow may feel tight.'
+  }
+
+  const buildSecuredDebtLoanToValueDescriptionFromDerivedValues = (loanToValuePercentValue) => {
+    if (loanToValuePercentValue <= 0) return 'No secured balance against the tracked collateral.'
+    if (loanToValuePercentValue < 60) return 'Conservative leverage.'
+    if (loanToValuePercentValue < 80) return 'Reasonable leverage, but watch market swings.'
+    if (loanToValuePercentValue < 100) return 'Thin equity cushion.'
+    return 'Debt is at or above collateral value.'
+  }
 
   const detailedRows = [
     {
@@ -2825,57 +3055,63 @@ export function calculateDetailedDashboardDatapointRowsFromCurrentCollectionsSta
     },
     {
       metric: 'Credit Card Debt',
-      value: totalCreditCardDebt,
+      value: buildNegativeDisplayValueFromMetricValue(totalCreditCardDebt),
       valueFormat: /** @type {'currency'} */ ('currency'),
       description: hasCreditCardInformationRows
         ? 'Current balance from the Credit Accounts section. Included in total debts.'
         : 'Current outstanding balance across all credit accounts. Included in total debts.'
     },
     {
+      metric: 'Available Credit Remaining',
+      value: availableCreditRemaining,
+      valueFormat: /** @type {'currency'} */ ('currency'),
+      description: buildAvailableCreditRemainingDescriptionFromDerivedValues(availableCreditRemaining, totalCreditCapacity)
+    },
+    {
       metric: 'Credit Card Utilization',
-      value: creditUtilizationPercent,
+      value: buildSignedDisplayValueFromMetricValueUsingMaximumHealthyThreshold(creditUtilizationPercent, 30),
       valueFormat: /** @type {'percent'} */ ('percent'),
-      description: 'Credit balance divided by total credit capacity. A lower percentage is healthier.'
+      description: buildCreditUtilizationDescriptionFromDerivedValues(creditUtilizationPercent)
     },
     {
       metric: 'Debt to Income Ratio',
-      value: debtToIncomeRatioPercent,
+      value: buildSignedDisplayValueFromMetricValueUsingMaximumHealthyThreshold(debtToIncomeRatioPercent, 36),
       valueFormat: /** @type {'percent'} */ ('percent'),
-      description: 'Monthly required debt payments divided by monthly income.'
+      description: buildDebtToIncomeDescriptionFromDerivedValues(debtToIncomeRatioPercent)
     },
     {
       metric: 'Emergency Funds',
       value: emergencyFundsCurrent,
       valueFormat: /** @type {'currency'} */ ('currency'),
-      description: 'Current emergency fund proxy from current-month assets. Compare to Emergency Funds Goal to see progress.'
+      description: 'Current emergency reserves. Higher is safer; compare against the goal and coverage rows.'
     },
     {
       metric: 'Emergency Funds Goal',
       value: emergencyFundGoal,
       valueFormat: /** @type {'currency'} */ ('currency'),
-      description: 'Six times recurring essential expenses plus non-credit-card debt minimums.'
+      description: 'Target reserve for 6 months of essentials plus debt minimums.'
     },
     {
-      metric: 'Goals Completed',
-      value: goalStatusSummary.completedCount,
-      valueFormat: /** @type {'count'} */ ('count'),
-      description: 'Goals where status is marked completed.'
+      metric: 'Goal Completion Rate',
+      value: buildSignedDisplayValueFromMetricValueUsingMinimumHealthyThreshold(goalCompletionRatePercent, 40),
+      valueFormat: /** @type {'percent'} */ ('percent'),
+      description: buildGoalCompletionRateDescriptionFromDerivedValues(goalCompletionRatePercent, goalStatusSummary.inProgressCount)
     },
     {
       metric: 'Goals In Progress',
       value: goalStatusSummary.inProgressCount,
       valueFormat: /** @type {'count'} */ ('count'),
-      description: 'Goals where status is marked in progress.'
+      description: 'Active goals currently being worked. Zero can mean the plan has stalled.'
     },
     {
-      metric: 'Goals Not Started',
-      value: goalStatusSummary.notStartedCount,
+      metric: 'Short-Term Goals Not Started',
+      value: buildNegativeDisplayValueFromMetricValue(shortTermGoalsNotStarted),
       valueFormat: /** @type {'count'} */ ('count'),
-      description: 'Goals where status is marked not started.'
+      description: buildShortTermGoalsNotStartedDescriptionFromDerivedValues(shortTermGoalsNotStarted)
     },
     {
       metric: 'Monthly Expenses',
-      value: monthlySummary.totalExpenses,
+      value: buildNegativeDisplayValueFromMetricValue(monthlySummary.totalExpenses),
       valueFormat: /** @type {'currency'} */ ('currency'),
       description: 'Total expenses from current recorded monthly expense entries.'
     },
@@ -2887,37 +3123,37 @@ export function calculateDetailedDashboardDatapointRowsFromCurrentCollectionsSta
     },
     {
       metric: 'Months Until Debt-Free',
-      value: monthsUntilDebtFree,
+      value: buildSignedDisplayValueFromMetricValueUsingMaximumHealthyThreshold(monthsUntilDebtFree, 60),
       valueFormat: /** @type {'duration'} */ ('duration'),
-      description: 'Estimated months to pay all debts at the current monthly debt payback pace.'
+      description: buildMonthsUntilDebtFreeDescriptionFromDerivedValues(monthsUntilDebtFree)
     },
     {
-      metric: 'Monthly Debt Payback',
-      value: totalMonthlyDebtPayback,
+      metric: 'Required Debt Payments',
+      value: buildNegativeDisplayValueFromMetricValue(totalMonthlyDebtMinimums),
       valueFormat: /** @type {'currency'} */ ('currency'),
-      description: 'Sum of minimum monthly payments across debt, credit, and loan records.'
+      description: 'Required monthly debt outflow before extra paydown. Lower leaves more room to plan.'
     },
     {
       metric: 'Weighted Interest Rate',
-      value: weightedAverageInterestRatePercent,
+      value: buildSignedDisplayValueFromMetricValueUsingMaximumHealthyThreshold(weightedAverageInterestRatePercent, 10),
       valueFormat: /** @type {'percent'} */ ('percent'),
-      description: 'Balance-weighted APR across debts, credit balances, and loans.'
+      description: buildWeightedInterestRateDescriptionFromDerivedValues(weightedAverageInterestRatePercent)
     },
     {
       metric: 'Net Worth',
       value: healthMetrics.netWorth,
       valueFormat: /** @type {'currency'} */ ('currency'),
-      description: 'Total assets minus total liabilities. See "Net Worth Change vs Last Month" for period-over-period movement.'
+      description: 'Total assets minus total liabilities.'
     },
     {
       metric: 'Savings Rate',
       value: monthlySavingsStorageSummary.monthlySavingsRatePercent,
       valueFormat: /** @type {'percent'} */ ('percent'),
-      description: 'Tracked monthly savings contributions divided by monthly income.'
+      description: buildSavingsRateDescriptionFromDerivedValues(monthlySavingsStorageSummary.monthlySavingsRatePercent)
     },
     {
       metric: 'Total Debts',
-      value: totalDebtBalance,
+      value: buildNegativeDisplayValueFromMetricValue(totalDebtBalance),
       valueFormat: /** @type {'currency'} */ ('currency'),
       description: 'Total liabilities including debts, credit balances, and loans.'
     },
@@ -2929,73 +3165,55 @@ export function calculateDetailedDashboardDatapointRowsFromCurrentCollectionsSta
     },
     {
       metric: 'Travel Goals On Bucket List',
-      value: travelGoalsOnBucketList,
+      value: buildSignedDisplayValueFromMetricValueUsingMaximumHealthyThreshold(travelGoalsOnBucketList, 10),
       valueFormat: /** @type {'count'} */ ('count'),
       description: 'Number of travel-related goals currently tracked.'
     },
     {
-      metric: 'Yearly Income',
-      value: monthlySummary.totalIncome * 12,
+      metric: 'Travel Goal Completion Rate',
+      value: buildSignedDisplayValueFromMetricValueUsingMinimumHealthyThreshold(travelGoalCompletionRatePercent, 25),
+      valueFormat: /** @type {'percent'} */ ('percent'),
+      description: buildTravelGoalCompletionRateDescriptionFromDerivedValues(travelGoalCompletionRatePercent, travelGoalsOnBucketList)
+    },
+    {
+      metric: 'Annualized Surplus / Deficit',
+      value: annualizedSurplusDeficit,
       valueFormat: /** @type {'currency'} */ ('currency'),
-      description: 'Current monthly income annualized.'
+      description: buildAnnualizedSurplusDeficitDescriptionFromDerivedValues(annualizedSurplusDeficit)
     },
     {
       metric: 'Income After Debt Minimums',
       value: incomeAfterDebtMinimums,
       valueFormat: /** @type {'currency'} */ ('currency'),
-      description: 'Monthly income remaining after minimum debt payments.'
+      description: buildIncomeAfterDebtMinimumsDescriptionFromDerivedValues(incomeAfterDebtMinimums, monthlySummary.totalIncome)
     },
     {
       metric: 'Monthly Surplus / Deficit',
       value: monthlySurplus,
       valueFormat: /** @type {'currency'} */ ('currency'),
-      description: 'Monthly income minus monthly expenses.'
-    },
-    {
-      metric: 'Projected Net Worth (3 Months)',
-      value: projectedNetWorthThreeMonths,
-      valueFormat: /** @type {'currency'} */ ('currency'),
-      description: 'Current net worth projected forward 3 months at current surplus pace.'
-    },
-    {
-      metric: 'Projected Net Worth (6 Months)',
-      value: projectedNetWorthSixMonths,
-      valueFormat: /** @type {'currency'} */ ('currency'),
-      description: 'Current net worth projected forward 6 months at current surplus pace.'
-    },
-    {
-      metric: 'Projected Net Worth (12 Months)',
-      value: projectedNetWorthTwelveMonths,
-      valueFormat: /** @type {'currency'} */ ('currency'),
-      description: 'Current net worth projected forward 12 months at current surplus pace.'
+      description: buildMonthlySurplusDeficitDescriptionFromDerivedValues(monthlySurplus)
     },
     {
       metric: 'Emergency Fund Gap',
-      value: emergencyFundGap,
+      value: buildNegativeDisplayValueFromMetricValue(emergencyFundGap),
       valueFormat: /** @type {'currency'} */ ('currency'),
-      description: 'How much is still needed to hit the emergency fund goal.'
+      description: buildEmergencyFundGapDescriptionFromDerivedValues(emergencyFundGap)
     },
     {
       metric: 'Emergency Fund Coverage (Months)',
-      value: emergencyFundMonthsCovered,
+      value: buildSignedDisplayValueFromMetricValueUsingMinimumHealthyThreshold(emergencyFundMonthsCovered, 3),
       valueFormat: /** @type {'duration'} */ ('duration'),
-      description: 'How many months of recurring essential expenses plus non-credit-card debt minimums current emergency funds can cover.'
+      description: buildEmergencyFundCoverageDescriptionFromDerivedValues(emergencyFundMonthsCovered)
     },
     {
-      metric: 'Debt Coverage By Assets',
-      value: debtCoverageByAssetsPercent,
-      valueFormat: /** @type {'percent'} */ ('percent'),
-      description: 'Assets divided by total liabilities.'
-    },
-    {
-      metric: 'Liabilities As % Of Assets',
-      value: liabilitiesAsPercentOfAssets,
-      valueFormat: /** @type {'percent'} */ ('percent'),
-      description: 'Total liabilities divided by assets.'
+      metric: 'Liquid Emergency Coverage (Months)',
+      value: buildSignedDisplayValueFromMetricValueUsingMinimumHealthyThreshold(liquidEmergencyFundMonthsCovered, 1),
+      valueFormat: /** @type {'duration'} */ ('duration'),
+      description: buildLiquidEmergencyCoverageDescriptionFromDerivedValues(liquidEmergencyFundMonthsCovered)
     },
     {
       metric: 'Debt Balance Without Mortgage',
-      value: debtBalanceWithoutMortgage,
+      value: buildNegativeDisplayValueFromMetricValue(debtBalanceWithoutMortgage),
       valueFormat: /** @type {'currency'} */ ('currency'),
       description: 'Total liabilities excluding identified mortgage balances.'
     },
@@ -3003,61 +3221,37 @@ export function calculateDetailedDashboardDatapointRowsFromCurrentCollectionsSta
       metric: 'Mortgage Share Of Liabilities',
       value: mortgageShareOfLiabilitiesPercent,
       valueFormat: /** @type {'percent'} */ ('percent'),
-      description: 'Mortgage balance as a share of total liabilities.'
+      description: 'How much of total debt is mortgage-related. Context metric; not automatically good or bad.'
     },
     {
       metric: 'Debt Minimums As % Of Expenses',
-      value: debtMinimumsAsPercentOfExpenses,
+      value: buildSignedDisplayValueFromMetricValueUsingMaximumHealthyThreshold(debtMinimumsAsPercentOfExpenses, 20),
       valueFormat: /** @type {'percent'} */ ('percent'),
-      description: 'Monthly debt minimums divided by monthly expenses.'
+      description: buildDebtMinimumsAsPercentOfExpensesDescriptionFromDerivedValues(debtMinimumsAsPercentOfExpenses)
     },
     {
       metric: 'Discretionary After Expenses + Debt',
       value: discretionaryAfterEssentialsAndDebt,
       valueFormat: /** @type {'currency'} */ ('currency'),
-      description: 'Income remaining after expenses and monthly debt minimums.'
+      description: buildDiscretionaryAfterExpensesAndDebtDescriptionFromDerivedValues(discretionaryAfterEssentialsAndDebt)
     },
     {
       metric: 'Cash Runway After Debt Service',
-      value: cashRunwayAfterDebtMonths,
+      value: buildSignedDisplayValueFromMetricValueUsingMinimumHealthyThreshold(cashRunwayAfterDebtMonths, 3),
       valueFormat: /** @type {'duration'} */ ('duration'),
-      description: 'Months current emergency funds can cover all recurring expenses and debt minimums at the current burn rate.'
-    },
-    {
-      metric: 'Income Change vs Last Month',
-      value: incomeChangeMonthOverMonth,
-      valueFormat: /** @type {'currency'} */ ('currency'),
-      description: 'Current-month income minus previous-month income.'
-    },
-    {
-      metric: 'Expense Change vs Last Month',
-      value: expenseChangeMonthOverMonth,
-      valueFormat: /** @type {'currency'} */ ('currency'),
-      description: 'Current-month expenses minus previous-month expenses.'
-    },
-    {
-      metric: 'Liabilities Change vs Last Month',
-      value: liabilitiesChangeMonthOverMonth,
-      valueFormat: /** @type {'currency'} */ ('currency'),
-      description: 'Current-month liabilities minus previous-month liabilities.'
-    },
-    {
-      metric: 'Net Worth Change vs Last Month',
-      value: netWorthChangeMonthOverMonth,
-      valueFormat: /** @type {'currency'} */ ('currency'),
-      description: 'Current-month net worth minus previous-month net worth.'
+      description: buildCashRunwayAfterDebtServiceDescriptionFromDerivedValues(cashRunwayAfterDebtMonths)
     },
     {
       metric: 'Annual Debt Service',
-      value: annualDebtService,
+      value: buildNegativeDisplayValueFromMetricValue(annualDebtService),
       valueFormat: /** @type {'currency'} */ ('currency'),
-      description: 'Annualized monthly debt minimum payments.'
+      description: 'Required debt payments annualized. Useful for seeing how much yearly cash flow is already committed.'
     },
     {
-      metric: 'Debt Paydown Velocity',
+      metric: 'Debt Service Rate',
       value: debtPaydownVelocityPercent,
       valueFormat: /** @type {'percent'} */ ('percent'),
-      description: 'Monthly debt minimums as a share of total liabilities.'
+      description: buildDebtServiceRateDescriptionFromDerivedValues(debtPaydownVelocityPercent)
     },
     {
       metric: 'Secured Collateral Market Value',
@@ -3069,13 +3263,13 @@ export function calculateDetailedDashboardDatapointRowsFromCurrentCollectionsSta
       metric: 'Secured Equity',
       value: securedEquityValue,
       valueFormat: /** @type {'currency'} */ ('currency'),
-      description: 'Tracked collateral market value minus associated secured debt balances.'
+      description: 'Estimated value left after secured debts are subtracted from collateral. Higher is better.'
     },
     {
       metric: 'Secured Debt Loan-To-Value',
-      value: securedDebtLoanToValuePercent,
+      value: buildSignedDisplayValueFromMetricValueUsingMaximumHealthyThreshold(securedDebtLoanToValuePercent, 80),
       valueFormat: /** @type {'percent'} */ ('percent'),
-      description: 'Debt+loan balance divided by collateral market value (lower is safer).'
+      description: buildSecuredDebtLoanToValueDescriptionFromDerivedValues(securedDebtLoanToValuePercent)
     }
   ]
 
