@@ -727,7 +727,17 @@ export async function exportBudgetCollectionsStateAsJsonTextSnapshot(budgetColle
     if (createErrorFailure) return [null, createErrorFailure]
     return [null, errorValue]
   }
-  if (!Array.isArray(budgetCollectionsState.income) || !Array.isArray(budgetCollectionsState.expenses)) {
+  const isV3Export = typeof budgetCollectionsState.schemaVersion === 'number' && budgetCollectionsState.schemaVersion >= 3
+  if (isV3Export && !Array.isArray(budgetCollectionsState.records)) {
+    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext(
+      'VALIDATION',
+      'v3 budgetCollectionsState must include a records array',
+      true
+    )
+    if (createErrorFailure) return [null, createErrorFailure]
+    return [null, errorValue]
+  }
+  if (!isV3Export && (!Array.isArray(budgetCollectionsState.income) || !Array.isArray(budgetCollectionsState.expenses))) {
     const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext(
       'VALIDATION',
       'budgetCollectionsState must include income and expenses arrays',
@@ -779,7 +789,8 @@ export async function importBudgetCollectionsStateFromJsonTextSnapshot(budgetCol
     if (createErrorFailure) return [null, createErrorFailure]
     return [null, errorValue]
   }
-  if (!Array.isArray(parsedValue.income) || !Array.isArray(parsedValue.expenses)) {
+  const isV3Import = typeof parsedValue.schemaVersion === 'number' && parsedValue.schemaVersion >= 3
+  if (!isV3Import && (!Array.isArray(parsedValue.income) || !Array.isArray(parsedValue.expenses))) {
     const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext(
       'VALIDATION',
       'imported profile is missing income or expenses arrays',

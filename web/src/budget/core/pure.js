@@ -332,22 +332,8 @@ export function buildSortedAndFilteredCollectionFromRecordsUsingCriteria(records
  * @returns {Result<Record<string, number>>}
  */
 export function calculateTwentyDashboardHealthMetricsFromFinancialCollections(financialCollections) {
-  const requiredCollectionNames = /** @type {Array<'income'|'expenses'|'assets'|'debts'|'credit'|'loans'|'goals'>} */ (
-    ['income', 'expenses', 'assets', 'debts', 'credit', 'loans', 'goals']
-  )
-
-  for (const requiredCollectionName of requiredCollectionNames) {
-    if (!Array.isArray(financialCollections[requiredCollectionName])) {
-      const [errorValue, createErrorFailure] = createApplicationErrorWithKindMessageAndRecoverability(
-        'VALIDATION',
-        `${requiredCollectionName} must be an array`,
-        true,
-        { requiredCollectionName }
-      )
-      if (createErrorFailure) return [null, createErrorFailure]
-      return [null, errorValue]
-    }
-  }
+  const { income, expenses, assets, assetHoldings, debts, loans, credit } = deriveNamedCollectionsFromState(financialCollections)
+  const goals = Array.isArray(financialCollections.goals) ? financialCollections.goals : []
 
   /**
    * Sums numeric values from a collection by field name.
@@ -362,21 +348,19 @@ export function calculateTwentyDashboardHealthMetricsFromFinancialCollections(fi
       return runningTotal + amountValue
     }, 0)
 
-  const totalIncome = sumAmountsFromCollection(financialCollections.income, 'amount')
-  const totalExpenses = sumAmountsFromCollection(financialCollections.expenses, 'amount')
-  const totalDirectAssets = sumAmountsFromCollection(financialCollections.assets, 'amount')
-  const totalAssetHoldingNetValue = Array.isArray(financialCollections.assetHoldings)
-    ? financialCollections.assetHoldings.reduce((runningTotal, assetHoldingItem) => {
-      const marketValue = typeof assetHoldingItem.assetMarketValue === 'number' ? assetHoldingItem.assetMarketValue : 0
-      const owedValue = typeof assetHoldingItem.assetValueOwed === 'number' ? assetHoldingItem.assetValueOwed : 0
-      return runningTotal + (marketValue - owedValue)
-    }, 0)
-    : 0
+  const totalIncome = sumAmountsFromCollection(income, 'amount')
+  const totalExpenses = sumAmountsFromCollection(expenses, 'amount')
+  const totalDirectAssets = sumAmountsFromCollection(assets, 'amount')
+  const totalAssetHoldingNetValue = assetHoldings.reduce((runningTotal, assetHoldingItem) => {
+    const marketValue = typeof assetHoldingItem.assetMarketValue === 'number' ? assetHoldingItem.assetMarketValue : 0
+    const owedValue = typeof assetHoldingItem.assetValueOwed === 'number' ? assetHoldingItem.assetValueOwed : 0
+    return runningTotal + (marketValue - owedValue)
+  }, 0)
   // Critical path: overview net worth should be driven only by explicit asset datasets.
   const totalAssets = totalDirectAssets + totalAssetHoldingNetValue
-  const totalDebts = sumAmountsFromCollection(financialCollections.debts, 'amount')
-  const totalCreditBalance = sumAmountsFromCollection(financialCollections.credit, 'amount')
-  const totalLoanBalance = sumAmountsFromCollection(financialCollections.loans, 'amount')
+  const totalDebts = sumAmountsFromCollection(debts, 'amount')
+  const totalCreditBalance = sumAmountsFromCollection(credit, 'amount')
+  const totalLoanBalance = sumAmountsFromCollection(loans, 'amount')
   const totalLiabilities = totalDebts + totalCreditBalance + totalLoanBalance
   const monthlySurplus = totalIncome - totalExpenses
   const netWorth = totalAssets - totalLiabilities
@@ -386,16 +370,16 @@ export function calculateTwentyDashboardHealthMetricsFromFinancialCollections(fi
   const safeExpenseDivisor = totalExpenses > 0 ? totalExpenses : 1
   const safeAssetDivisor = totalAssets > 0 ? totalAssets : 1
 
-  const averageCreditUtilization = financialCollections.credit.length === 0
+  const averageCreditUtilization = credit.length === 0
     ? 0
-    : financialCollections.credit.reduce((runningUtilization, creditRecord) => {
+    : credit.reduce((runningUtilization, creditRecord) => {
       const balance = typeof creditRecord.amount === 'number' ? creditRecord.amount : 0
       const creditLimit = typeof creditRecord.creditLimit === 'number' && creditRecord.creditLimit > 0 ? creditRecord.creditLimit : 1
       return runningUtilization + balance / creditLimit
-    }, 0) / financialCollections.credit.length
+    }, 0) / credit.length
 
-  const totalGoalTarget = sumAmountsFromCollection(financialCollections.goals, 'targetAmount')
-  const totalGoalCurrent = sumAmountsFromCollection(financialCollections.goals, 'currentAmount')
+  const totalGoalTarget = sumAmountsFromCollection(goals, 'targetAmount')
+  const totalGoalCurrent = sumAmountsFromCollection(goals, 'currentAmount')
   const goalProgressScore = totalGoalTarget > 0 ? (totalGoalCurrent / totalGoalTarget) * 100 : 0
 
   const healthMetrics = {
@@ -425,24 +409,121 @@ export function calculateTwentyDashboardHealthMetricsFromFinancialCollections(fi
 }
 
 /**
- * Builds the default deterministic application state for core budgeting collections.
+ * Derives named collection views from v3 (records/instruments) or v2 (named arrays) state.
+ * Always returns arrays — empty when no canonical source is present.
+ * @param {Record<string, unknown>} state
+ * @returns {{income: Array<Record<string, unknown>>, expenses: Array<Record<string, unknown>>, assets: Array<Record<string, unknown>>, creditCards: Array<Record<string, unknown>>, debts: Array<Record<string, unknown>>, loans: Array<Record<string, unknown>>, assetHoldings: Array<Record<string, unknown>>, credit: Array<Record<string, unknown>>}}
+ */
+function deriveNamedCollectionsFromState(state) {
+  if (!state || typeof state !== 'object') {
+    return { income: [], expenses: [], assets: [], creditCards: [], debts: [], loans: [], assetHoldings: [], credit: [] }
+  }
+  if (typeof state.schemaVersion === 'number' && state.schemaVersion >= 3) {
+    const records = Array.isArray(state.records) ? state.records : []
+    const instruments = Array.isArray(state.instruments) ? state.instruments : []
+    return {
+      income: records.filter((r) => r.recordType === 'income'),
+      expenses: records.filter((r) => r.recordType === 'expense'),
+      assets: records.filter((r) => r.recordType === 'savings'),
+      creditCards: instruments.filter((i) => i.kind === 'creditCard'),
+      debts: instruments.filter((i) => i.kind === 'debt'),
+      loans: instruments.filter((i) => i.kind === 'loan'),
+      assetHoldings: instruments.filter((i) => i.kind === 'assetHolding'),
+      credit: []
+    }
+  }
+  return {
+    income: Array.isArray(state.income) ? state.income : [],
+    expenses: Array.isArray(state.expenses) ? state.expenses : [],
+    assets: Array.isArray(state.assets) ? state.assets : [],
+    creditCards: Array.isArray(state.creditCards) ? state.creditCards : [],
+    debts: Array.isArray(state.debts) ? state.debts : [],
+    loans: Array.isArray(state.loans) ? state.loans : [],
+    assetHoldings: Array.isArray(state.assetHoldings) ? state.assetHoldings : [],
+    credit: Array.isArray(state.credit) ? state.credit : []
+  }
+}
+
+/**
+ * Builds the default deterministic application state for core budgeting collections (v3 schema).
  * Returns a tuple error when static initialization unexpectedly fails.
- * @returns {Result<{income: Array<Record<string, unknown>>, expenses: Array<Record<string, unknown>>, assets: Array<Record<string, unknown>>, debts: Array<Record<string, unknown>>, credit: Array<Record<string, unknown>>, loans: Array<Record<string, unknown>>, goals: Array<Record<string, unknown>>, notes: Array<Record<string, unknown>>, schemaVersion: number}>}
+ * @returns {Result<{records: Array<Record<string, unknown>>, instruments: Array<Record<string, unknown>>, goals: Array<Record<string, unknown>>, notes: Array<Record<string, unknown>>, personas: Array<Record<string, unknown>>, schemaVersion: number}>}
  */
 export function buildDefaultBudgetCollectionsStateForLocalFirstUsage() {
   return [
     {
-      income: [],
-      expenses: [],
-      assets: [],
-      assetHoldings: [],
-      debts: [],
-      credit: [],
-      creditCards: [],
-      loans: [],
+      records: [],
+      instruments: [],
       goals: [],
       notes: [],
-      schemaVersion: 2
+      personas: [],
+      schemaVersion: 3
+    },
+    null
+  ]
+}
+
+/**
+ * Migrates a v2 collections state (named arrays) to v3 (records + instruments).
+ * Returns the state unchanged when schemaVersion is already >= 3.
+ * @param {Record<string, unknown>} currentCollectionsState
+ * @returns {Result<Record<string, unknown>>}
+ */
+export function migrateCollectionsStateFromV2ToV3(currentCollectionsState) {
+  if (!currentCollectionsState || typeof currentCollectionsState !== 'object') {
+    const [errorValue, createErrorFailure] = createApplicationErrorWithKindMessageAndRecoverability(
+      'VALIDATION',
+      'currentCollectionsState must be an object',
+      true
+    )
+    if (createErrorFailure) return [null, createErrorFailure]
+    return [null, errorValue]
+  }
+
+  if (typeof currentCollectionsState.schemaVersion === 'number' && currentCollectionsState.schemaVersion >= 3) {
+    return [currentCollectionsState, null]
+  }
+
+  const existingRecords = Array.isArray(currentCollectionsState.records) ? currentCollectionsState.records : []
+  const existingInstruments = Array.isArray(currentCollectionsState.instruments) ? currentCollectionsState.instruments : []
+
+  const incomeRecords = (Array.isArray(currentCollectionsState.income) ? currentCollectionsState.income : [])
+    .map((r) => ({ ...r, recordType: 'income' }))
+  const expenseRecords = (Array.isArray(currentCollectionsState.expenses) ? currentCollectionsState.expenses : [])
+    .map((r) => ({ ...r, recordType: 'expense' }))
+  const savingsRecords = (Array.isArray(currentCollectionsState.assets) ? currentCollectionsState.assets : [])
+    .map((r) => ({ ...r, recordType: 'savings' }))
+
+  const existingRecordIds = new Set(existingRecords.map((r) => r.id).filter(Boolean))
+  const newRecords = [
+    ...existingRecords,
+    ...[...incomeRecords, ...expenseRecords, ...savingsRecords].filter((r) => !existingRecordIds.has(r.id))
+  ]
+
+  const creditCardInstruments = (Array.isArray(currentCollectionsState.creditCards) ? currentCollectionsState.creditCards : [])
+    .map((i) => ({ ...i, kind: 'creditCard' }))
+  const debtInstruments = (Array.isArray(currentCollectionsState.debts) ? currentCollectionsState.debts : [])
+    .map((i) => ({ ...i, kind: 'debt' }))
+  const loanInstruments = (Array.isArray(currentCollectionsState.loans) ? currentCollectionsState.loans : [])
+    .map((i) => ({ ...i, kind: 'loan' }))
+  const assetHoldingInstruments = (Array.isArray(currentCollectionsState.assetHoldings) ? currentCollectionsState.assetHoldings : [])
+    .map((i) => ({ ...i, kind: 'assetHolding' }))
+
+  const existingInstrumentIds = new Set(existingInstruments.map((i) => i.id).filter(Boolean))
+  const newInstruments = [
+    ...existingInstruments,
+    ...[...creditCardInstruments, ...debtInstruments, ...loanInstruments, ...assetHoldingInstruments]
+      .filter((i) => !existingInstrumentIds.has(i.id))
+  ]
+
+  return [
+    {
+      records: newRecords,
+      instruments: newInstruments,
+      goals: Array.isArray(currentCollectionsState.goals) ? currentCollectionsState.goals : [],
+      notes: Array.isArray(currentCollectionsState.notes) ? currentCollectionsState.notes : [],
+      personas: Array.isArray(currentCollectionsState.personas) ? currentCollectionsState.personas : [],
+      schemaVersion: 3
     },
     null
   ]
@@ -531,15 +612,11 @@ export function appendValidatedIncomeOrExpenseRecordIntoCollectionsState(
     return [null, errorValue]
   }
 
-  const targetCollectionName = recordType === 'income'
-    ? 'income'
-    : (recordType === 'savings' ? 'assets' : 'expenses')
-  if (!Array.isArray(currentCollectionsState[targetCollectionName])) {
+  if (!Array.isArray(currentCollectionsState.records)) {
     const [errorValue, createErrorFailure] = createApplicationErrorWithKindMessageAndRecoverability(
       'VALIDATION',
-      `${targetCollectionName} collection must be an array`,
-      true,
-      { targetCollectionName }
+      'records collection must be an array',
+      true
     )
     if (createErrorFailure) return [null, createErrorFailure]
     return [null, errorValue]
@@ -558,22 +635,20 @@ export function appendValidatedIncomeOrExpenseRecordIntoCollectionsState(
     return [null, errorValue]
   }
 
+  const existingRecords = Array.isArray(currentCollectionsState.records) ? currentCollectionsState.records : []
   const nextRecord = {
     ...validatedRecord,
     recordType,
     // Critical path: preserve externally supplied IDs, otherwise generate stable write-time IDs.
     id: typeof validatedRecord.id === 'string' && validatedRecord.id.trim().length > 0
       ? validatedRecord.id
-      : `${recordType}-${isoTimestamp}-${currentCollectionsState[targetCollectionName].length + 1}`,
+      : `${recordType}-${isoTimestamp}-${existingRecords.length + 1}`,
     updatedAt: isoTimestamp
   }
 
   const nextState = {
     ...currentCollectionsState,
-    [targetCollectionName]: [
-      ...currentCollectionsState[targetCollectionName],
-      nextRecord
-    ]
+    records: [...existingRecords, nextRecord]
   }
 
   return [nextState, null]
@@ -595,10 +670,10 @@ export function upsertRecurringSeededExpenseRowsIntoCollectionsState(currentColl
     if (createErrorFailure) return [null, createErrorFailure]
     return [null, errorValue]
   }
-  if (!Array.isArray(currentCollectionsState.expenses)) {
+  if (!Array.isArray(currentCollectionsState.records) && !Array.isArray(currentCollectionsState.expenses)) {
     const [errorValue, createErrorFailure] = createApplicationErrorWithKindMessageAndRecoverability(
       'VALIDATION',
-      'expenses collection must be an array',
+      'records collection must be an array',
       true
     )
     if (createErrorFailure) return [null, createErrorFailure]
@@ -630,11 +705,17 @@ export function upsertRecurringSeededExpenseRowsIntoCollectionsState(currentColl
     return `${person}|${item}|${category}|${amount}|${description}`
   }
 
-  const existingFingerprints = new Set(currentCollectionsState.expenses.map(buildExpenseFingerprint))
-  const rowsToAdd = defaultState.expenses.filter((rowItem) => !existingFingerprints.has(buildExpenseFingerprint(rowItem)))
+  const existingRecords = Array.isArray(currentCollectionsState.records) ? currentCollectionsState.records : []
+  const existingExpenses = existingRecords.filter((r) => r.recordType === 'expense')
+  const defaultExpenses = Array.isArray(defaultState.records)
+    ? defaultState.records.filter((r) => r.recordType === 'expense')
+    : []
+  const existingFingerprints = new Set(existingExpenses.map(buildExpenseFingerprint))
+  const rowsToAdd = defaultExpenses.filter((rowItem) => !existingFingerprints.has(buildExpenseFingerprint(rowItem)))
 
   // Critical path: remove legacy synthetic debt-payment expense rows to avoid debt minimum duplication.
-  const cleanedExistingExpenses = currentCollectionsState.expenses.filter((rowItem) => {
+  const cleanedExistingRecords = existingRecords.filter((rowItem) => {
+    if (rowItem.recordType !== 'expense') return true
     const item = typeof rowItem.item === 'string' ? rowItem.item.trim().toLowerCase() : ''
     const category = typeof rowItem.category === 'string' ? rowItem.category.trim().toLowerCase() : ''
     const description = typeof rowItem.description === 'string' ? rowItem.description.trim().toLowerCase() : ''
@@ -642,8 +723,8 @@ export function upsertRecurringSeededExpenseRowsIntoCollectionsState(currentColl
   })
 
   const nextCollectionsState = rowsToAdd.length === 0
-    ? { ...currentCollectionsState, expenses: cleanedExistingExpenses }
-    : { ...currentCollectionsState, expenses: [...cleanedExistingExpenses, ...rowsToAdd] }
+    ? { ...currentCollectionsState, records: cleanedExistingRecords }
+    : { ...currentCollectionsState, records: [...cleanedExistingRecords, ...rowsToAdd] }
 
   return [{ nextCollectionsState, addedCount: rowsToAdd.length }, null]
 }
@@ -779,34 +860,19 @@ export function calculateCreditCardPaymentRecommendationsFromCollectionsState(cu
     return [null, errorValue]
   }
 
-  const [monthlySummary, monthlySummaryError] = calculateMonthlyIncomeExpenseSummaryFromCollectionsState(currentCollectionsState)
-  if (monthlySummaryError) return [null, monthlySummaryError]
-  if (!monthlySummary) {
-    const [errorValue, createErrorFailure] = createApplicationErrorWithKindMessageAndRecoverability(
-      'VALIDATION',
-      'monthly summary is unexpectedly empty',
-      true
-    )
-    if (createErrorFailure) return [null, createErrorFailure]
-    return [null, errorValue]
-  }
+  // Only recommend against cards that actually carry a balance.
+  const activeCardCollection = creditCardInformationCollection.filter((creditCardItem) => {
+    const balance = typeof creditCardItem.currentBalance === 'number' ? creditCardItem.currentBalance : 0
+    return balance > 0
+  })
 
-  const requiredDebtMinimums = (Array.isArray(currentCollectionsState.debts) ? currentCollectionsState.debts : []).reduce((runningTotal, debtItem) => (
-    runningTotal + (typeof debtItem.minimumPayment === 'number' ? debtItem.minimumPayment : 0)
-  ), 0) + (Array.isArray(currentCollectionsState.loans) ? currentCollectionsState.loans : []).reduce((runningTotal, loanItem) => (
-    runningTotal + (typeof loanItem.minimumPayment === 'number' ? loanItem.minimumPayment : 0)
-  ), 0)
-
-  const totalCurrentCardPayment = creditCardInformationCollection.reduce((runningTotal, creditCardItem) => {
+  // Current total = sum of actual entered monthly payments (not min-floored) for active cards only.
+  const totalCurrentCardPayment = activeCardCollection.reduce((runningTotal, creditCardItem) => {
     const monthlyPayment = typeof creditCardItem.monthlyPayment === 'number' ? creditCardItem.monthlyPayment : 0
-    const minimumPayment = typeof creditCardItem.minimumPayment === 'number' ? creditCardItem.minimumPayment : 0
-    return runningTotal + Math.max(monthlyPayment, minimumPayment)
+    return runningTotal + monthlyPayment
   }, 0)
 
-  const availableCashAfterNonCardDebt = monthlySummary.totalIncome - monthlySummary.totalExpenses - requiredDebtMinimums
-  const extraCardAccelerationBudget = Math.max(0, availableCashAfterNonCardDebt * 0.35)
-
-  const scoredRows = creditCardInformationCollection.map((creditCardItem, cardIndex) => {
+  const scoredRows = activeCardCollection.map((creditCardItem, cardIndex) => {
     const id = typeof creditCardItem.id === 'string' ? creditCardItem.id : `credit-card-reco-${cardIndex + 1}`
     const person = typeof creditCardItem.person === 'string' ? creditCardItem.person : 'Unknown'
     const item = typeof creditCardItem.item === 'string' ? creditCardItem.item : `Card ${cardIndex + 1}`
@@ -836,9 +902,14 @@ export function calculateCreditCardPaymentRecommendationsFromCollectionsState(cu
   const totalPriorityScore = scoredRows.reduce((runningTotal, rowItem) => runningTotal + rowItem.weightedPriorityScore, 0)
   const normalizedPriorityDivisor = totalPriorityScore > 0 ? totalPriorityScore : 1
   const totalCardMinimumPayments = scoredRows.reduce((runningTotal, rowItem) => runningTotal + rowItem.minimumPayment, 0)
-  // Critical path: recommendations should never undercut current payment posture.
-  const baselineCardPaymentPool = Math.max(totalCurrentCardPayment, totalCardMinimumPayments)
-  const allocatableCardPoolAboveMinimums = Math.max(0, (baselineCardPaymentPool + extraCardAccelerationBudget) - totalCardMinimumPayments)
+  const totalCardBalance = scoredRows.reduce((runningTotal, rowItem) => runningTotal + rowItem.currentBalance, 0)
+  // Payment pool: redistribute existing budget only — never inflate above current payments.
+  // Also never recommend paying more than the total owed across all cards.
+  const baselineCardPaymentPool = Math.min(
+    Math.max(totalCurrentCardPayment, totalCardMinimumPayments),
+    totalCardBalance
+  )
+  const allocatableCardPoolAboveMinimums = Math.max(0, baselineCardPaymentPool - totalCardMinimumPayments)
   const equalShareCount = scoredRows.length > 0 ? scoredRows.length : 1
 
   const recommendationRows = []
@@ -846,7 +917,11 @@ export function calculateCreditCardPaymentRecommendationsFromCollectionsState(cu
     const extraPaymentShare = totalPriorityScore > 0
       ? (rowItem.weightedPriorityScore / normalizedPriorityDivisor)
       : (1 / equalShareCount)
-    const recommendedMonthlyPayment = rowItem.minimumPayment + (allocatableCardPoolAboveMinimums * extraPaymentShare)
+    // Cap recommended payment at the card's own balance — never recommend overpaying.
+    const recommendedMonthlyPayment = Math.min(
+      rowItem.minimumPayment + (allocatableCardPoolAboveMinimums * extraPaymentShare),
+      rowItem.currentBalance
+    )
     const [estimatedMonthsCurrent, estimatedMonthsCurrentError] = calculateEstimatedPayoffMonthsFromBalancePaymentAndInterestRate(
       rowItem.currentBalance,
       Math.max(rowItem.currentMonthlyPayment, rowItem.minimumPayment),
@@ -870,7 +945,7 @@ export function calculateCreditCardPaymentRecommendationsFromCollectionsState(cu
       item: rowItem.item,
       currentBalance: rowItem.currentBalance,
       minimumPayment: rowItem.minimumPayment,
-      currentMonthlyPayment: Math.max(rowItem.currentMonthlyPayment, rowItem.minimumPayment),
+      currentMonthlyPayment: rowItem.currentMonthlyPayment,
       interestRatePercent: rowItem.interestRatePercent,
       utilizationPercent: rowItem.utilizationPercent,
       recommendedMonthlyPayment,
@@ -996,7 +1071,17 @@ export function updateExistingRecordInCollectionsStateByCollectionNameAndId(
     return [null, errorValue]
   }
 
-  const targetCollection = currentCollectionsState[collectionName]
+  // Critical path: v3 state uses records/instruments; v2 uses named arrays.
+  const recordCollectionNames = ['income', 'expenses', 'assets']
+  const instrumentCollectionNames = ['assetHoldings', 'debts', 'credit', 'loans', 'creditCards']
+  const isV3 = typeof currentCollectionsState.schemaVersion === 'number' && currentCollectionsState.schemaVersion >= 3
+  const canonicalArrayKey = isV3
+    ? (recordCollectionNames.includes(collectionName) ? 'records' : 'instruments')
+    : collectionName
+  const targetCollection = isV3
+    ? (Array.isArray(currentCollectionsState[canonicalArrayKey]) ? currentCollectionsState[canonicalArrayKey] : [])
+    : currentCollectionsState[collectionName]
+
   if (!Array.isArray(targetCollection)) {
     const [errorValue, createErrorFailure] = createApplicationErrorWithKindMessageAndRecoverability(
       'VALIDATION',
@@ -1099,7 +1184,7 @@ export function updateExistingRecordInCollectionsStateByCollectionNameAndId(
   return [
     {
       ...currentCollectionsState,
-      [collectionName]: nextCollection
+      [canonicalArrayKey]: nextCollection
     },
     null
   ]
@@ -1132,7 +1217,7 @@ export function mergeImportedCollectionsStateWithExistingStateUsingDedupKeys(cur
     return [null, errorValue]
   }
 
-  const collectionNamesToMerge = ['income', 'expenses', 'assets', 'assetHoldings', 'debts', 'credit', 'loans', 'creditCards', 'goals', 'personas', 'notes']
+  const collectionNamesToMerge = ['records', 'instruments', 'goals', 'personas', 'notes']
 
   /**
    * @param {Record<string, unknown>} rowItem
@@ -1247,12 +1332,13 @@ export function buildPersonaImpactSummaryFromCollectionsStateByPersonaName(curre
     return [null, errorValue]
   }
 
-  const collectionNames = ['income', 'expenses', 'assets', 'debts', 'credit', 'loans', 'creditCards']
+  const { income, expenses, assets, debts, loans, credit, creditCards } = deriveNamedCollectionsFromState(currentCollectionsState)
+  const namedCollectionViews = { income, expenses, assets, debts, credit, loans, creditCards }
   /** @type {{income: number, expenses: number, assets: number, debts: number, credit: number, loans: number, creditCards: number, total: number}} */
   const summary = { income: 0, expenses: 0, assets: 0, debts: 0, credit: 0, loans: 0, creditCards: 0, total: 0 }
 
-  for (const collectionName of collectionNames) {
-    const rows = Array.isArray(currentCollectionsState[collectionName]) ? currentCollectionsState[collectionName] : []
+  for (const collectionName of /** @type {Array<'income'|'expenses'|'assets'|'debts'|'credit'|'loans'|'creditCards'>} */ (Object.keys(namedCollectionViews))) {
+    const rows = namedCollectionViews[collectionName]
     const count = rows.reduce((runningTotal, rowItem) => {
       const person = typeof rowItem.person === 'string' ? rowItem.person.trim().toLowerCase() : ''
       return runningTotal + (person === normalizedPersonaName ? 1 : 0)
@@ -1296,7 +1382,7 @@ export function renamePersonaAcrossCollectionsStateByName(currentCollectionsStat
   }
   const sourceLower = normalizedSourceName.toLowerCase()
 
-  const collectionNames = ['income', 'expenses', 'assets', 'debts', 'credit', 'loans', 'creditCards']
+  const collectionNames = ['records', 'instruments']
   /** @type {Record<string, unknown>} */
   const nextState = { ...currentCollectionsState }
   for (const collectionName of collectionNames) {
@@ -1367,7 +1453,7 @@ export function deletePersonaAcrossCollectionsStateByName(currentCollectionsStat
   const sourceLower = normalizedSourceName.toLowerCase()
   const normalizedReassignName = typeof reassignPersonaName === 'string' ? reassignPersonaName.trim() : ''
 
-  const collectionNames = ['income', 'expenses', 'assets', 'debts', 'credit', 'loans', 'creditCards']
+  const collectionNames = ['records', 'instruments']
   /** @type {Record<string, unknown>} */
   const nextState = { ...currentCollectionsState }
   for (const collectionName of collectionNames) {
@@ -1617,22 +1703,14 @@ export function calculateMonthlyIncomeExpenseSummaryFromCollectionsState(current
     return [null, errorValue]
   }
 
-  if (!Array.isArray(currentCollectionsState.income) || !Array.isArray(currentCollectionsState.expenses)) {
-    const [errorValue, createErrorFailure] = createApplicationErrorWithKindMessageAndRecoverability(
-      'VALIDATION',
-      'income and expenses collections must be arrays',
-      true
-    )
-    if (createErrorFailure) return [null, createErrorFailure]
-    return [null, errorValue]
-  }
+  const { income, expenses } = deriveNamedCollectionsFromState(currentCollectionsState)
 
-  const totalIncome = currentCollectionsState.income.reduce((runningTotal, recordItem) => {
+  const totalIncome = income.reduce((runningTotal, recordItem) => {
     const amountValue = typeof recordItem.amount === 'number' ? recordItem.amount : 0
     return runningTotal + amountValue
   }, 0)
 
-  const totalExpenses = currentCollectionsState.expenses.reduce((runningTotal, recordItem) => {
+  const totalExpenses = expenses.reduce((runningTotal, recordItem) => {
     const amountValue = typeof recordItem.amount === 'number' ? recordItem.amount : 0
     return runningTotal + amountValue
   }, 0)
@@ -3290,68 +3368,65 @@ export function calculatePlanningCockpitInsightsFromCollectionsState(currentColl
 /**
  * Builds a canonical unified records feed from all financial collections.
  * This feed is designed to be the single source-of-truth for records views.
- * @param {{income: Array<Record<string, unknown>>, expenses: Array<Record<string, unknown>>, assets: Array<Record<string, unknown>>, debts: Array<Record<string, unknown>>, credit: Array<Record<string, unknown>>, loans: Array<Record<string, unknown>>, creditCards: Array<Record<string, unknown>>}} currentCollectionsState
+ * Supports both v3 (records/instruments) and v2 (named arrays) state shapes.
+ * @param {Record<string, unknown>} currentCollectionsState
  * @returns {Result<Array<Record<string, unknown>>>}
  */
 export function calculateUnifiedFinancialRecordsSourceOfTruthFromCollectionsState(currentCollectionsState) {
-  const requiredCollectionNames = /** @type {Array<'income'|'expenses'|'assets'|'debts'|'credit'|'loans'|'creditCards'>} */ (
-    ['income', 'expenses', 'assets', 'debts', 'credit', 'loans', 'creditCards']
-  )
-  for (const collectionName of requiredCollectionNames) {
-    if (!Array.isArray(currentCollectionsState[collectionName])) {
-      const [errorValue, createErrorFailure] = createApplicationErrorWithKindMessageAndRecoverability(
-        'VALIDATION',
-        `${collectionName} must be an array`,
-        true,
-        { collectionName }
-      )
-      if (createErrorFailure) return [null, createErrorFailure]
-      return [null, errorValue]
-    }
+  if (!currentCollectionsState || typeof currentCollectionsState !== 'object') {
+    const [errorValue, createErrorFailure] = createApplicationErrorWithKindMessageAndRecoverability(
+      'VALIDATION',
+      'currentCollectionsState must be an object',
+      true
+    )
+    if (createErrorFailure) return [null, createErrorFailure]
+    return [null, errorValue]
   }
 
+  const { income, expenses, assets, debts, loans, credit, creditCards, assetHoldings } = deriveNamedCollectionsFromState(currentCollectionsState)
+
   const unifiedRows = [
-    ...currentCollectionsState.income.map((recordItem) => ({
+    ...income.map((recordItem) => ({
       ...recordItem,
       sourceCollectionName: 'income',
       recordType: 'income',
       signedAmount: typeof recordItem.amount === 'number' ? recordItem.amount : 0
     })),
-    ...currentCollectionsState.expenses.map((recordItem) => ({
+    ...expenses.map((recordItem) => ({
       ...recordItem,
       sourceCollectionName: 'expenses',
       recordType: 'expense',
       signedAmount: typeof recordItem.amount === 'number' ? -recordItem.amount : 0
     })),
-    ...currentCollectionsState.assets.map((recordItem) => ({
-        ...recordItem,
-        sourceCollectionName: 'assets',
-        recordType: 'savings',
-        // Critical path: savings contributions are transfers from monthly cashflow, not inflow.
-        signedAmount: typeof recordItem.amount === 'number' ? -recordItem.amount : 0
-      })),
-    ...currentCollectionsState.debts.map((recordItem) => ({
+    ...assets.map((recordItem) => ({
+      ...recordItem,
+      sourceCollectionName: 'assets',
+      recordType: 'savings',
+      // Critical path: savings contributions are transfers from monthly cashflow, not inflow.
+      signedAmount: typeof recordItem.amount === 'number' ? -recordItem.amount : 0
+    })),
+    ...debts.map((recordItem) => ({
       ...recordItem,
       sourceCollectionName: 'debts',
       recordType: 'debt',
       amount: typeof recordItem.minimumPayment === 'number' ? recordItem.minimumPayment : 0,
       signedAmount: typeof recordItem.minimumPayment === 'number' ? -recordItem.minimumPayment : 0
     })),
-    ...currentCollectionsState.loans.map((recordItem) => ({
+    ...loans.map((recordItem) => ({
       ...recordItem,
       sourceCollectionName: 'loans',
       recordType: 'loan',
       amount: typeof recordItem.minimumPayment === 'number' ? recordItem.minimumPayment : 0,
       signedAmount: typeof recordItem.minimumPayment === 'number' ? -recordItem.minimumPayment : 0
     })),
-    ...currentCollectionsState.credit.map((recordItem) => ({
+    ...credit.map((recordItem) => ({
       ...recordItem,
       sourceCollectionName: 'credit',
       recordType: 'credit',
       amount: typeof recordItem.minimumPayment === 'number' ? recordItem.minimumPayment : 0,
       signedAmount: typeof recordItem.minimumPayment === 'number' ? -recordItem.minimumPayment : 0
     })),
-    ...currentCollectionsState.creditCards.map((recordItem) => ({
+    ...creditCards.map((recordItem) => ({
       ...recordItem,
       sourceCollectionName: 'creditCards',
       recordType: 'credit card',
@@ -3360,7 +3435,7 @@ export function calculateUnifiedFinancialRecordsSourceOfTruthFromCollectionsStat
       signedAmount: typeof recordItem.monthlyPayment === 'number' ? -recordItem.monthlyPayment : 0,
       description: typeof recordItem.description === 'string' ? recordItem.description : ''
     })),
-    ...(Array.isArray(currentCollectionsState.assetHoldings) ? currentCollectionsState.assetHoldings : []).map((recordItem) => {
+    ...assetHoldings.map((recordItem) => {
       const owed = typeof recordItem.assetValueOwed === 'number' ? recordItem.assetValueOwed : 0
       const market = typeof recordItem.assetMarketValue === 'number' ? recordItem.assetMarketValue : 0
       const value = market - owed

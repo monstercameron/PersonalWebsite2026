@@ -1,6 +1,7 @@
 import React from 'react'
 import {
   buildDefaultBudgetCollectionsStateForLocalFirstUsage,
+  migrateCollectionsStateFromV2ToV3,
   appendValidatedIncomeOrExpenseRecordIntoCollectionsState,
   appendValidatedGoalRecordIntoCollectionsState,
   validateRequiredGoalRecordFieldsBeforePersistence,
@@ -71,6 +72,10 @@ const IconTrash = () => <svg width="14" height="14" viewBox="0 0 24 24" fill="no
 const IconFileText = () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
 const IconCheck = () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
 const IconX = () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+const IconLogIn = () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
+const IconLogOut = () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+const IconEye = () => <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+const IconEyeOff = () => <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
 
 const DASHBOARD_CURRENCY_FORMATTER = new Intl.NumberFormat('en-US', {
   style: 'currency',
@@ -403,24 +408,21 @@ function buildInitialRecordNotesFormState() {
 
 function readHasAnyMeaningfulFinancialRowsInCollections(collectionsState) {
   if (!collectionsState || typeof collectionsState !== 'object') return false
+  if (Array.isArray(collectionsState.records) && collectionsState.records.length > 0) return true
+  if (Array.isArray(collectionsState.instruments) && collectionsState.instruments.length > 0) return true
+  // Fallback for v2 state
   const collectionNames = ['income', 'expenses', 'assets', 'assetHoldings', 'debts', 'credit', 'creditCards', 'loans']
   return collectionNames.some((collectionName) => Array.isArray(collectionsState[collectionName]) && collectionsState[collectionName].length > 0)
 }
 
 function buildEmptyBudgetCollectionsStateForHardReset() {
   return {
-    income: [],
-    expenses: [],
-    assets: [],
-    assetHoldings: [],
-    debts: [],
-    credit: [],
-    creditCards: [],
-    loans: [],
+    records: [],
+    instruments: [],
     goals: [],
     personas: [{ id: `persona-reset-${Date.now()}`, name: DEFAULT_PERSONA_NAME, emoji: DEFAULT_PERSONA_EMOJI, note: '', updatedAt: new Date().toISOString() }],
     notes: [],
-    schemaVersion: 2
+    schemaVersion: 3
   }
 }
 
@@ -876,7 +878,13 @@ export default function App() {
   const [syncNoticeState, setSyncNoticeState] = React.useState({ tone: '', message: '' })
   const transactionUndoStackRef = React.useRef([])
   const syncNoticeTimeoutRef = React.useRef(/** @type {ReturnType<typeof setTimeout>|null} */ (null))
+  const sessionExpiryTimersRef = React.useRef(/** @type {ReturnType<typeof setTimeout>[]} */ ([]))
   const [transactionUndoDepth, setTransactionUndoDepth] = React.useState(0)
+  const [isLoginModalOpen, setIsLoginModalOpen] = React.useState(false)
+  const [loginPasswordInputValue, setLoginPasswordInputValue] = React.useState('')
+  const [loginStatusMessage, setLoginStatusMessage] = React.useState('')
+  const [isLoginOperationInFlight, setIsLoginOperationInFlight] = React.useState(false)
+  const [isLoginPasswordVisible, setIsLoginPasswordVisible] = React.useState(false)
 
   function showSyncNotice(tone, message) {
     if (syncNoticeTimeoutRef.current) {
@@ -953,13 +961,18 @@ export default function App() {
         return
       }
       if (cachedStateValue) {
-        // Critical path: backfill new collections for existing local-cache users.
-        const migratedCachedState = Array.isArray(cachedStateValue.assetHoldings)
-          ? cachedStateValue
-          : {
-            ...cachedStateValue,
-            assetHoldings: Array.isArray(defaultCollectionsState?.assetHoldings) ? defaultCollectionsState.assetHoldings : []
-          }
+        // Critical path: run v2→v3 schema migration on every load to keep state canonical.
+        const [migratedCachedState, migrationError] = migrateCollectionsStateFromV2ToV3(cachedStateValue)
+        if (migrationError || !migratedCachedState) {
+          console.warn('[state] Failed to migrate cached state to v3.', migrationError)
+          setCollections(cachedStateValue)
+          setIsLoadingState(false)
+          return
+        }
+        // Persist migrated state back to localStorage when it changed.
+        if (migratedCachedState !== cachedStateValue) {
+          void persistBudgetCollectionsStateIntoLocalStorageCache(migratedCachedState)
+        }
         setCollections(migratedCachedState)
         setIsLoadingState(false)
         return
@@ -1000,7 +1013,7 @@ export default function App() {
   }, [textScaleMultiplier])
 
   React.useEffect(() => {
-    if (!isAddRecordModalOpen && !isAddGoalModalOpen && !isAddPersonaModalOpen && !isAddAssetModalOpen && !isProfileTransferModalOpen && !isEditRecordModalOpen && !isRecordNotesModalOpen && !selectedRiskFinding) return
+    if (!isAddRecordModalOpen && !isAddGoalModalOpen && !isAddPersonaModalOpen && !isAddAssetModalOpen && !isProfileTransferModalOpen && !isEditRecordModalOpen && !isRecordNotesModalOpen && !selectedRiskFinding && !isLoginModalOpen) return
     function closeOnEscape(keyboardEvent) {
       if (keyboardEvent.key === 'Escape') {
         setIsAddRecordModalOpen(false)
@@ -1011,26 +1024,35 @@ export default function App() {
         setIsEditRecordModalOpen(false)
         setIsRecordNotesModalOpen(false)
         setSelectedRiskFinding(null)
+        setIsLoginModalOpen(false)
       }
     }
     globalThis.window.addEventListener('keydown', closeOnEscape)
     return () => globalThis.window.removeEventListener('keydown', closeOnEscape)
-  }, [isAddRecordModalOpen, isAddGoalModalOpen, isAddPersonaModalOpen, isAddAssetModalOpen, isProfileTransferModalOpen, isEditRecordModalOpen, isRecordNotesModalOpen, selectedRiskFinding])
+  }, [isAddRecordModalOpen, isAddGoalModalOpen, isAddPersonaModalOpen, isAddAssetModalOpen, isProfileTransferModalOpen, isEditRecordModalOpen, isRecordNotesModalOpen, selectedRiskFinding, isLoginModalOpen])
 
-  const safeCollections = collections ?? {
-    income: [],
-    expenses: [],
-    assets: [],
-    assetHoldings: [],
-    debts: [],
-    credit: [],
-    creditCards: [],
-    loans: [],
-    goals: [],
-    personas: [],
-    notes: [],
-    schemaVersion: 1
-  }
+  // Critical path: derive named collection views from v3 (records/instruments) state so all
+  // downstream calc functions continue to receive the named collection shape they expect.
+  const safeCollections = React.useMemo(() => {
+    const state = collections ?? { records: [], instruments: [], goals: [], notes: [], personas: [], schemaVersion: 3 }
+    const isV3 = typeof state.schemaVersion === 'number' && state.schemaVersion >= 3
+    const records = isV3 && Array.isArray(state.records) ? state.records : []
+    const instruments = isV3 && Array.isArray(state.instruments) ? state.instruments : []
+    return {
+      ...state,
+      income: isV3 ? records.filter((r) => r.recordType === 'income') : (Array.isArray(state.income) ? state.income : []),
+      expenses: isV3 ? records.filter((r) => r.recordType === 'expense') : (Array.isArray(state.expenses) ? state.expenses : []),
+      assets: isV3 ? records.filter((r) => r.recordType === 'savings') : (Array.isArray(state.assets) ? state.assets : []),
+      creditCards: isV3 ? instruments.filter((i) => i.kind === 'creditCard') : (Array.isArray(state.creditCards) ? state.creditCards : []),
+      debts: isV3 ? instruments.filter((i) => i.kind === 'debt') : (Array.isArray(state.debts) ? state.debts : []),
+      loans: isV3 ? instruments.filter((i) => i.kind === 'loan') : (Array.isArray(state.loans) ? state.loans : []),
+      assetHoldings: isV3 ? instruments.filter((i) => i.kind === 'assetHolding') : (Array.isArray(state.assetHoldings) ? state.assetHoldings : []),
+      credit: isV3 ? [] : (Array.isArray(state.credit) ? state.credit : []),
+      goals: Array.isArray(state.goals) ? state.goals : [],
+      personas: Array.isArray(state.personas) ? state.personas : [],
+      notes: Array.isArray(state.notes) ? state.notes : []
+    }
+  }, [collections])
   const shouldSkipHeavyComputations = isLoadingState || !collections
 
   const dashboardComputation = React.useMemo(() => {
@@ -1795,8 +1817,10 @@ export default function App() {
     if (timestampError || !isoTimestamp) return
     let nextCollectionsState = null
     if (entryFormState.recordType === 'asset') {
+      const existingInstruments = Array.isArray(collections.instruments) ? collections.instruments : []
       const nextAssetRecord = {
-        id: `asset-holding-${isoTimestamp}-${(Array.isArray(collections.assetHoldings) ? collections.assetHoldings.length : 0) + 1}`,
+        id: `asset-holding-${isoTimestamp}-${existingInstruments.filter((i) => i.kind === 'assetHolding').length + 1}`,
+        kind: 'assetHolding',
         person: normalizedPerson,
         item: normalizedCategory || 'Asset',
         assetValueOwed: 0,
@@ -1807,12 +1831,14 @@ export default function App() {
       }
       nextCollectionsState = {
         ...collections,
-        assetHoldings: [...(Array.isArray(collections.assetHoldings) ? collections.assetHoldings : []), nextAssetRecord]
+        instruments: [...existingInstruments, nextAssetRecord]
       }
     } else if (entryFormState.recordType === 'debt' || entryFormState.recordType === 'loan') {
-      const liabilityCollectionName = entryFormState.recordType === 'debt' ? 'debts' : 'loans'
+      const existingInstruments = Array.isArray(collections.instruments) ? collections.instruments : []
+      const instrumentKind = entryFormState.recordType === 'debt' ? 'debt' : 'loan'
       const nextLiabilityRecord = {
-        id: `${entryFormState.recordType}-${isoTimestamp}-${(Array.isArray(collections[liabilityCollectionName]) ? collections[liabilityCollectionName].length : 0) + 1}`,
+        id: `${entryFormState.recordType}-${isoTimestamp}-${existingInstruments.filter((i) => i.kind === instrumentKind).length + 1}`,
+        kind: instrumentKind,
         person: normalizedPerson,
         item: typeof entryFormState.item === 'string' && entryFormState.item.trim() ? entryFormState.item.trim() : (normalizedCategory || 'Liability'),
         category: normalizedCategory || 'Debt Payment',
@@ -1829,11 +1855,13 @@ export default function App() {
       }
       nextCollectionsState = {
         ...collections,
-        [liabilityCollectionName]: [...(Array.isArray(collections[liabilityCollectionName]) ? collections[liabilityCollectionName] : []), nextLiabilityRecord]
+        instruments: [...existingInstruments, nextLiabilityRecord]
       }
     } else if (entryFormState.recordType === 'credit_card') {
+      const existingInstruments = Array.isArray(collections.instruments) ? collections.instruments : []
       const nextCreditCardRecord = {
-        id: `credit-card-${isoTimestamp}-${(Array.isArray(collections.creditCards) ? collections.creditCards.length : 0) + 1}`,
+        id: `credit-card-${isoTimestamp}-${existingInstruments.filter((i) => i.kind === 'creditCard').length + 1}`,
+        kind: 'creditCard',
         person: normalizedPerson,
         item: typeof entryFormState.item === 'string' && entryFormState.item.trim() ? entryFormState.item.trim() : 'Credit Account',
         maxCapacity: Number(entryFormState.maxCapacity || 0),
@@ -1847,7 +1875,7 @@ export default function App() {
       }
       nextCollectionsState = {
         ...collections,
-        creditCards: [...(Array.isArray(collections.creditCards) ? collections.creditCards : []), nextCreditCardRecord]
+        instruments: [...existingInstruments, nextCreditCardRecord]
       }
     } else {
       const [appendState, appendError] = appendValidatedIncomeOrExpenseRecordIntoCollectionsState(
@@ -1904,8 +1932,10 @@ export default function App() {
     }
     const [isoTimestamp, timestampError] = readCurrentIsoTimestampForBudgetRecordUpdates()
     if (timestampError || !isoTimestamp) return
+    const existingInstruments = Array.isArray(collections.instruments) ? collections.instruments : []
     const nextRecord = {
-      id: `asset-holding-${isoTimestamp}-${(Array.isArray(collections.assetHoldings) ? collections.assetHoldings.length : 0) + 1}`,
+      id: `asset-holding-${isoTimestamp}-${existingInstruments.filter((i) => i.kind === 'assetHolding').length + 1}`,
+      kind: 'assetHolding',
       person: normalizedPerson,
       item: normalizedItem,
       assetValueOwed: Number(assetHoldingEntryFormState.assetValueOwed || 0),
@@ -1916,7 +1946,7 @@ export default function App() {
     }
     const nextCollectionsState = {
       ...collections,
-      assetHoldings: [...(Array.isArray(collections.assetHoldings) ? collections.assetHoldings : []), nextRecord]
+      instruments: [...existingInstruments, nextRecord]
     }
     const didApply = await applyNextCollectionsStateWithUndoForTransaction(nextCollectionsState, 'add-asset')
     if (!didApply) {
@@ -2210,7 +2240,12 @@ export default function App() {
       hasUiPreferences: !!importedProfile.uiPreferences,
       auditEntries: Array.isArray(importedProfile.auditTimelineEntries) ? importedProfile.auditTimelineEntries.length : 0
     })
-    const [mergedCollectionsState, mergeCollectionsError] = mergeImportedCollectionsStateWithExistingStateUsingDedupKeys(collections, importedProfile.collections)
+    const [migratedImportedCollections, migrationError] = migrateCollectionsStateFromV2ToV3(importedProfile.collections)
+    if (migrationError || !migratedImportedCollections) {
+      console.warn('[profile] Failed to migrate imported collections to v3 schema.', migrationError)
+      return false
+    }
+    const [mergedCollectionsState, mergeCollectionsError] = mergeImportedCollectionsStateWithExistingStateUsingDedupKeys(collections, migratedImportedCollections)
     if (mergeCollectionsError || !mergedCollectionsState) {
       console.warn('[profile] Failed to merge imported collections with local data.', mergeCollectionsError)
       return false
@@ -2632,6 +2667,56 @@ export default function App() {
     setTextScaleMultiplier(1)
     await persistUpdatedUiPreferencesAfterControlChanges(themeName, 1)
   }
+  function openLoginModal() {
+    setLoginPasswordInputValue('')
+    setLoginStatusMessage('')
+    setIsLoginModalOpen(true)
+  }
+  async function submitAdminLoginFromModal(submitEvent) {
+    submitEvent.preventDefault()
+    const trimmedPassword = loginPasswordInputValue.trim()
+    if (!trimmedPassword) {
+      setLoginStatusMessage('Password is required.')
+      return
+    }
+    setIsLoginOperationInFlight(true)
+    setLoginStatusMessage('Authenticating...')
+    const enabledConfig = { ...supabaseSyncFormState, enabled: true }
+    const [verifiedUser, verifyError] = await verifySupabaseEmailOtpCodeAndCreateSession(enabledConfig, '', trimmedPassword)
+    if (verifyError || !verifiedUser) {
+      setLoginStatusMessage('Login failed. Check your password.')
+      setIsLoginOperationInFlight(false)
+      return
+    }
+    setSupabaseAuthUserSummary({ id: verifiedUser.id, email: verifiedUser.email })
+    setSupabaseSyncFormState((prev) => ({ ...prev, enabled: true, password: '' }))
+    await persistSupabaseWebConfigIntoLocalStorageCache({ enabled: true })
+    setLoginStatusMessage('')
+    setLoginPasswordInputValue('')
+    setIsLoginOperationInFlight(false)
+    setIsLoginModalOpen(false)
+    sessionExpiryTimersRef.current.forEach(clearTimeout)
+    const SESSION_TTL_MS = 3600000
+    const WARN_BEFORE_MS = 120000
+    sessionExpiryTimersRef.current = [
+      setTimeout(() => { showSyncNotice(SYNC_NOTICE_TONE_FAILURE, 'Admin session expires in 2 minutes.') }, SESSION_TTL_MS - WARN_BEFORE_MS),
+      setTimeout(() => { showSyncNotice(SYNC_NOTICE_TONE_FAILURE, 'Admin session expired. Please log in again.'); setSupabaseAuthUserSummary(null) }, SESSION_TTL_MS),
+    ]
+  }
+  async function submitAdminLogoutFromModal() {
+    setIsLoginOperationInFlight(true)
+    const [, logoutError] = await signOutFromSupabaseCurrentSession({ ...supabaseSyncFormState, enabled: true })
+    if (logoutError) {
+      console.warn('[auth] logout failed', logoutError)
+    }
+    sessionExpiryTimersRef.current.forEach(clearTimeout)
+    sessionExpiryTimersRef.current = []
+    setSupabaseAuthUserSummary(null)
+    setSupabaseSyncFormState((prev) => ({ ...prev, enabled: false, password: '' }))
+    await persistSupabaseWebConfigIntoLocalStorageCache({ enabled: false })
+    setIsLoginOperationInFlight(false)
+    setIsLoginModalOpen(false)
+  }
   function scrollViewportToTopFromUtilityButton() {
     scrollViewportToTopWithSmoothBehavior()
   }
@@ -2966,6 +3051,11 @@ export default function App() {
           <button className="inline-flex items-center gap-1.5 rounded-lg border border-white/30 bg-violet-600 px-2.5 py-1.5 text-[11px] font-semibold text-white" onClick={openManagePersonasModal} type="button"><IconUsers /> Personas</button>
           <button className="inline-flex items-center gap-1.5 rounded-lg border border-white/30 bg-indigo-600 px-2.5 py-1.5 text-[11px] font-semibold text-white" onClick={() => void openProfileTransferModalForMode('import')} type="button"><IconDownload /> Import</button>
           <button className="inline-flex items-center gap-1.5 rounded-lg border border-white/30 bg-indigo-700 px-2.5 py-1.5 text-[11px] font-semibold text-white" onClick={() => void openProfileTransferModalForMode('export')} type="button"><IconUpload /> Export</button>
+          {supabaseAuthUserSummary ? (
+            <button className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-300/60 bg-emerald-600 px-2.5 py-1.5 text-[11px] font-semibold text-white" onClick={openLoginModal} type="button"><IconLogOut /> Admin</button>
+          ) : (
+            <button className="inline-flex items-center gap-1.5 rounded-lg border border-white/30 bg-slate-700 px-2.5 py-1.5 text-[11px] font-semibold text-white" onClick={openLoginModal} type="button"><IconLogIn /> Login</button>
+          )}
         </div>
       </section>
 
@@ -3882,55 +3972,35 @@ export default function App() {
       {isProfileTransferModalOpen ? (
         <section className="profile-transfer-modal fixed inset-0 z-[5000] flex items-center justify-center p-3 sm:p-4" role="dialog" aria-modal="true" aria-label="Financial Profile Import Export Modal">
           <button className="absolute inset-0 bg-slate-950/55 backdrop-blur-sm" onClick={() => setIsProfileTransferModalOpen(false)} type="button" aria-label="Close profile transfer modal backdrop" />
-          <div className="profile-transfer-shell relative z-[5001] w-full max-w-3xl rounded-3xl border border-white/40 bg-white p-4 shadow-2xl sm:p-6">
+          <div className="profile-transfer-shell relative z-[5001] w-full max-w-2xl rounded-3xl border border-white/40 bg-white p-4 shadow-2xl sm:p-6">
             <div className="mb-4 flex items-center justify-between gap-3">
-              <h3 className="text-lg font-bold text-slate-900">{profileTransferFormState.mode === 'import' ? 'Import Financial Profile JSON' : 'Export Financial Profile JSON'}</h3>
+              <h3 className="text-lg font-bold text-slate-900">{profileTransferFormState.mode === 'import' ? 'Import Profile' : 'Export Profile'}</h3>
               <button className="rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 inline-flex items-center gap-1.5" onClick={() => setIsProfileTransferModalOpen(false)} type="button"><IconX /> Close</button>
             </div>
-            <div className="mb-3 rounded-2xl border border-slate-200/90 bg-slate-50/80 p-3">
-              <React.Fragment>
-                <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">{SYNC_SECTION_TITLE}</p>
-                <p className="mt-2 text-xs text-slate-600">{SYNC_SECTION_DESC}</p>
-                <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
-                  <label className="text-xs font-medium text-slate-700">{SYNC_LABEL_ENABLED}
-                    <select className="mt-1 h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none transition focus:border-indigo-400" value={supabaseSyncFormState.enabled ? 'true' : 'false'} onChange={(event) => updateSupabaseSyncFormFieldValue('enabled', event.target.value === 'true')}>
-                      <option value="false">Disabled</option>
-                      <option value="true">Enabled</option>
-                    </select>
-                  </label>
-                  <label className="text-xs font-medium text-slate-700 sm:col-span-2">{SYNC_LABEL_ADMIN_PASSWORD}
-                    <input className="mt-1 h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none transition focus:border-indigo-400" type="password" value={supabaseSyncFormState.password || ''} onChange={(event) => updateSupabaseSyncFormFieldValue('password', event.target.value)} />
-                  </label>
-                </div>
-                <div className="mt-2 flex flex-wrap justify-end gap-2">
-                  <button className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 disabled:cursor-not-allowed disabled:opacity-40" disabled={isSupabaseOperationInFlight} onClick={() => { void saveSupabaseWebConfigIntoCache() }} type="button">{SYNC_BTN_SAVE_CONFIG}</button>
-                  <button className="rounded-xl border border-indigo-300 bg-indigo-50 px-3 py-2 text-xs font-semibold text-indigo-700 disabled:cursor-not-allowed disabled:opacity-40" disabled={isSupabaseOperationInFlight} onClick={() => { void connectSupabaseSessionFromModal() }} type="button">{SYNC_BTN_CONNECT}</button>
-                  <button className="rounded-xl border border-slate-300 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-700 disabled:cursor-not-allowed disabled:opacity-40" disabled={isSupabaseOperationInFlight} onClick={() => { void refreshSupabaseAuthUserSummaryFromSession() }} type="button">{SYNC_BTN_REFRESH_SESSION}</button>
-                  <button className="rounded-xl border border-rose-300 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700 disabled:cursor-not-allowed disabled:opacity-40" disabled={!supabaseAuthUserSummary || isSupabaseOperationInFlight} onClick={() => { void signOutFromSupabaseSessionFromModal() }} type="button">{SYNC_BTN_DISCONNECT}</button>
-                  <button className="rounded-xl border border-emerald-300 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700 disabled:cursor-not-allowed disabled:opacity-40" disabled={!supabaseAuthUserSummary || isSupabaseOperationInFlight} onClick={() => { void pushCurrentProfileSnapshotToSupabase() }} type="button">{SYNC_BTN_PUSH}</button>
-                  <button className="rounded-xl border border-sky-300 bg-sky-50 px-3 py-2 text-xs font-semibold text-sky-700 disabled:cursor-not-allowed disabled:opacity-40" disabled={!supabaseAuthUserSummary || isSupabaseOperationInFlight} onClick={() => { void pullProfileSnapshotFromSupabase() }} type="button">{SYNC_BTN_PULL}</button>
-                </div>
-                <p className="mt-2 text-[11px] text-slate-500">Auth: {supabaseAuthUserSummary ? `${supabaseAuthUserSummary.email || supabaseAuthUserSummary.id}` : SYNC_AUTH_NOT_SIGNED_IN}.</p>
-                <p className={`mt-1 text-[11px] ${supabaseSyncStatusState.tone === SYNC_STATUS_TONE_SUCCESS ? 'text-emerald-600' : (supabaseSyncStatusState.tone === SYNC_STATUS_TONE_WARNING ? 'text-amber-700' : 'text-slate-500')}`}>Status: {supabaseSyncStatusState.message}</p>
-                {isSupabaseOperationInFlight ? <p className="mt-1 text-[11px] font-semibold text-indigo-600">{SYNC_PROGRESS_TEXT}</p> : null}
-                {supabaseSyncStatusState.detail ? <p className="mt-1 text-[11px] text-slate-500">{supabaseSyncStatusState.detail}</p> : null}
-                <p className="mt-1 text-[11px] text-slate-500">{API_SYNC_STORAGE_NOTE}</p>
-              </React.Fragment>
-            </div>
             <form className="grid grid-cols-1 gap-3" onSubmit={submitImportedProfileJson}>
-              <textarea className="min-h-[280px] w-full rounded-2xl border border-slate-200/90 bg-slate-50/90 p-3 font-mono text-xs text-slate-900 outline-none transition focus:border-indigo-400 focus:bg-white" value={profileTransferFormState.jsonText} onChange={(event) => updateProfileTransferFormFieldValue('jsonText', event.target.value)} readOnly={profileTransferFormState.mode === 'export'} />
+              <textarea className="min-h-[260px] w-full rounded-2xl border border-slate-200/90 bg-slate-50/90 p-3 font-mono text-xs text-slate-900 outline-none transition focus:border-indigo-400 focus:bg-white" value={profileTransferFormState.jsonText} onChange={(event) => updateProfileTransferFormFieldValue('jsonText', event.target.value)} readOnly={profileTransferFormState.mode === 'export'} placeholder={profileTransferFormState.mode === 'import' ? 'Paste profile JSON here...' : ''} />
+              {!supabaseAuthUserSummary ? (
+                <p className="text-[11px] text-amber-600">Log in as admin to enable server sync.</p>
+              ) : (
+                <p className="text-[11px] text-emerald-600">Signed in as {supabaseAuthUserSummary.email || supabaseAuthUserSummary.id}.</p>
+              )}
               <div className="flex flex-wrap justify-end gap-2">
                 <button className="rounded-2xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 inline-flex items-center gap-1.5" onClick={() => setIsProfileTransferModalOpen(false)} type="button"><IconX /> Cancel</button>
-                <button className="rounded-2xl border border-indigo-300 bg-indigo-50 px-4 py-2 text-sm font-semibold text-indigo-700" onClick={() => { void copyProfileTransferJsonTextToClipboard() }} type="button">Copy JSON</button>
                 {profileTransferFormState.mode === 'export' ? (
-                  <button className="rounded-2xl border border-rose-300 bg-rose-50 px-4 py-2 text-sm font-semibold text-rose-700" onClick={() => { void deleteAllLocalFinancialProfileDataWithUndoSnapshot() }} type="button">Delete Local Data</button>
-                ) : null}
-                {profileTransferFormState.mode === 'export' && profileDeleteUndoSnapshotJsonText ? (
-                  <button className="rounded-2xl border border-emerald-300 bg-emerald-50 px-4 py-2 text-sm font-semibold text-emerald-700" onClick={() => { void restoreDeletedLocalFinancialProfileDataFromUndoSnapshot() }} type="button">Undo Delete</button>
-                ) : null}
-                {profileTransferFormState.mode === 'import' ? (
-                  <button className="rounded-2xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-indigo-700" type="submit">Import Profile</button>
-                ) : null}
+                  <React.Fragment>
+                    <button className="rounded-2xl border border-indigo-300 bg-indigo-50 px-4 py-2 text-sm font-semibold text-indigo-700 disabled:cursor-not-allowed disabled:opacity-40" onClick={() => { void copyProfileTransferJsonTextToClipboard() }} type="button">Copy JSON</button>
+                    <button className="rounded-2xl border border-sky-300 bg-sky-50 px-4 py-2 text-sm font-semibold text-sky-700 disabled:cursor-not-allowed disabled:opacity-40" disabled={!supabaseAuthUserSummary || isSupabaseOperationInFlight} onClick={() => { void pushCurrentProfileSnapshotToSupabase() }} type="button">Save to Server</button>
+                    {profileDeleteUndoSnapshotJsonText ? (
+                      <button className="rounded-2xl border border-emerald-300 bg-emerald-50 px-4 py-2 text-sm font-semibold text-emerald-700" onClick={() => { void restoreDeletedLocalFinancialProfileDataFromUndoSnapshot() }} type="button">Undo Delete</button>
+                    ) : null}
+                    <button className="rounded-2xl border border-rose-300 bg-rose-50 px-4 py-2 text-sm font-semibold text-rose-700" onClick={() => { void deleteAllLocalFinancialProfileDataWithUndoSnapshot() }} type="button">Delete Local</button>
+                  </React.Fragment>
+                ) : (
+                  <React.Fragment>
+                    <button className="rounded-2xl border border-sky-300 bg-sky-50 px-4 py-2 text-sm font-semibold text-sky-700 disabled:cursor-not-allowed disabled:opacity-40" disabled={!supabaseAuthUserSummary || isSupabaseOperationInFlight} onClick={() => { void pullProfileSnapshotFromSupabase() }} type="button">Restore from Server</button>
+                    <button className="rounded-2xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-indigo-700" type="submit">Import JSON</button>
+                  </React.Fragment>
+                )}
               </div>
             </form>
           </div>
@@ -4000,6 +4070,61 @@ export default function App() {
                 <button className="rounded-2xl bg-sky-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-sky-700" type="submit">Save Notes</button>
               </div>
             </form>
+          </div>
+        </section>
+      ) : null}
+
+      {isLoginModalOpen ? (
+        <section className="fixed inset-0 z-[5000] flex items-center justify-center p-3 sm:p-4" role="dialog" aria-modal="true" aria-label="Admin Login Modal">
+          <button className="absolute inset-0 bg-slate-950/55 backdrop-blur-sm" onClick={() => setIsLoginModalOpen(false)} type="button" aria-label="Close login modal backdrop" />
+          <div className="relative z-[5001] w-full max-w-sm rounded-3xl border border-white/40 bg-white p-4 shadow-2xl sm:p-6">
+            <div className="mb-5 flex items-center justify-between gap-3">
+              <h3 className="text-lg font-bold text-slate-900">{supabaseAuthUserSummary ? 'Admin Session' : 'Admin Login'}</h3>
+              <button className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700" onClick={() => setIsLoginModalOpen(false)} type="button"><IconX /> Close</button>
+            </div>
+            {supabaseAuthUserSummary ? (
+              <div className="space-y-4">
+                <p className="rounded-2xl border border-emerald-200/90 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">Signed in as <span className="font-semibold">{supabaseAuthUserSummary.email || supabaseAuthUserSummary.id}</span>.</p>
+                <div className="flex justify-end gap-2">
+                  <button className="rounded-2xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700" onClick={() => setIsLoginModalOpen(false)} type="button">Close</button>
+                  <button className="inline-flex items-center gap-1.5 rounded-2xl bg-rose-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-40" disabled={isLoginOperationInFlight} onClick={() => void submitAdminLogoutFromModal()} type="button"><IconLogOut /> Sign Out</button>
+                </div>
+              </div>
+            ) : (
+              <form className="space-y-4" onSubmit={(e) => void submitAdminLoginFromModal(e)}>
+                <label className="block">
+                  <span className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Admin Password</span>
+                  <div className="relative mt-2">
+                    <input
+                      autoFocus
+                      className="h-11 w-full rounded-2xl border border-slate-200/90 bg-slate-50/90 text-slate-900 outline-none transition focus:border-indigo-400 focus:bg-white"
+                      style={{ paddingLeft: '14px', paddingRight: '44px' }}
+                      type={isLoginPasswordVisible ? 'text' : 'password'}
+                      value={loginPasswordInputValue}
+                      onChange={(e) => setLoginPasswordInputValue(e.target.value)}
+                      disabled={isLoginOperationInFlight}
+                    />
+                    <button
+                      className="absolute flex h-8 w-8 items-center justify-center rounded-xl text-slate-400 transition hover:bg-slate-200/70 hover:text-slate-600"
+                      style={{ right: '6px', top: '50%', transform: 'translateY(-50%)' }}
+                      type="button"
+                      tabIndex={-1}
+                      onClick={() => setIsLoginPasswordVisible((v) => !v)}
+                      aria-label={isLoginPasswordVisible ? 'Hide password' : 'Show password'}
+                    >
+                      {isLoginPasswordVisible ? <IconEyeOff /> : <IconEye />}
+                    </button>
+                  </div>
+                </label>
+                {loginStatusMessage ? (
+                  <p className="rounded-2xl border border-rose-200/90 bg-rose-50 px-4 py-3 text-sm text-rose-700">{loginStatusMessage}</p>
+                ) : null}
+                <div className="flex justify-end gap-2">
+                  <button className="rounded-2xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700" onClick={() => setIsLoginModalOpen(false)} type="button">Cancel</button>
+                  <button className="inline-flex items-center gap-1.5 rounded-2xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-40" disabled={isLoginOperationInFlight} type="submit"><IconLogIn /> {isLoginOperationInFlight ? 'Signing in...' : 'Sign In'}</button>
+                </div>
+              </form>
+            )}
           </div>
         </section>
       ) : null}
