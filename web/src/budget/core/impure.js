@@ -3,7 +3,18 @@
  * @property {string} kind
  * @property {string} message
  * @property {boolean} recoverable
- * @property {unknown} [details]
+ * @property {ApplicationErrorDetails} [details]
+ */
+
+/**
+ * @typedef {Object} ApplicationErrorDetails
+ * @property {string} [parentFunctionUseHint] What higher-level operation the current helper was serving.
+ * @property {string} [errorDetailsHint] Short explanation of the specific failure boundary that was crossed.
+ * @property {'low'|'medium'|'high'|'critical'} [errorSeverityHint] Operational seriousness hint for logs and UI handling.
+ * @property {string} [applicationErrorCode] Stable machine-oriented subcode for grouping similar failures.
+ * @property {string} [underlyingFailureMessage] Raw runtime failure message when one exists.
+ * @property {string} [underlyingFailureName] Raw runtime failure name or constructor hint when one exists.
+ * @property {Record<string, unknown>} [relevantRuntimeContext] Small structured context such as URLs, storage keys, or operation names.
  */
 
 /**
@@ -20,6 +31,7 @@ const API_HTTP_METHOD_POST = 'POST'
 const API_HTTP_METHOD_PUT = 'PUT'
 const API_HTTP_HEADER_CONTENT_TYPE = 'Content-Type'
 const API_HTTP_CONTENT_TYPE_JSON = 'application/json'
+const API_KIND_AUTH = 'AUTH'
 const API_KIND_VALIDATION = 'VALIDATION'
 const API_KIND_NETWORK = 'NETWORK'
 const API_KIND_NOT_FOUND = 'NOT_FOUND'
@@ -41,6 +53,432 @@ const API_ERR_PROFILE_PAYLOAD_INVALID = 'profile payload is malformed before api
 const API_ERR_PROFILE_COLLECTIONS_MISSING = 'profile payload is missing supported collections shape'
 const API_DEFAULT_ADMIN_USER = 'admin'
 const API_SYNC_DEFAULT_BASE_URL = ''
+const APPLICATION_ERROR_KIND_VALIDATION = 'VALIDATION'
+const APPLICATION_ERROR_KIND_INTERNAL = 'INTERNAL'
+const RECOVERABLE_APPLICATION_ERROR_DEFAULT = true
+const NON_RECOVERABLE_APPLICATION_ERROR_DEFAULT = false
+
+const INTERNAL_APPLICATION_ERROR_DEFINITION_FOR_APPLICATION_ERROR_DEFINITION_IS_MALFORMED = Object.freeze({
+  kind: APPLICATION_ERROR_KIND_INTERNAL,
+  message: 'application error definition is malformed',
+  recoverable: NON_RECOVERABLE_APPLICATION_ERROR_DEFAULT
+})
+
+const INTERNAL_APPLICATION_ERROR_DEFINITION_FOR_APPLICATION_ERROR_INPUTS_ARE_MALFORMED = Object.freeze({
+  kind: APPLICATION_ERROR_KIND_INTERNAL,
+  message: 'application error builder inputs are malformed',
+  recoverable: NON_RECOVERABLE_APPLICATION_ERROR_DEFAULT
+})
+
+const INTERNAL_APPLICATION_ERROR_DEFINITION_FOR_APPLICATION_ERROR_DEFINITION_IS_NOT_REGISTERED = Object.freeze({
+  kind: APPLICATION_ERROR_KIND_INTERNAL,
+  message: 'application error definition is not registered',
+  recoverable: NON_RECOVERABLE_APPLICATION_ERROR_DEFAULT
+})
+
+/**
+ * @param {string} errorKind
+ * @param {string} errorMessage
+ * @param {boolean} isRecoverable
+ * @returns {string}
+ */
+function buildImpureLayerApplicationErrorSignature(errorKind, errorMessage, isRecoverable) {
+  return `${errorKind}|${String(isRecoverable)}|${errorMessage}`
+}
+
+/**
+ * @param {string} errorKind
+ * @param {string} errorMessage
+ * @param {boolean} [isRecoverable=true]
+ * @returns {{kind: string, message: string, recoverable: boolean}}
+ */
+function defineImpureLayerApplicationErrorDefinition(errorKind, errorMessage, isRecoverable = true) {
+  return Object.freeze({
+    kind: errorKind,
+    message: errorMessage,
+    recoverable: isRecoverable
+  })
+}
+
+/**
+ * @param {string} fieldName
+ * @returns {{kind: string, message: string, recoverable: boolean}}
+ */
+function buildImpureLayerApplicationErrorDefinitionForFirebaseFieldMustBeString(fieldName) {
+  return defineImpureLayerApplicationErrorDefinition(
+    APPLICATION_ERROR_KIND_VALIDATION,
+    `firebase ${fieldName} must be a string`,
+    RECOVERABLE_APPLICATION_ERROR_DEFAULT
+  )
+}
+
+/**
+ * @param {'export'|'import'} operationName
+ * @param {number|string} statusCode
+ * @returns {{kind: string, message: string, recoverable: boolean}}
+ */
+function buildImpureLayerApplicationErrorDefinitionForGoogleSheetsEndpointReturnedStatus(operationName, statusCode) {
+  return defineImpureLayerApplicationErrorDefinition(
+    API_KIND_NETWORK,
+    `google sheets ${operationName} endpoint returned status ${statusCode}`,
+    RECOVERABLE_APPLICATION_ERROR_DEFAULT
+  )
+}
+
+/**
+ * @param {number} statusCode
+ * @param {unknown} responsePayload
+ * @returns {{kind: string, message: string, recoverable: boolean}}
+ */
+function buildImpureLayerApplicationErrorDefinitionForBudgetApiRequestStatus(statusCode, responsePayload) {
+  return defineImpureLayerApplicationErrorDefinition(
+    mapBudgetApiResponseStatusCodeIntoApplicationErrorKind(statusCode),
+    buildReadableApiErrorMessage(statusCode, responsePayload),
+    RECOVERABLE_APPLICATION_ERROR_DEFAULT
+  )
+}
+
+const IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_AUTH_FIREBASE_GOOGLE_POPUP_SIGN_IN_FAILED = defineImpureLayerApplicationErrorDefinition('AUTH', 'firebase google popup sign-in failed', true)
+const IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_AUTH_FIREBASE_SIGN_IN_RETURNED_EMPTY_USER = defineImpureLayerApplicationErrorDefinition('AUTH', 'firebase sign-in returned empty user', true)
+const IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_AUTH_FIREBASE_SIGN_OUT_FAILED = defineImpureLayerApplicationErrorDefinition('AUTH', 'firebase sign-out failed', true)
+const IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_AUTH_FIREBASE_USER_MUST_BE_SIGNED_IN_BEFORE_PULL = defineImpureLayerApplicationErrorDefinition('AUTH', 'firebase user must be signed in before pull', true)
+const IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_AUTH_FIREBASE_USER_MUST_BE_SIGNED_IN_BEFORE_SYNC = defineImpureLayerApplicationErrorDefinition('AUTH', 'firebase user must be signed in before sync', true)
+const IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_BROWSER_API_CLIPBOARD_WRITE_API_IS_UNAVAILABLE = defineImpureLayerApplicationErrorDefinition('BROWSER_API', 'clipboard write API is unavailable', true)
+const IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_BROWSER_API_CLIPBOARD_WRITE_RETURNED_EMPTY_SUCCESS_FLAG = defineImpureLayerApplicationErrorDefinition('BROWSER_API', 'clipboard write returned empty success flag', true)
+const IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_BROWSER_API_DOCUMENT_BODY_IS_UNAVAILABLE = defineImpureLayerApplicationErrorDefinition('BROWSER_API', 'document body is unavailable', true)
+const IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_BROWSER_API_DOCUMENT_ROOT_ELEMENT_IS_UNAVAILABLE = defineImpureLayerApplicationErrorDefinition('BROWSER_API', 'document root element is unavailable', true)
+const IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_BROWSER_API_FAILED_TO_OPEN_OAUTH_POPUP_WINDOW = defineImpureLayerApplicationErrorDefinition('BROWSER_API', 'failed to open oauth popup window', true)
+const IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_BROWSER_API_FAILED_TO_WRITE_CLIPBOARD_TEXT = defineImpureLayerApplicationErrorDefinition('BROWSER_API', 'failed to write clipboard text', true)
+const IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_BROWSER_API_WINDOW_SCROLL_API_IS_UNAVAILABLE = defineImpureLayerApplicationErrorDefinition('BROWSER_API', 'window scroll API is unavailable', true)
+const IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_BROWSER_API_WINDOW_LOCATION_IS_NOT_AVAILABLE_IN_THIS_RUNTIME = defineImpureLayerApplicationErrorDefinition('BROWSER_API', 'window.location is not available in this runtime', true)
+const IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_BROWSER_API_WINDOW_OPEN_IS_NOT_AVAILABLE_IN_THIS_RUNTIME = defineImpureLayerApplicationErrorDefinition('BROWSER_API', 'window.open is not available in this runtime', true)
+const IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_INDEXED_DB_FAILED_TO_OPEN_INDEXEDDB_DATABASE = defineImpureLayerApplicationErrorDefinition('INDEXED_DB', 'failed to open indexedDB database', true)
+const IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_INDEXED_DB_FAILED_TO_READ_VALUE_FROM_INDEXEDDB_OBJECT_STORE = defineImpureLayerApplicationErrorDefinition('INDEXED_DB', 'failed to read value from indexedDB object store', true)
+const IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_INDEXED_DB_FAILED_TO_WRITE_VALUE_INTO_INDEXEDDB_OBJECT_STORE = defineImpureLayerApplicationErrorDefinition('INDEXED_DB', 'failed to write value into indexedDB object store', true)
+const IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_INDEXED_DB_INDEXEDDB_CONNECTION_IS_UNEXPECTEDLY_EMPTY = defineImpureLayerApplicationErrorDefinition('INDEXED_DB', 'indexedDB connection is unexpectedly empty', true)
+const IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_INDEXED_DB_INDEXEDDB_IS_NOT_AVAILABLE_IN_THIS_RUNTIME = defineImpureLayerApplicationErrorDefinition('INDEXED_DB', 'indexedDB is not available in this runtime', true)
+const IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_JSON_PARSE_FAILED_TO_PARSE_JSON_TEXT = defineImpureLayerApplicationErrorDefinition('JSON_PARSE', 'failed to parse json text', true)
+const IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_JSON_STRINGIFY_COLLECTIONS_JSON_TEXT_IS_UNEXPECTEDLY_EMPTY_DURING_COMPLETE_EXPORT = defineImpureLayerApplicationErrorDefinition('JSON_STRINGIFY', 'collections json text is unexpectedly empty during complete export', true)
+const IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_JSON_STRINGIFY_COMPLETE_PROFILE_JSON_TEXT_IS_UNEXPECTEDLY_NULL = defineImpureLayerApplicationErrorDefinition('JSON_STRINGIFY', 'complete profile json text is unexpectedly null', true)
+const IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_JSON_STRINGIFY_FAILED_TO_STRINGIFY_OBJECT_INTO_JSON_TEXT = defineImpureLayerApplicationErrorDefinition('JSON_STRINGIFY', 'failed to stringify object into json text', true)
+const IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_JSON_STRINGIFY_JSON_STRINGIFY_PRODUCED_NULL_SNAPSHOT_TEXT_UNEXPECTEDLY = defineImpureLayerApplicationErrorDefinition('JSON_STRINGIFY', 'json stringify produced null snapshot text unexpectedly', true)
+const IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_JSON_STRINGIFY_JSON_TEXT_IS_UNEXPECTEDLY_NULL = defineImpureLayerApplicationErrorDefinition('JSON_STRINGIFY', 'json text is unexpectedly null', true)
+const IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_LOCAL_STORAGE_FAILED_TO_READ_JSON_SNAPSHOT_FROM_LOCALSTORAGE = defineImpureLayerApplicationErrorDefinition('LOCAL_STORAGE', 'failed to read json snapshot from localStorage', true)
+const IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_LOCAL_STORAGE_FAILED_TO_WRITE_JSON_SNAPSHOT_TO_LOCALSTORAGE = defineImpureLayerApplicationErrorDefinition('LOCAL_STORAGE', 'failed to write json snapshot to localStorage', true)
+const IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_LOCAL_STORAGE_FALLBACK_LOCALSTORAGE_WRITE_DID_NOT_RETURN_SUCCESS_FLAG = defineImpureLayerApplicationErrorDefinition('LOCAL_STORAGE', 'fallback localStorage write did not return success flag', true)
+const IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_LOCAL_STORAGE_FALLBACK_LOCALSTORAGE_WRITE_FOR_AUDIT_TIMELINE_DID_NOT_RETURN_SUCCESS_FLAG = defineImpureLayerApplicationErrorDefinition('LOCAL_STORAGE', 'fallback localStorage write for audit timeline did not return success flag', true)
+const IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_LOCAL_STORAGE_FALLBACK_LOCALSTORAGE_WRITE_FOR_FIREBASE_CONFIG_DID_NOT_RETURN_SUCCESS_FLAG = defineImpureLayerApplicationErrorDefinition('LOCAL_STORAGE', 'fallback localStorage write for firebase config did not return success flag', true)
+const IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_LOCAL_STORAGE_FALLBACK_LOCALSTORAGE_WRITE_FOR_GOOGLE_SHEETS_SETTINGS_DID_NOT_RETURN_SUCCESS_FLAG = defineImpureLayerApplicationErrorDefinition('LOCAL_STORAGE', 'fallback localStorage write for google sheets settings did not return success flag', true)
+const IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_LOCAL_STORAGE_FALLBACK_LOCALSTORAGE_WRITE_FOR_UI_PREFERENCES_DID_NOT_RETURN_SUCCESS_FLAG = defineImpureLayerApplicationErrorDefinition('LOCAL_STORAGE', 'fallback localStorage write for ui preferences did not return success flag', true)
+const IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_LOCAL_STORAGE_LOCALSTORAGE_IS_NOT_AVAILABLE_IN_THIS_RUNTIME = defineImpureLayerApplicationErrorDefinition('LOCAL_STORAGE', 'localStorage is not available in this runtime', true)
+const IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_NETWORK_FAILED_TO_EXPORT_PROFILE_TO_GOOGLE_SHEETS_ENDPOINT = defineImpureLayerApplicationErrorDefinition('NETWORK', 'failed to export profile to google sheets endpoint', true)
+const IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_NETWORK_FAILED_TO_FETCH_REMOTE_JSON_PAYLOAD = defineImpureLayerApplicationErrorDefinition('NETWORK', 'failed to fetch remote json payload', true)
+const IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_NETWORK_FAILED_TO_IMPORT_PROFILE_FROM_GOOGLE_SHEETS_ENDPOINT = defineImpureLayerApplicationErrorDefinition('NETWORK', 'failed to import profile from google sheets endpoint', true)
+const IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_NETWORK_FAILED_TO_LOAD_FIREBASE_AUTH_MODULE_FOR_SIGN_IN = defineImpureLayerApplicationErrorDefinition('NETWORK', 'failed to load firebase auth module for sign-in', true)
+const IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_NETWORK_FAILED_TO_LOAD_FIREBASE_SDK_MODULES = defineImpureLayerApplicationErrorDefinition('NETWORK', 'failed to load firebase sdk modules', true)
+const IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_NETWORK_FAILED_TO_LOAD_FIRESTORE_MODULE_FOR_PULL = defineImpureLayerApplicationErrorDefinition('NETWORK', 'failed to load firestore module for pull', true)
+const IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_NETWORK_FAILED_TO_LOAD_FIRESTORE_MODULE_FOR_PUSH = defineImpureLayerApplicationErrorDefinition('NETWORK', 'failed to load firestore module for push', true)
+const IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_NETWORK_FAILED_TO_READ_GOOGLE_SHEETS_EXPORT_ENDPOINT_RESPONSE_BODY = defineImpureLayerApplicationErrorDefinition('NETWORK', 'failed to read google sheets export endpoint response body', true)
+const IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_NETWORK_FAILED_TO_READ_GOOGLE_SHEETS_IMPORT_ENDPOINT_RESPONSE_BODY = defineImpureLayerApplicationErrorDefinition('NETWORK', 'failed to read google sheets import endpoint response body', true)
+const IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_NETWORK_FAILED_TO_READ_PROFILE_FROM_FIREBASE_FIRESTORE = defineImpureLayerApplicationErrorDefinition('NETWORK', 'failed to read profile from firebase firestore', true)
+const IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_NETWORK_FAILED_TO_READ_RESPONSE_BODY_TEXT = defineImpureLayerApplicationErrorDefinition('NETWORK', 'failed to read response body text', true)
+const IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_NETWORK_FAILED_TO_WRITE_PROFILE_INTO_FIREBASE_FIRESTORE = defineImpureLayerApplicationErrorDefinition('NETWORK', 'failed to write profile into firebase firestore', true)
+const IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_NETWORK_FIREBASE_FIRESTORE_WRITE_RETURNED_EMPTY_SUCCESS_FLAG = defineImpureLayerApplicationErrorDefinition('NETWORK', 'firebase firestore write returned empty success flag', true)
+const IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_NETWORK_GOOGLE_SHEETS_EXPORT_ENDPOINT_RETURNED_NOT_OK_STATUS = defineImpureLayerApplicationErrorDefinition('NETWORK', 'google sheets export endpoint returned not-ok status', true)
+const IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_NETWORK_GOOGLE_SHEETS_EXPORT_ENDPOINT_RETURNED_NULL_RESPONSE_BODY = defineImpureLayerApplicationErrorDefinition('NETWORK', 'google sheets export endpoint returned null response body', true)
+const IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_NETWORK_GOOGLE_SHEETS_EXPORT_ENDPOINT_RETURNED_NULL_RESPONSE_OBJECT_UNEXPECTEDLY = defineImpureLayerApplicationErrorDefinition('NETWORK', 'google sheets export endpoint returned null response object unexpectedly', true)
+const IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_NETWORK_GOOGLE_SHEETS_IMPORT_ENDPOINT_RETURNED_NOT_OK_STATUS = defineImpureLayerApplicationErrorDefinition('NETWORK', 'google sheets import endpoint returned not-ok status', true)
+const IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_NETWORK_GOOGLE_SHEETS_IMPORT_ENDPOINT_RETURNED_NULL_RESPONSE_BODY = defineImpureLayerApplicationErrorDefinition('NETWORK', 'google sheets import endpoint returned null response body', true)
+const IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_NETWORK_GOOGLE_SHEETS_IMPORT_ENDPOINT_RETURNED_NULL_RESPONSE_OBJECT_UNEXPECTEDLY = defineImpureLayerApplicationErrorDefinition('NETWORK', 'google sheets import endpoint returned null response object unexpectedly', true)
+const IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_NETWORK_NETWORK_FETCH_RETURNED_NULL_RESPONSE_OBJECT_UNEXPECTEDLY = defineImpureLayerApplicationErrorDefinition('NETWORK', 'network fetch returned null response object unexpectedly', true)
+const IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_NETWORK_RESPONSE_BODY_TEXT_RESOLVED_TO_NULL_UNEXPECTEDLY = defineImpureLayerApplicationErrorDefinition('NETWORK', 'response body text resolved to null unexpectedly', true)
+const IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_NOT_FOUND_NO_FIREBASE_PROFILE_SNAPSHOT_EXISTS_FOR_THIS_USER = defineImpureLayerApplicationErrorDefinition('NOT_FOUND', 'no firebase profile snapshot exists for this user', true)
+const IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_NOT_IMPLEMENTED_GOOGLE_SHEETS_READ_INTEGRATION_IS_NOT_IMPLEMENTED_YET = defineImpureLayerApplicationErrorDefinition('NOT_IMPLEMENTED', 'google sheets read integration is not implemented yet', true)
+const IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_NOT_IMPLEMENTED_GOOGLE_SIGN_IN_INTEGRATION_IS_NOT_IMPLEMENTED_YET = defineImpureLayerApplicationErrorDefinition('NOT_IMPLEMENTED', 'google sign-in integration is not implemented yet', true)
+const IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_TIME_FAILED_TO_PRODUCE_ISO_TIMESTAMP_STRING = defineImpureLayerApplicationErrorDefinition('TIME', 'failed to produce ISO timestamp string', true)
+const IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_VALIDATION_AUDITTIMELINEENTRIES_MUST_BE_AN_ARRAY = defineImpureLayerApplicationErrorDefinition('VALIDATION', 'auditTimelineEntries must be an array', true)
+const IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_VALIDATION_BUDGETCOLLECTIONSJSONTEXT_MUST_BE_A_NON_EMPTY_STRING = defineImpureLayerApplicationErrorDefinition('VALIDATION', 'budgetCollectionsJsonText must be a non-empty string', true)
+const IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_VALIDATION_BUDGETCOLLECTIONSSTATE_MUST_BE_AN_OBJECT = defineImpureLayerApplicationErrorDefinition('VALIDATION', 'budgetCollectionsState must be an object', true)
+const IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_VALIDATION_CACHED_AUDIT_TIMELINE_MUST_BE_AN_ARRAY = defineImpureLayerApplicationErrorDefinition('VALIDATION', 'cached audit timeline must be an array', true)
+const IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_VALIDATION_CACHED_BUDGETING_STATE_MUST_BE_AN_OBJECT = defineImpureLayerApplicationErrorDefinition('VALIDATION', 'cached budgeting state must be an object', true)
+const IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_VALIDATION_CACHED_FIREBASE_CONFIG_MUST_BE_AN_OBJECT = defineImpureLayerApplicationErrorDefinition('VALIDATION', 'cached firebase config must be an object', true)
+const IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_VALIDATION_CACHED_GOOGLE_SHEETS_SETTINGS_PAYLOAD_MUST_BE_AN_OBJECT = defineImpureLayerApplicationErrorDefinition('VALIDATION', 'cached google sheets settings payload must be an object', true)
+const IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_VALIDATION_CACHED_UI_PREFERENCES_ARE_MALFORMED = defineImpureLayerApplicationErrorDefinition('VALIDATION', 'cached ui preferences are malformed', true)
+const IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_VALIDATION_CACHED_UI_PREFERENCES_MUST_BE_AN_OBJECT = defineImpureLayerApplicationErrorDefinition('VALIDATION', 'cached ui preferences must be an object', true)
+const IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_VALIDATION_CACHED_UI_PREFERENCES_TABLESORTSTATE_IS_MALFORMED = defineImpureLayerApplicationErrorDefinition('VALIDATION', 'cached ui preferences tableSortState is malformed', true)
+const IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_VALIDATION_COLLECTIONS_PAYLOAD_IS_MALFORMED_DURING_COMPLETE_EXPORT = defineImpureLayerApplicationErrorDefinition('VALIDATION', 'collections payload is malformed during complete export', true)
+const IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_VALIDATION_FIREBASE_CLIENT_BUNDLE_IS_UNEXPECTEDLY_EMPTY = defineImpureLayerApplicationErrorDefinition('VALIDATION', 'firebase client bundle is unexpectedly empty', true)
+const IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_VALIDATION_FIREBASE_CONFIG_IS_MISSING_REQUIRED_FIELDS = defineImpureLayerApplicationErrorDefinition('VALIDATION', 'firebase config is missing required fields', true)
+const IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_VALIDATION_FIREBASE_ENABLED_MUST_BE_BOOLEAN = defineImpureLayerApplicationErrorDefinition('VALIDATION', 'firebase enabled must be boolean', true)
+const IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_VALIDATION_FIREBASE_MODULE_BUNDLE_IS_UNEXPECTEDLY_EMPTY = defineImpureLayerApplicationErrorDefinition('VALIDATION', 'firebase module bundle is unexpectedly empty', true)
+const IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_VALIDATION_FIREBASE_PROFILE_JSON_IS_UNEXPECTEDLY_EMPTY = defineImpureLayerApplicationErrorDefinition('VALIDATION', 'firebase profile json is unexpectedly empty', true)
+const IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_VALIDATION_FIREBASE_PROFILE_PAYLOAD_IS_MALFORMED = defineImpureLayerApplicationErrorDefinition('VALIDATION', 'firebase profile payload is malformed', true)
+const IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_VALIDATION_FIREBASE_SYNC_IS_DISABLED = defineImpureLayerApplicationErrorDefinition('VALIDATION', 'firebase sync is disabled', true)
+const IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_VALIDATION_FIREBASE_WEB_CONFIG_MUST_BE_AN_OBJECT = defineImpureLayerApplicationErrorDefinition('VALIDATION', 'firebase web config must be an object', true)
+const IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_VALIDATION_FIREBASEWEBCONFIG_MUST_BE_AN_OBJECT = defineImpureLayerApplicationErrorDefinition('VALIDATION', 'firebaseWebConfig must be an object', true)
+const IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_VALIDATION_GOOGLE_SHEETS_EXPORT_ENDPOINT_PAYLOAD_IS_MALFORMED = defineImpureLayerApplicationErrorDefinition('VALIDATION', 'google sheets export endpoint payload is malformed', true)
+const IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_VALIDATION_GOOGLE_SHEETS_IMPORT_ENDPOINT_PAYLOAD_IS_MALFORMED = defineImpureLayerApplicationErrorDefinition('VALIDATION', 'google sheets import endpoint payload is malformed', true)
+const IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_VALIDATION_GOOGLE_SHEETS_IMPORT_PAYLOAD_IS_UNEXPECTEDLY_EMPTY = defineImpureLayerApplicationErrorDefinition('VALIDATION', 'google sheets import payload is unexpectedly empty', true)
+const IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_VALIDATION_GOOGLE_SHEETS_SETTINGS_ENABLED_MUST_BE_BOOLEAN = defineImpureLayerApplicationErrorDefinition('VALIDATION', 'google sheets settings enabled must be boolean', true)
+const IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_VALIDATION_GOOGLE_SHEETS_SETTINGS_FIELDS_MUST_BE_STRINGS = defineImpureLayerApplicationErrorDefinition('VALIDATION', 'google sheets settings fields must be strings', true)
+const IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_VALIDATION_GOOGLE_SHEETS_SETTINGS_MUST_BE_AN_OBJECT = defineImpureLayerApplicationErrorDefinition('VALIDATION', 'google sheets settings must be an object', true)
+const IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_VALIDATION_GOOGLE_SHEETS_SYNC_IS_DISABLED = defineImpureLayerApplicationErrorDefinition('VALIDATION', 'google sheets sync is disabled', true)
+const IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_VALIDATION_GOOGLE_SHEETS_WEB_APP_URL_IS_REQUIRED = defineImpureLayerApplicationErrorDefinition('VALIDATION', 'google sheets web app url is required', true)
+const IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_VALIDATION_GOOGLESHEETSSETTINGS_MUST_BE_AN_OBJECT = defineImpureLayerApplicationErrorDefinition('VALIDATION', 'googleSheetsSettings must be an object', true)
+const IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_VALIDATION_IMPORTED_PROFILE_AUDITTIMELINEENTRIES_CONTAINS_MALFORMED_ROWS = defineImpureLayerApplicationErrorDefinition('VALIDATION', 'imported profile auditTimelineEntries contains malformed rows', true)
+const IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_VALIDATION_IMPORTED_PROFILE_AUDITTIMELINEENTRIES_MUST_BE_AN_ARRAY_WHEN_PROVIDED = defineImpureLayerApplicationErrorDefinition('VALIDATION', 'imported profile auditTimelineEntries must be an array when provided', true)
+const IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_VALIDATION_IMPORTED_PROFILE_IS_MISSING_COLLECTIONS_OBJECT = defineImpureLayerApplicationErrorDefinition('VALIDATION', 'imported profile is missing collections object', true)
+const IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_VALIDATION_IMPORTED_PROFILE_IS_MISSING_PROFILE_OBJECT = defineImpureLayerApplicationErrorDefinition('VALIDATION', 'imported profile is missing profile object', true)
+const IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_VALIDATION_IMPORTED_PROFILE_MUST_BE_A_JSON_OBJECT = defineImpureLayerApplicationErrorDefinition('VALIDATION', 'imported profile must be a JSON object', true)
+const IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_VALIDATION_IMPORTED_PROFILE_UIPREFERENCES_ARE_MALFORMED = defineImpureLayerApplicationErrorDefinition('VALIDATION', 'imported profile uiPreferences are malformed', true)
+const IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_VALIDATION_IMPORTED_PROFILE_UIPREFERENCES_MUST_BE_AN_OBJECT_WHEN_PROVIDED = defineImpureLayerApplicationErrorDefinition('VALIDATION', 'imported profile uiPreferences must be an object when provided', true)
+const IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_VALIDATION_OAUTH_CLIENT_ID_AND_REDIRECT_URI_ARE_REQUIRED = defineImpureLayerApplicationErrorDefinition('VALIDATION', 'oauth client id and redirect uri are required', true)
+const IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_VALIDATION_OAUTH_SETTINGS_MUST_BE_AN_OBJECT = defineImpureLayerApplicationErrorDefinition('VALIDATION', 'oauth settings must be an object', true)
+const IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_VALIDATION_PROFILE_JSON_TEXT_IS_UNEXPECTEDLY_EMPTY_BEFORE_FIREBASE_PUSH = defineImpureLayerApplicationErrorDefinition('VALIDATION', 'profile json text is unexpectedly empty before firebase push', true)
+const IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_VALIDATION_PROFILE_JSON_TEXT_IS_UNEXPECTEDLY_EMPTY_BEFORE_GOOGLE_SHEETS_EXPORT = defineImpureLayerApplicationErrorDefinition('VALIDATION', 'profile json text is unexpectedly empty before google sheets export', true)
+const IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_VALIDATION_PROFILE_PAYLOAD_IS_MALFORMED_BEFORE_FIREBASE_PUSH = defineImpureLayerApplicationErrorDefinition('VALIDATION', 'profile payload is malformed before firebase push', true)
+const IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_VALIDATION_PROFILE_PAYLOAD_IS_MALFORMED_BEFORE_GOOGLE_SHEETS_EXPORT = defineImpureLayerApplicationErrorDefinition('VALIDATION', 'profile payload is malformed before google sheets export', true)
+const IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_VALIDATION_PROFILE_COLLECTIONS_VALIDATION_DID_NOT_RETURN_SUCCESS_UNEXPECTEDLY = defineImpureLayerApplicationErrorDefinition('VALIDATION', 'profile collections validation did not return success unexpectedly', true)
+const IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_VALIDATION_SUPPORTED_CACHED_COLLECTIONS_VALIDATION_DID_NOT_RETURN_SUCCESS_UNEXPECTEDLY = defineImpureLayerApplicationErrorDefinition('VALIDATION', 'supported cached collections validation did not return success unexpectedly', true)
+const IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_VALIDATION_SUPPORTED_COLLECTIONS_SHAPE_VALIDATION_DID_NOT_RETURN_SUCCESS_UNEXPECTEDLY = defineImpureLayerApplicationErrorDefinition('VALIDATION', 'supported collections shape validation did not return success unexpectedly', true)
+const IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_VALIDATION_SUPPORTED_IMPORTED_COLLECTIONS_VALIDATION_DID_NOT_RETURN_SUCCESS_UNEXPECTEDLY = defineImpureLayerApplicationErrorDefinition('VALIDATION', 'supported imported collections validation did not return success unexpectedly', true)
+const IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_VALIDATION_SUPPORTED_NESTED_COLLECTIONS_VALIDATION_DID_NOT_RETURN_SUCCESS_UNEXPECTEDLY = defineImpureLayerApplicationErrorDefinition('VALIDATION', 'supported nested collections validation did not return success unexpectedly', true)
+const IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_VALIDATION_SUPPORTED_PERSIST_COLLECTIONS_VALIDATION_DID_NOT_RETURN_SUCCESS_UNEXPECTEDLY = defineImpureLayerApplicationErrorDefinition('VALIDATION', 'supported persist collections validation did not return success unexpectedly', true)
+const IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_VALIDATION_TEXTSCALEMULTIPLIER_MUST_BE_A_FINITE_NUMBER = defineImpureLayerApplicationErrorDefinition('VALIDATION', 'textScaleMultiplier must be a finite number', true)
+const IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_VALIDATION_TEXTTOCOPY_MUST_BE_A_STRING = defineImpureLayerApplicationErrorDefinition('VALIDATION', 'textToCopy must be a string', true)
+const IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_VALIDATION_THEMENAME_MUST_BE_LIGHT_OR_DARK = defineImpureLayerApplicationErrorDefinition('VALIDATION', 'themeName must be light or dark', true)
+const IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_VALIDATION_UIPREFERENCES_MUST_BE_AN_OBJECT = defineImpureLayerApplicationErrorDefinition('VALIDATION', 'uiPreferences must be an object', true)
+const IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_VALIDATION_UIPREFERENCES_TABLESORTSTATE_MUST_BE_AN_OBJECT_WHEN_PROVIDED = defineImpureLayerApplicationErrorDefinition('VALIDATION', 'uiPreferences.tableSortState must be an object when provided', true)
+const IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_VALIDATION_UIPREFERENCES_TEXTSCALEMULTIPLIER_MUST_BE_A_FINITE_NUMBER = defineImpureLayerApplicationErrorDefinition('VALIDATION', 'uiPreferences.textScaleMultiplier must be a finite number', true)
+const IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_VALIDATION_UIPREFERENCES_THEMENAME_MUST_BE_LIGHT_OR_DARK = defineImpureLayerApplicationErrorDefinition('VALIDATION', 'uiPreferences.themeName must be light or dark', true)
+const IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_WORKER_WORKER_FALLBACK_PRODUCED_EMPTY_FINDINGS_UNEXPECTEDLY = defineImpureLayerApplicationErrorDefinition('WORKER', 'worker fallback produced empty findings unexpectedly', true)
+const IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_WORKER_WORKER_RETURNED_MALFORMED_RISK_PAYLOAD = defineImpureLayerApplicationErrorDefinition('WORKER', 'worker returned malformed risk payload', true)
+const IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_WORKER_WORKER_RISK_COMPUTATION_RETURNED_ERROR = defineImpureLayerApplicationErrorDefinition('WORKER', 'worker risk computation returned error', true)
+const IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_API_KIND_LOCAL_STORAGE_API_ERR_PERSIST_CONFIG = defineImpureLayerApplicationErrorDefinition(API_KIND_LOCAL_STORAGE, API_ERR_PERSIST_CONFIG, true)
+const IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_API_KIND_NETWORK_API_RETURNED_AN_UNEXPECTED_SESSION_PAYLOAD = defineImpureLayerApplicationErrorDefinition(API_KIND_NETWORK, 'API returned an unexpected session payload', true)
+const IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_API_KIND_NETWORK_API_ERR_REQUEST_FAILED = defineImpureLayerApplicationErrorDefinition(API_KIND_NETWORK, API_ERR_REQUEST_FAILED, true)
+const IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_API_KIND_NETWORK_API_ERR_RESPONSE_MISSING = defineImpureLayerApplicationErrorDefinition(API_KIND_NETWORK, API_ERR_RESPONSE_MISSING, true)
+const IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_API_KIND_NETWORK_API_ERR_RESPONSE_READ_FAILED = defineImpureLayerApplicationErrorDefinition(API_KIND_NETWORK, API_ERR_RESPONSE_READ_FAILED, true)
+const IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_API_KIND_NOT_FOUND_API_ERR_PROFILE_NOT_FOUND = defineImpureLayerApplicationErrorDefinition(API_KIND_NOT_FOUND, API_ERR_PROFILE_NOT_FOUND, true)
+const IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_API_KIND_VALIDATION_API_ERR_CACHED_CONFIG_OBJECT = defineImpureLayerApplicationErrorDefinition(API_KIND_VALIDATION, API_ERR_CACHED_CONFIG_OBJECT, true)
+const IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_API_KIND_VALIDATION_API_ERR_CONFIG_OBJECT = defineImpureLayerApplicationErrorDefinition(API_KIND_VALIDATION, API_ERR_CONFIG_OBJECT, true)
+const IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_API_KIND_VALIDATION_API_ERR_ENABLED_BOOLEAN = defineImpureLayerApplicationErrorDefinition(API_KIND_VALIDATION, API_ERR_ENABLED_BOOLEAN, true)
+const IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_API_KIND_VALIDATION_API_ERR_LOGIN_PASSWORD_REQUIRED = defineImpureLayerApplicationErrorDefinition(API_KIND_VALIDATION, API_ERR_LOGIN_PASSWORD_REQUIRED, true)
+const IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_API_KIND_VALIDATION_API_ERR_PROFILE_EXPORT_EMPTY = defineImpureLayerApplicationErrorDefinition(API_KIND_VALIDATION, API_ERR_PROFILE_EXPORT_EMPTY, true)
+const IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_API_KIND_VALIDATION_API_ERR_PROFILE_JSON_EMPTY = defineImpureLayerApplicationErrorDefinition(API_KIND_VALIDATION, API_ERR_PROFILE_JSON_EMPTY, true)
+const IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_API_KIND_VALIDATION_API_ERR_PROFILE_PAYLOAD_INVALID = defineImpureLayerApplicationErrorDefinition(API_KIND_VALIDATION, API_ERR_PROFILE_PAYLOAD_INVALID, true)
+const IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_API_KIND_VALIDATION_API_ERR_SYNC_BUNDLE_MISSING = defineImpureLayerApplicationErrorDefinition(API_KIND_VALIDATION, API_ERR_SYNC_BUNDLE_MISSING, true)
+const IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_API_KIND_VALIDATION_API_ERR_SYNC_DISABLED = defineImpureLayerApplicationErrorDefinition(API_KIND_VALIDATION, API_ERR_SYNC_DISABLED, true)
+
+const IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_LIST = Object.freeze([
+  IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_AUTH_FIREBASE_GOOGLE_POPUP_SIGN_IN_FAILED,
+  IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_AUTH_FIREBASE_SIGN_IN_RETURNED_EMPTY_USER,
+  IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_AUTH_FIREBASE_SIGN_OUT_FAILED,
+  IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_AUTH_FIREBASE_USER_MUST_BE_SIGNED_IN_BEFORE_PULL,
+  IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_AUTH_FIREBASE_USER_MUST_BE_SIGNED_IN_BEFORE_SYNC,
+  IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_BROWSER_API_CLIPBOARD_WRITE_API_IS_UNAVAILABLE,
+  IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_BROWSER_API_CLIPBOARD_WRITE_RETURNED_EMPTY_SUCCESS_FLAG,
+  IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_BROWSER_API_DOCUMENT_BODY_IS_UNAVAILABLE,
+  IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_BROWSER_API_DOCUMENT_ROOT_ELEMENT_IS_UNAVAILABLE,
+  IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_BROWSER_API_FAILED_TO_OPEN_OAUTH_POPUP_WINDOW,
+  IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_BROWSER_API_FAILED_TO_WRITE_CLIPBOARD_TEXT,
+  IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_BROWSER_API_WINDOW_SCROLL_API_IS_UNAVAILABLE,
+  IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_BROWSER_API_WINDOW_LOCATION_IS_NOT_AVAILABLE_IN_THIS_RUNTIME,
+  IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_BROWSER_API_WINDOW_OPEN_IS_NOT_AVAILABLE_IN_THIS_RUNTIME,
+  IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_INDEXED_DB_FAILED_TO_OPEN_INDEXEDDB_DATABASE,
+  IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_INDEXED_DB_FAILED_TO_READ_VALUE_FROM_INDEXEDDB_OBJECT_STORE,
+  IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_INDEXED_DB_FAILED_TO_WRITE_VALUE_INTO_INDEXEDDB_OBJECT_STORE,
+  IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_INDEXED_DB_INDEXEDDB_CONNECTION_IS_UNEXPECTEDLY_EMPTY,
+  IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_INDEXED_DB_INDEXEDDB_IS_NOT_AVAILABLE_IN_THIS_RUNTIME,
+  IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_JSON_PARSE_FAILED_TO_PARSE_JSON_TEXT,
+  IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_JSON_STRINGIFY_COLLECTIONS_JSON_TEXT_IS_UNEXPECTEDLY_EMPTY_DURING_COMPLETE_EXPORT,
+  IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_JSON_STRINGIFY_COMPLETE_PROFILE_JSON_TEXT_IS_UNEXPECTEDLY_NULL,
+  IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_JSON_STRINGIFY_FAILED_TO_STRINGIFY_OBJECT_INTO_JSON_TEXT,
+  IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_JSON_STRINGIFY_JSON_STRINGIFY_PRODUCED_NULL_SNAPSHOT_TEXT_UNEXPECTEDLY,
+  IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_JSON_STRINGIFY_JSON_TEXT_IS_UNEXPECTEDLY_NULL,
+  IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_LOCAL_STORAGE_FAILED_TO_READ_JSON_SNAPSHOT_FROM_LOCALSTORAGE,
+  IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_LOCAL_STORAGE_FAILED_TO_WRITE_JSON_SNAPSHOT_TO_LOCALSTORAGE,
+  IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_LOCAL_STORAGE_FALLBACK_LOCALSTORAGE_WRITE_DID_NOT_RETURN_SUCCESS_FLAG,
+  IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_LOCAL_STORAGE_FALLBACK_LOCALSTORAGE_WRITE_FOR_AUDIT_TIMELINE_DID_NOT_RETURN_SUCCESS_FLAG,
+  IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_LOCAL_STORAGE_FALLBACK_LOCALSTORAGE_WRITE_FOR_FIREBASE_CONFIG_DID_NOT_RETURN_SUCCESS_FLAG,
+  IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_LOCAL_STORAGE_FALLBACK_LOCALSTORAGE_WRITE_FOR_GOOGLE_SHEETS_SETTINGS_DID_NOT_RETURN_SUCCESS_FLAG,
+  IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_LOCAL_STORAGE_FALLBACK_LOCALSTORAGE_WRITE_FOR_UI_PREFERENCES_DID_NOT_RETURN_SUCCESS_FLAG,
+  IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_LOCAL_STORAGE_LOCALSTORAGE_IS_NOT_AVAILABLE_IN_THIS_RUNTIME,
+  IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_NETWORK_FAILED_TO_EXPORT_PROFILE_TO_GOOGLE_SHEETS_ENDPOINT,
+  IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_NETWORK_FAILED_TO_FETCH_REMOTE_JSON_PAYLOAD,
+  IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_NETWORK_FAILED_TO_IMPORT_PROFILE_FROM_GOOGLE_SHEETS_ENDPOINT,
+  IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_NETWORK_FAILED_TO_LOAD_FIREBASE_AUTH_MODULE_FOR_SIGN_IN,
+  IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_NETWORK_FAILED_TO_LOAD_FIREBASE_SDK_MODULES,
+  IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_NETWORK_FAILED_TO_LOAD_FIRESTORE_MODULE_FOR_PULL,
+  IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_NETWORK_FAILED_TO_LOAD_FIRESTORE_MODULE_FOR_PUSH,
+  IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_NETWORK_FAILED_TO_READ_GOOGLE_SHEETS_EXPORT_ENDPOINT_RESPONSE_BODY,
+  IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_NETWORK_FAILED_TO_READ_GOOGLE_SHEETS_IMPORT_ENDPOINT_RESPONSE_BODY,
+  IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_NETWORK_FAILED_TO_READ_PROFILE_FROM_FIREBASE_FIRESTORE,
+  IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_NETWORK_FAILED_TO_READ_RESPONSE_BODY_TEXT,
+  IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_NETWORK_FAILED_TO_WRITE_PROFILE_INTO_FIREBASE_FIRESTORE,
+  IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_NETWORK_FIREBASE_FIRESTORE_WRITE_RETURNED_EMPTY_SUCCESS_FLAG,
+  IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_NETWORK_GOOGLE_SHEETS_EXPORT_ENDPOINT_RETURNED_NOT_OK_STATUS,
+  IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_NETWORK_GOOGLE_SHEETS_EXPORT_ENDPOINT_RETURNED_NULL_RESPONSE_BODY,
+  IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_NETWORK_GOOGLE_SHEETS_EXPORT_ENDPOINT_RETURNED_NULL_RESPONSE_OBJECT_UNEXPECTEDLY,
+  IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_NETWORK_GOOGLE_SHEETS_IMPORT_ENDPOINT_RETURNED_NOT_OK_STATUS,
+  IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_NETWORK_GOOGLE_SHEETS_IMPORT_ENDPOINT_RETURNED_NULL_RESPONSE_BODY,
+  IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_NETWORK_GOOGLE_SHEETS_IMPORT_ENDPOINT_RETURNED_NULL_RESPONSE_OBJECT_UNEXPECTEDLY,
+  IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_NETWORK_NETWORK_FETCH_RETURNED_NULL_RESPONSE_OBJECT_UNEXPECTEDLY,
+  IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_NETWORK_RESPONSE_BODY_TEXT_RESOLVED_TO_NULL_UNEXPECTEDLY,
+  IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_NOT_FOUND_NO_FIREBASE_PROFILE_SNAPSHOT_EXISTS_FOR_THIS_USER,
+  IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_NOT_IMPLEMENTED_GOOGLE_SHEETS_READ_INTEGRATION_IS_NOT_IMPLEMENTED_YET,
+  IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_NOT_IMPLEMENTED_GOOGLE_SIGN_IN_INTEGRATION_IS_NOT_IMPLEMENTED_YET,
+  IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_TIME_FAILED_TO_PRODUCE_ISO_TIMESTAMP_STRING,
+  IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_VALIDATION_AUDITTIMELINEENTRIES_MUST_BE_AN_ARRAY,
+  IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_VALIDATION_BUDGETCOLLECTIONSJSONTEXT_MUST_BE_A_NON_EMPTY_STRING,
+  IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_VALIDATION_BUDGETCOLLECTIONSSTATE_MUST_BE_AN_OBJECT,
+  IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_VALIDATION_CACHED_AUDIT_TIMELINE_MUST_BE_AN_ARRAY,
+  IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_VALIDATION_CACHED_BUDGETING_STATE_MUST_BE_AN_OBJECT,
+  IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_VALIDATION_CACHED_FIREBASE_CONFIG_MUST_BE_AN_OBJECT,
+  IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_VALIDATION_CACHED_GOOGLE_SHEETS_SETTINGS_PAYLOAD_MUST_BE_AN_OBJECT,
+  IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_VALIDATION_CACHED_UI_PREFERENCES_ARE_MALFORMED,
+  IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_VALIDATION_CACHED_UI_PREFERENCES_MUST_BE_AN_OBJECT,
+  IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_VALIDATION_CACHED_UI_PREFERENCES_TABLESORTSTATE_IS_MALFORMED,
+  IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_VALIDATION_COLLECTIONS_PAYLOAD_IS_MALFORMED_DURING_COMPLETE_EXPORT,
+  IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_VALIDATION_FIREBASE_CLIENT_BUNDLE_IS_UNEXPECTEDLY_EMPTY,
+  IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_VALIDATION_FIREBASE_CONFIG_IS_MISSING_REQUIRED_FIELDS,
+  IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_VALIDATION_FIREBASE_ENABLED_MUST_BE_BOOLEAN,
+  IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_VALIDATION_FIREBASE_MODULE_BUNDLE_IS_UNEXPECTEDLY_EMPTY,
+  IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_VALIDATION_FIREBASE_PROFILE_JSON_IS_UNEXPECTEDLY_EMPTY,
+  IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_VALIDATION_FIREBASE_PROFILE_PAYLOAD_IS_MALFORMED,
+  IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_VALIDATION_FIREBASE_SYNC_IS_DISABLED,
+  IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_VALIDATION_FIREBASE_WEB_CONFIG_MUST_BE_AN_OBJECT,
+  IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_VALIDATION_FIREBASEWEBCONFIG_MUST_BE_AN_OBJECT,
+  IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_VALIDATION_GOOGLE_SHEETS_EXPORT_ENDPOINT_PAYLOAD_IS_MALFORMED,
+  IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_VALIDATION_GOOGLE_SHEETS_IMPORT_ENDPOINT_PAYLOAD_IS_MALFORMED,
+  IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_VALIDATION_GOOGLE_SHEETS_IMPORT_PAYLOAD_IS_UNEXPECTEDLY_EMPTY,
+  IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_VALIDATION_GOOGLE_SHEETS_SETTINGS_ENABLED_MUST_BE_BOOLEAN,
+  IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_VALIDATION_GOOGLE_SHEETS_SETTINGS_FIELDS_MUST_BE_STRINGS,
+  IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_VALIDATION_GOOGLE_SHEETS_SETTINGS_MUST_BE_AN_OBJECT,
+  IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_VALIDATION_GOOGLE_SHEETS_SYNC_IS_DISABLED,
+  IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_VALIDATION_GOOGLE_SHEETS_WEB_APP_URL_IS_REQUIRED,
+  IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_VALIDATION_GOOGLESHEETSSETTINGS_MUST_BE_AN_OBJECT,
+  IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_VALIDATION_IMPORTED_PROFILE_AUDITTIMELINEENTRIES_CONTAINS_MALFORMED_ROWS,
+  IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_VALIDATION_IMPORTED_PROFILE_AUDITTIMELINEENTRIES_MUST_BE_AN_ARRAY_WHEN_PROVIDED,
+  IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_VALIDATION_IMPORTED_PROFILE_IS_MISSING_COLLECTIONS_OBJECT,
+  IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_VALIDATION_IMPORTED_PROFILE_IS_MISSING_PROFILE_OBJECT,
+  IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_VALIDATION_IMPORTED_PROFILE_MUST_BE_A_JSON_OBJECT,
+  IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_VALIDATION_IMPORTED_PROFILE_UIPREFERENCES_ARE_MALFORMED,
+  IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_VALIDATION_IMPORTED_PROFILE_UIPREFERENCES_MUST_BE_AN_OBJECT_WHEN_PROVIDED,
+  IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_VALIDATION_OAUTH_CLIENT_ID_AND_REDIRECT_URI_ARE_REQUIRED,
+  IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_VALIDATION_OAUTH_SETTINGS_MUST_BE_AN_OBJECT,
+  IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_VALIDATION_PROFILE_JSON_TEXT_IS_UNEXPECTEDLY_EMPTY_BEFORE_FIREBASE_PUSH,
+  IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_VALIDATION_PROFILE_JSON_TEXT_IS_UNEXPECTEDLY_EMPTY_BEFORE_GOOGLE_SHEETS_EXPORT,
+  IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_VALIDATION_PROFILE_PAYLOAD_IS_MALFORMED_BEFORE_FIREBASE_PUSH,
+  IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_VALIDATION_PROFILE_PAYLOAD_IS_MALFORMED_BEFORE_GOOGLE_SHEETS_EXPORT,
+  IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_VALIDATION_PROFILE_COLLECTIONS_VALIDATION_DID_NOT_RETURN_SUCCESS_UNEXPECTEDLY,
+  IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_VALIDATION_SUPPORTED_CACHED_COLLECTIONS_VALIDATION_DID_NOT_RETURN_SUCCESS_UNEXPECTEDLY,
+  IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_VALIDATION_SUPPORTED_COLLECTIONS_SHAPE_VALIDATION_DID_NOT_RETURN_SUCCESS_UNEXPECTEDLY,
+  IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_VALIDATION_SUPPORTED_IMPORTED_COLLECTIONS_VALIDATION_DID_NOT_RETURN_SUCCESS_UNEXPECTEDLY,
+  IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_VALIDATION_SUPPORTED_NESTED_COLLECTIONS_VALIDATION_DID_NOT_RETURN_SUCCESS_UNEXPECTEDLY,
+  IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_VALIDATION_SUPPORTED_PERSIST_COLLECTIONS_VALIDATION_DID_NOT_RETURN_SUCCESS_UNEXPECTEDLY,
+  IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_VALIDATION_TEXTSCALEMULTIPLIER_MUST_BE_A_FINITE_NUMBER,
+  IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_VALIDATION_TEXTTOCOPY_MUST_BE_A_STRING,
+  IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_VALIDATION_THEMENAME_MUST_BE_LIGHT_OR_DARK,
+  IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_VALIDATION_UIPREFERENCES_MUST_BE_AN_OBJECT,
+  IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_VALIDATION_UIPREFERENCES_TABLESORTSTATE_MUST_BE_AN_OBJECT_WHEN_PROVIDED,
+  IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_VALIDATION_UIPREFERENCES_TEXTSCALEMULTIPLIER_MUST_BE_A_FINITE_NUMBER,
+  IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_VALIDATION_UIPREFERENCES_THEMENAME_MUST_BE_LIGHT_OR_DARK,
+  IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_WORKER_WORKER_FALLBACK_PRODUCED_EMPTY_FINDINGS_UNEXPECTEDLY,
+  IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_WORKER_WORKER_RETURNED_MALFORMED_RISK_PAYLOAD,
+  IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_WORKER_WORKER_RISK_COMPUTATION_RETURNED_ERROR,
+  IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_API_KIND_LOCAL_STORAGE_API_ERR_PERSIST_CONFIG,
+  IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_API_KIND_NETWORK_API_RETURNED_AN_UNEXPECTED_SESSION_PAYLOAD,
+  IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_API_KIND_NETWORK_API_ERR_REQUEST_FAILED,
+  IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_API_KIND_NETWORK_API_ERR_RESPONSE_MISSING,
+  IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_API_KIND_NETWORK_API_ERR_RESPONSE_READ_FAILED,
+  IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_API_KIND_NOT_FOUND_API_ERR_PROFILE_NOT_FOUND,
+  IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_API_KIND_VALIDATION_API_ERR_CACHED_CONFIG_OBJECT,
+  IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_API_KIND_VALIDATION_API_ERR_CONFIG_OBJECT,
+  IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_API_KIND_VALIDATION_API_ERR_ENABLED_BOOLEAN,
+  IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_API_KIND_VALIDATION_API_ERR_LOGIN_PASSWORD_REQUIRED,
+  IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_API_KIND_VALIDATION_API_ERR_PROFILE_EXPORT_EMPTY,
+  IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_API_KIND_VALIDATION_API_ERR_PROFILE_JSON_EMPTY,
+  IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_API_KIND_VALIDATION_API_ERR_PROFILE_PAYLOAD_INVALID,
+  IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_API_KIND_VALIDATION_API_ERR_SYNC_BUNDLE_MISSING,
+  IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_API_KIND_VALIDATION_API_ERR_SYNC_DISABLED
+])
+
+/**
+ * Lazily built registry keyed by `kind|recoverable|message`.
+ * This keeps startup cheaper while still forcing returned application errors through shared definitions.
+ * @type {Map<string, {kind: string, message: string, recoverable: boolean}>|null}
+ */
+let cachedImpureLayerApplicationErrorDefinitionBySignature = null
+
+/**
+ * Materializes the error-definition lookup map on first use.
+ * @returns {Map<string, {kind: string, message: string, recoverable: boolean}>}
+ */
+function readImpureLayerApplicationErrorDefinitionBySignature() {
+  if (cachedImpureLayerApplicationErrorDefinitionBySignature) {
+    return cachedImpureLayerApplicationErrorDefinitionBySignature
+  }
+  cachedImpureLayerApplicationErrorDefinitionBySignature = new Map(
+    IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_LIST.map((applicationErrorDefinition) => ([
+      buildImpureLayerApplicationErrorSignature(
+        applicationErrorDefinition.kind,
+        applicationErrorDefinition.message,
+        applicationErrorDefinition.recoverable
+      ),
+      applicationErrorDefinition
+    ]))
+  )
+  return cachedImpureLayerApplicationErrorDefinitionBySignature
+}
+
+/**
+ * Reads a previously registered error definition, including supported dynamic families.
+ * Dynamic message families are normalized back through top-level builders so call sites do not return inline objects.
+ * @param {string} errorKind
+ * @param {string} errorMessage
+ * @param {boolean} isRecoverable
+ * @returns {{kind: string, message: string, recoverable: boolean}|null}
+ */
+function readRegisteredImpureLayerApplicationErrorDefinition(errorKind, errorMessage, isRecoverable) {
+  const staticDefinition = readImpureLayerApplicationErrorDefinitionBySignature().get(
+    buildImpureLayerApplicationErrorSignature(errorKind, errorMessage, isRecoverable)
+  ) ?? null
+  if (staticDefinition) return staticDefinition
+
+  const firebaseFieldMessageMatch = errorKind === APPLICATION_ERROR_KIND_VALIDATION
+    ? /^firebase (.+) must be a string$/.exec(errorMessage)
+    : null
+  if (firebaseFieldMessageMatch) {
+    return buildImpureLayerApplicationErrorDefinitionForFirebaseFieldMustBeString(firebaseFieldMessageMatch[1])
+  }
+
+  const googleSheetsStatusMessageMatch = errorKind === API_KIND_NETWORK
+    ? /^google sheets (export|import) endpoint returned status (.+)$/.exec(errorMessage)
+    : null
+  if (googleSheetsStatusMessageMatch) {
+    return buildImpureLayerApplicationErrorDefinitionForGoogleSheetsEndpointReturnedStatus(
+      /** @type {'export'|'import'} */ (googleSheetsStatusMessageMatch[1]),
+      googleSheetsStatusMessageMatch[2]
+    )
+  }
+
+  return null
+}
+
+/** @type {Worker|null} Shared worker instance reused across risk requests until it faults. */
+let cachedRiskWorkerHandle = null
+/** @type {number} Monotonic request id so multiple in-flight risk requests can share one worker safely. */
+let nextRiskWorkerRequestId = 1
+/** @type {Map<number, {resolve: (value: Result<Array<{id: string, severity: 'high'|'medium'|'low', title: string, detail: string, metricValue: number}>>) => void, currentCollectionsState: Record<string, unknown>} >} Pending worker requests keyed by request id for tuple-safe resolution and fallback. */
+const pendingRiskWorkerRequestById = new Map()
+
+function clearCachedRiskWorkerHandle() {
+  if (cachedRiskWorkerHandle) {
+    cachedRiskWorkerHandle.terminate()
+    cachedRiskWorkerHandle = null
+  }
+}
 
 /**
  * Probes whether collections match either v2 (income/expenses arrays) or v3 (records array) shape.
@@ -68,10 +506,8 @@ function requireSupportedBudgetCollectionsShapeWithTupleResult(collectionsCandid
   const [hasSupportedShape, probeError] = probeSupportedBudgetCollectionsShapeWithTupleResult(collectionsCandidate)
   if (probeError) return [null, probeError]
   if (hasSupportedShape !== true) {
-    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext(
-      'VALIDATION',
+    const [errorValue, createErrorFailure] = buildValidationApplicationErrorForCondition(
       invalidShapeMessage,
-      true,
       errorDetails
     )
     if (createErrorFailure) return [null, createErrorFailure]
@@ -81,23 +517,139 @@ function requireSupportedBudgetCollectionsShapeWithTupleResult(collectionsCandid
 }
 
 /**
- * Creates a normalized application error object for tuple-based error flow.
+ * Creates a tuple application error from a reusable top-level definition.
+ * @param {{kind: string, message: string, recoverable: boolean}} applicationErrorDefinition
+ * @param {ApplicationErrorDetails} [applicationErrorDetails]
+ * @returns {Result<AppError>}
+ */
+export function createImpureLayerApplicationErrorFromDefinitionAndOptionalDetails(applicationErrorDefinition, applicationErrorDetails) {
+  const hasValidDefinitionShape = !!applicationErrorDefinition &&
+    typeof applicationErrorDefinition === 'object' &&
+    typeof applicationErrorDefinition.kind === 'string' &&
+    typeof applicationErrorDefinition.message === 'string' &&
+    typeof applicationErrorDefinition.recoverable === 'boolean'
+  if (!hasValidDefinitionShape) {
+    return [
+      null,
+      {
+        ...INTERNAL_APPLICATION_ERROR_DEFINITION_FOR_APPLICATION_ERROR_DEFINITION_IS_MALFORMED,
+        details: {
+          parentFunctionUseHint: 'Used to create a reusable impure-layer application error from a top-level definition object.',
+          errorDetailsHint: 'The provided impure-layer application error definition did not include valid kind, message, and recoverable fields.',
+          errorSeverityHint: 'high',
+          applicationErrorCode: 'IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_IS_MALFORMED'
+        }
+      }
+    ]
+  }
+
+  return [
+    applicationErrorDetails === undefined
+      ? { ...applicationErrorDefinition }
+      : { ...applicationErrorDefinition, details: applicationErrorDetails },
+    null
+  ]
+}
+
+/**
+ * Builds a normalized application error object for tuple-based error flow.
  * @param {string} errorKind
  * @param {string} errorMessage
  * @param {boolean} isRecoverable
- * @param {unknown} [errorDetails]
+ * @param {ApplicationErrorDetails} [errorDetails]
+ * @returns {Result<AppError>}
+ */
+export function buildImpureLayerApplicationErrorFromKindMessageRecoverabilityAndOptionalDetails(errorKind, errorMessage, isRecoverable, errorDetails) {
+  if (typeof errorKind !== 'string' || typeof errorMessage !== 'string' || typeof isRecoverable !== 'boolean') {
+    return [
+      null,
+      {
+        ...INTERNAL_APPLICATION_ERROR_DEFINITION_FOR_APPLICATION_ERROR_INPUTS_ARE_MALFORMED,
+        details: {
+          parentFunctionUseHint: 'Used to create a tuple-style impure-layer application error from kind, message, and recoverability inputs.',
+          errorDetailsHint: 'One or more impure-layer application error builder inputs did not match the required types.',
+          errorSeverityHint: 'high',
+          applicationErrorCode: 'IMPURE_LAYER_APPLICATION_ERROR_INPUTS_ARE_MALFORMED',
+          relevantRuntimeContext: {
+            errorKindType: typeof errorKind,
+            errorMessageType: typeof errorMessage,
+            isRecoverableType: typeof isRecoverable
+          }
+        }
+      }
+    ]
+  }
+
+  const registeredApplicationErrorDefinition = readRegisteredImpureLayerApplicationErrorDefinition(errorKind, errorMessage, isRecoverable)
+  if (!registeredApplicationErrorDefinition) {
+    return [
+      null,
+      {
+        ...INTERNAL_APPLICATION_ERROR_DEFINITION_FOR_APPLICATION_ERROR_DEFINITION_IS_NOT_REGISTERED,
+        details: {
+          parentFunctionUseHint: 'Used to create a tuple-style impure-layer application error from kind, message, and recoverability inputs.',
+          errorDetailsHint: 'The provided impure-layer application error signature was not registered in the top-level impure-layer error definition table.',
+          errorSeverityHint: 'high',
+          applicationErrorCode: 'IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_IS_NOT_REGISTERED',
+          relevantRuntimeContext: {
+            errorKind,
+            errorMessage,
+            isRecoverable
+          }
+        }
+      }
+    ]
+  }
+
+  return createImpureLayerApplicationErrorFromDefinitionAndOptionalDetails(
+    registeredApplicationErrorDefinition,
+    errorDetails
+  )
+}
+
+/**
+ * Builds a recoverable validation application error with optional debugging details.
+ * @param {string} validationErrorMessage
+ * @param {ApplicationErrorDetails} [applicationErrorDetails]
+ * @returns {Result<AppError>}
+ */
+export function buildValidationApplicationErrorForCondition(validationErrorMessage, applicationErrorDetails) {
+  return buildImpureLayerApplicationErrorFromKindMessageRecoverabilityAndOptionalDetails(
+    APPLICATION_ERROR_KIND_VALIDATION,
+    validationErrorMessage,
+    RECOVERABLE_APPLICATION_ERROR_DEFAULT,
+    applicationErrorDetails
+  )
+}
+
+/**
+ * Compatibility wrapper for older impure-layer tuple-style callers.
+ * @param {string} errorKind
+ * @param {string} errorMessage
+ * @param {boolean} isRecoverable
+ * @param {ApplicationErrorDetails} [errorDetails]
  * @returns {Result<AppError>}
  */
 export function createImpureLayerApplicationErrorWithContext(errorKind, errorMessage, isRecoverable, errorDetails) {
-  return [
-    {
-      kind: errorKind,
-      message: errorMessage,
-      recoverable: isRecoverable,
-      details: errorDetails
-    },
-    null
-  ]
+  return buildImpureLayerApplicationErrorFromKindMessageRecoverabilityAndOptionalDetails(
+    errorKind,
+    errorMessage,
+    isRecoverable,
+    errorDetails
+  )
+}
+
+/**
+ * Runs a sync-or-async operation and returns its settled result without try/catch at the call site.
+ * @template T
+ * @param {() => T|Promise<T>} operationFactory
+ * @returns {Promise<PromiseSettledResult<T>>}
+ */
+async function settleAsyncOrSyncOperation(operationFactory) {
+  const [operationResult] = await Promise.allSettled([
+    (async () => operationFactory())()
+  ])
+  return operationResult
 }
 
 /**
@@ -106,20 +658,14 @@ export function createImpureLayerApplicationErrorWithContext(errorKind, errorMes
  * @param {string} jsonTextToParse
  * @returns {Promise<Result<Record<string, unknown>|Array<unknown>>>}
  */
-export function safelyParseJsonTextIntoObjectUsingPromiseBoundary(jsonTextToParse) {
-  return Promise.resolve()
-    .then(() => JSON.parse(jsonTextToParse))
-    .then((parsedObject) => /** @type {Result<Record<string, unknown>|Array<unknown>>} */ ([parsedObject, null]))
-    .catch((parseFailure) => {
-      const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext(
-        'JSON_PARSE',
-        'failed to parse json text',
-        true,
-        { parseFailure }
-      )
-      if (createErrorFailure) return /** @type {Result<Record<string, unknown>|Array<unknown>>} */ ([null, createErrorFailure])
-      return /** @type {Result<Record<string, unknown>|Array<unknown>>} */ ([null, errorValue])
-    })
+export async function safelyParseJsonTextIntoObjectUsingPromiseBoundary(jsonTextToParse) {
+  const parseResult = await settleAsyncOrSyncOperation(() => JSON.parse(jsonTextToParse))
+  if (parseResult.status === 'rejected') {
+    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorFromDefinitionAndOptionalDetails(IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_JSON_PARSE_FAILED_TO_PARSE_JSON_TEXT, { parseFailure: parseResult.reason })
+    if (createErrorFailure) return [null, createErrorFailure]
+    return [null, errorValue]
+  }
+  return [parseResult.value, null]
 }
 
 /**
@@ -128,20 +674,14 @@ export function safelyParseJsonTextIntoObjectUsingPromiseBoundary(jsonTextToPars
  * @param {unknown} objectToSerialize
  * @returns {Promise<Result<string>>}
  */
-export function safelyStringifyObjectIntoJsonTextUsingPromiseBoundary(objectToSerialize) {
-  return Promise.resolve()
-    .then(() => JSON.stringify(objectToSerialize))
-    .then((jsonTextValue) => /** @type {Result<string>} */ ([jsonTextValue, null]))
-    .catch((stringifyFailure) => {
-      const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext(
-        'JSON_STRINGIFY',
-        'failed to stringify object into json text',
-        true,
-        { stringifyFailure }
-      )
-      if (createErrorFailure) return /** @type {Result<string>} */ ([null, createErrorFailure])
-      return /** @type {Result<string>} */ ([null, errorValue])
-    })
+export async function safelyStringifyObjectIntoJsonTextUsingPromiseBoundary(objectToSerialize) {
+  const stringifyResult = await settleAsyncOrSyncOperation(() => JSON.stringify(objectToSerialize))
+  if (stringifyResult.status === 'rejected') {
+    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorFromDefinitionAndOptionalDetails(IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_JSON_STRINGIFY_FAILED_TO_STRINGIFY_OBJECT_INTO_JSON_TEXT, { stringifyFailure: stringifyResult.reason })
+    if (createErrorFailure) return [null, createErrorFailure]
+    return [null, errorValue]
+  }
+  return [stringifyResult.value, null]
 }
 
 /**
@@ -154,11 +694,7 @@ export function safelyStringifyObjectIntoJsonTextUsingPromiseBoundary(objectToSe
 export async function safelyWriteJsonSnapshotToBrowserLocalStorageByKey(localStorageKey, snapshotValue) {
   // Critical path: never touch storage APIs unless runtime support is confirmed.
   if (typeof globalThis.localStorage === 'undefined') {
-    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext(
-      'LOCAL_STORAGE',
-      'localStorage is not available in this runtime',
-      true
-    )
+    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorFromDefinitionAndOptionalDetails(IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_LOCAL_STORAGE_LOCALSTORAGE_IS_NOT_AVAILABLE_IN_THIS_RUNTIME)
     if (createErrorFailure) return [null, createErrorFailure]
     return [null, errorValue]
   }
@@ -167,28 +703,21 @@ export async function safelyWriteJsonSnapshotToBrowserLocalStorageByKey(localSto
   if (stringifyError) return [null, stringifyError]
   // Critical path: stringify wrappers must still be null-checked before IO writes.
   if (snapshotText === null) {
-    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext(
-      'JSON_STRINGIFY',
-      'json stringify produced null snapshot text unexpectedly',
-      true
-    )
+    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorFromDefinitionAndOptionalDetails(IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_JSON_STRINGIFY_JSON_STRINGIFY_PRODUCED_NULL_SNAPSHOT_TEXT_UNEXPECTEDLY)
     if (createErrorFailure) return [null, createErrorFailure]
     return [null, errorValue]
   }
 
-  return Promise.resolve()
-    .then(() => globalThis.localStorage.setItem(localStorageKey, snapshotText))
-    .then(() => /** @type {Result<true>} */ ([true, null]))
-    .catch((writeFailure) => {
-      const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext(
-        'LOCAL_STORAGE',
-        'failed to write json snapshot to localStorage',
-        true,
-        { writeFailure, localStorageKey }
-      )
-      if (createErrorFailure) return /** @type {Result<true>} */ ([null, createErrorFailure])
-      return /** @type {Result<true>} */ ([null, errorValue])
-    })
+  const writeResult = await settleAsyncOrSyncOperation(() => {
+    globalThis.localStorage.setItem(localStorageKey, snapshotText)
+    return true
+  })
+  if (writeResult.status === 'rejected') {
+    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorFromDefinitionAndOptionalDetails(IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_LOCAL_STORAGE_FAILED_TO_WRITE_JSON_SNAPSHOT_TO_LOCALSTORAGE, { writeFailure: writeResult.reason, localStorageKey })
+    if (createErrorFailure) return [null, createErrorFailure]
+    return [null, errorValue]
+  }
+  return [true, null]
 }
 
 /**
@@ -200,29 +729,18 @@ export async function safelyWriteJsonSnapshotToBrowserLocalStorageByKey(localSto
 export async function safelyReadJsonSnapshotFromBrowserLocalStorageByKey(localStorageKey) {
   // Critical path: fail fast in non-browser contexts so callers can choose fallback state.
   if (typeof globalThis.localStorage === 'undefined') {
-    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext(
-      'LOCAL_STORAGE',
-      'localStorage is not available in this runtime',
-      true
-    )
+    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorFromDefinitionAndOptionalDetails(IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_LOCAL_STORAGE_LOCALSTORAGE_IS_NOT_AVAILABLE_IN_THIS_RUNTIME)
     if (createErrorFailure) return [null, createErrorFailure]
     return [null, errorValue]
   }
 
-  const [storedText, readError] = await Promise.resolve()
-    .then(() => globalThis.localStorage.getItem(localStorageKey))
-    .then((localStorageValue) => /** @type {Result<string|null>} */ ([localStorageValue, null]))
-    .catch((readFailure) => {
-      const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext(
-        'LOCAL_STORAGE',
-        'failed to read json snapshot from localStorage',
-        true,
-        { readFailure, localStorageKey }
-      )
-      if (createErrorFailure) return /** @type {Result<string|null>} */ ([null, createErrorFailure])
-      return /** @type {Result<string|null>} */ ([null, errorValue])
-    })
-  if (readError) return [null, readError]
+  const readResult = await settleAsyncOrSyncOperation(() => globalThis.localStorage.getItem(localStorageKey))
+  if (readResult.status === 'rejected') {
+    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorFromDefinitionAndOptionalDetails(IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_LOCAL_STORAGE_FAILED_TO_READ_JSON_SNAPSHOT_FROM_LOCALSTORAGE, { readFailure: readResult.reason, localStorageKey })
+    if (createErrorFailure) return [null, createErrorFailure]
+    return [null, errorValue]
+  }
+  const storedText = readResult.value
 
   // Critical path: null means cache miss, not error.
   if (storedText === null) return [null, null]
@@ -241,52 +759,28 @@ export async function safelyReadJsonSnapshotFromBrowserLocalStorageByKey(localSt
  */
 export async function safelyFetchJsonFromUrlUsingTupleErrorHandling(requestUrl) {
   // Critical path: network failure is common, so we normalize transport errors here.
-  const [responseObject, responseError] = await Promise.resolve()
-    .then(() => fetch(requestUrl))
-    .then((fetchResponse) => /** @type {Result<Response>} */ ([fetchResponse, null]))
-    .catch((fetchFailure) => {
-      const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext(
-        'NETWORK',
-        'failed to fetch remote json payload',
-        true,
-        { fetchFailure, requestUrl }
-      )
-      if (createErrorFailure) return /** @type {Result<Response>} */ ([null, createErrorFailure])
-      return /** @type {Result<Response>} */ ([null, errorValue])
-    })
-  if (responseError) return [null, responseError]
+  const responseResult = await settleAsyncOrSyncOperation(() => fetch(requestUrl))
+  if (responseResult.status === 'rejected') {
+    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorFromDefinitionAndOptionalDetails(IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_NETWORK_FAILED_TO_FETCH_REMOTE_JSON_PAYLOAD, { fetchFailure: responseResult.reason, requestUrl })
+    if (createErrorFailure) return [null, createErrorFailure]
+    return [null, errorValue]
+  }
+  const responseObject = responseResult.value
   if (responseObject === null) {
-    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext(
-      'NETWORK',
-      'network fetch returned null response object unexpectedly',
-      true,
-      { requestUrl }
-    )
+    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorFromDefinitionAndOptionalDetails(IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_NETWORK_NETWORK_FETCH_RETURNED_NULL_RESPONSE_OBJECT_UNEXPECTEDLY, { requestUrl })
     if (createErrorFailure) return [null, createErrorFailure]
     return [null, errorValue]
   }
 
-  const [responseText, responseTextError] = await Promise.resolve()
-    .then(() => responseObject.text())
-    .then((textValue) => /** @type {Result<string>} */ ([textValue, null]))
-    .catch((textFailure) => {
-      const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext(
-        'NETWORK',
-        'failed to read response body text',
-        true,
-        { textFailure, requestUrl }
-      )
-      if (createErrorFailure) return /** @type {Result<string>} */ ([null, createErrorFailure])
-      return /** @type {Result<string>} */ ([null, errorValue])
-    })
-  if (responseTextError) return [null, responseTextError]
+  const responseTextResult = await settleAsyncOrSyncOperation(() => responseObject.text())
+  if (responseTextResult.status === 'rejected') {
+    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorFromDefinitionAndOptionalDetails(IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_NETWORK_FAILED_TO_READ_RESPONSE_BODY_TEXT, { textFailure: responseTextResult.reason, requestUrl })
+    if (createErrorFailure) return [null, createErrorFailure]
+    return [null, errorValue]
+  }
+  const responseText = responseTextResult.value
   if (responseText === null) {
-    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext(
-      'NETWORK',
-      'response body text resolved to null unexpectedly',
-      true,
-      { requestUrl }
-    )
+    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorFromDefinitionAndOptionalDetails(IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_NETWORK_RESPONSE_BODY_TEXT_RESOLVED_TO_NULL_UNEXPECTEDLY, { requestUrl })
     if (createErrorFailure) return [null, createErrorFailure]
     return [null, errorValue]
   }
@@ -303,11 +797,7 @@ export async function safelyFetchJsonFromUrlUsingTupleErrorHandling(requestUrl) 
  * @returns {Promise<Result<null>>}
  */
 export async function initializeGoogleSignInSessionWithTupleResultPlaceholder() {
-  const [notImplementedError, createErrorFailure] = createImpureLayerApplicationErrorWithContext(
-    'NOT_IMPLEMENTED',
-    'google sign-in integration is not implemented yet',
-    true
-  )
+  const [notImplementedError, createErrorFailure] = createImpureLayerApplicationErrorFromDefinitionAndOptionalDetails(IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_NOT_IMPLEMENTED_GOOGLE_SIGN_IN_INTEGRATION_IS_NOT_IMPLEMENTED_YET)
   if (createErrorFailure) return [null, createErrorFailure]
   return [null, notImplementedError]
 }
@@ -319,11 +809,7 @@ export async function initializeGoogleSignInSessionWithTupleResultPlaceholder() 
  */
 export async function readGoogleSheetsRowsUsingTupleResultPlaceholder() {
   // Critical path: this placeholder prevents accidental direct SDK calls outside wrappers.
-  const [notImplementedError, createErrorFailure] = createImpureLayerApplicationErrorWithContext(
-    'NOT_IMPLEMENTED',
-    'google sheets read integration is not implemented yet',
-    true
-  )
+  const [notImplementedError, createErrorFailure] = createImpureLayerApplicationErrorFromDefinitionAndOptionalDetails(IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_NOT_IMPLEMENTED_GOOGLE_SHEETS_READ_INTEGRATION_IS_NOT_IMPLEMENTED_YET)
   if (createErrorFailure) return [null, createErrorFailure]
   return [null, notImplementedError]
 }
@@ -348,11 +834,7 @@ export async function loadGoogleSheetsSyncSettingsFromLocalStorageCache() {
     }, null]
   }
   if (Array.isArray(cachedValue) || typeof cachedValue !== 'object') {
-    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext(
-      'VALIDATION',
-      'cached google sheets settings payload must be an object',
-      true
-    )
+    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorFromDefinitionAndOptionalDetails(IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_VALIDATION_CACHED_GOOGLE_SHEETS_SETTINGS_PAYLOAD_MUST_BE_AN_OBJECT)
     if (createErrorFailure) return [null, createErrorFailure]
     return [null, errorValue]
   }
@@ -375,20 +857,12 @@ export async function loadGoogleSheetsSyncSettingsFromLocalStorageCache() {
  */
 export async function persistGoogleSheetsSyncSettingsIntoLocalStorageCache(settingsValue) {
   if (!settingsValue || typeof settingsValue !== 'object' || Array.isArray(settingsValue)) {
-    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext(
-      'VALIDATION',
-      'google sheets settings must be an object',
-      true
-    )
+    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorFromDefinitionAndOptionalDetails(IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_VALIDATION_GOOGLE_SHEETS_SETTINGS_MUST_BE_AN_OBJECT)
     if (createErrorFailure) return [null, createErrorFailure]
     return [null, errorValue]
   }
   if (typeof settingsValue.enabled !== 'boolean') {
-    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext(
-      'VALIDATION',
-      'google sheets settings enabled must be boolean',
-      true
-    )
+    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorFromDefinitionAndOptionalDetails(IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_VALIDATION_GOOGLE_SHEETS_SETTINGS_ENABLED_MUST_BE_BOOLEAN)
     if (createErrorFailure) return [null, createErrorFailure]
     return [null, errorValue]
   }
@@ -400,11 +874,7 @@ export async function persistGoogleSheetsSyncSettingsIntoLocalStorageCache(setti
     typeof settingsValue.oauthRedirectUri !== 'string' ||
     typeof settingsValue.oauthAccessToken !== 'string'
   ) {
-    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext(
-      'VALIDATION',
-      'google sheets settings fields must be strings',
-      true
-    )
+    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorFromDefinitionAndOptionalDetails(IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_VALIDATION_GOOGLE_SHEETS_SETTINGS_FIELDS_MUST_BE_STRINGS)
     if (createErrorFailure) return [null, createErrorFailure]
     return [null, errorValue]
   }
@@ -420,11 +890,7 @@ export async function persistGoogleSheetsSyncSettingsIntoLocalStorageCache(setti
   const [persistSuccess, persistError] = await safelyWriteJsonSnapshotToBrowserLocalStorageByKey(LOCAL_GOOGLE_SHEETS_SETTINGS_STORAGE_KEY, payload)
   if (persistError) return [null, persistError]
   if (!persistSuccess) {
-    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext(
-      'LOCAL_STORAGE',
-      'fallback localStorage write for google sheets settings did not return success flag',
-      true
-    )
+    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorFromDefinitionAndOptionalDetails(IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_LOCAL_STORAGE_FALLBACK_LOCALSTORAGE_WRITE_FOR_GOOGLE_SHEETS_SETTINGS_DID_NOT_RETURN_SUCCESS_FLAG)
     if (createErrorFailure) return [null, createErrorFailure]
     return [null, errorValue]
   }
@@ -439,14 +905,14 @@ export async function persistGoogleSheetsSyncSettingsIntoLocalStorageCache(setti
  */
 export function openGoogleSheetsOAuthPopupUsingImplicitFlow(oauthSettings) {
   if (!oauthSettings || typeof oauthSettings !== 'object' || Array.isArray(oauthSettings)) {
-    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext('VALIDATION', 'oauth settings must be an object', true)
+    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorFromDefinitionAndOptionalDetails(IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_VALIDATION_OAUTH_SETTINGS_MUST_BE_AN_OBJECT)
     if (createErrorFailure) return [null, createErrorFailure]
     return [null, errorValue]
   }
   const oauthClientId = typeof oauthSettings.oauthClientId === 'string' ? oauthSettings.oauthClientId.trim() : ''
   const oauthRedirectUri = typeof oauthSettings.oauthRedirectUri === 'string' ? oauthSettings.oauthRedirectUri.trim() : ''
   if (oauthClientId.length === 0 || oauthRedirectUri.length === 0) {
-    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext('VALIDATION', 'oauth client id and redirect uri are required', true)
+    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorFromDefinitionAndOptionalDetails(IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_VALIDATION_OAUTH_CLIENT_ID_AND_REDIRECT_URI_ARE_REQUIRED)
     if (createErrorFailure) return [null, createErrorFailure]
     return [null, errorValue]
   }
@@ -460,13 +926,13 @@ export function openGoogleSheetsOAuthPopupUsingImplicitFlow(oauthSettings) {
   }).toString()
   const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?${query}`
   if (typeof globalThis.window === 'undefined' || typeof globalThis.window.open !== 'function') {
-    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext('BROWSER_API', 'window.open is not available in this runtime', true)
+    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorFromDefinitionAndOptionalDetails(IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_BROWSER_API_WINDOW_OPEN_IS_NOT_AVAILABLE_IN_THIS_RUNTIME)
     if (createErrorFailure) return [null, createErrorFailure]
     return [null, errorValue]
   }
   const popupWindow = globalThis.window.open(authUrl, 'google-sheets-oauth', 'popup,width=520,height=720')
   if (!popupWindow) {
-    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext('BROWSER_API', 'failed to open oauth popup window', true)
+    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorFromDefinitionAndOptionalDetails(IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_BROWSER_API_FAILED_TO_OPEN_OAUTH_POPUP_WINDOW)
     if (createErrorFailure) return [null, createErrorFailure]
     return [null, errorValue]
   }
@@ -481,7 +947,7 @@ export function openGoogleSheetsOAuthPopupUsingImplicitFlow(oauthSettings) {
  */
 export function readGoogleOAuthAccessTokenFromCurrentUrlHash(shouldClearHash = true) {
   if (typeof globalThis.window === 'undefined' || typeof globalThis.window.location === 'undefined') {
-    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext('BROWSER_API', 'window.location is not available in this runtime', true)
+    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorFromDefinitionAndOptionalDetails(IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_BROWSER_API_WINDOW_LOCATION_IS_NOT_AVAILABLE_IN_THIS_RUNTIME)
     if (createErrorFailure) return [null, createErrorFailure]
     return [null, errorValue]
   }
@@ -510,30 +976,18 @@ export async function exportFinancialProfileToGoogleSheetsUsingTupleResultPlaceh
   auditTimelineEntries
 ) {
   if (!googleSheetsSettings || typeof googleSheetsSettings !== 'object' || Array.isArray(googleSheetsSettings)) {
-    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext(
-      'VALIDATION',
-      'googleSheetsSettings must be an object',
-      true
-    )
+    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorFromDefinitionAndOptionalDetails(IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_VALIDATION_GOOGLESHEETSSETTINGS_MUST_BE_AN_OBJECT)
     if (createErrorFailure) return [null, createErrorFailure]
     return [null, errorValue]
   }
   if (googleSheetsSettings.enabled !== true) {
-    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext(
-      'VALIDATION',
-      'google sheets sync is disabled',
-      true
-    )
+    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorFromDefinitionAndOptionalDetails(IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_VALIDATION_GOOGLE_SHEETS_SYNC_IS_DISABLED)
     if (createErrorFailure) return [null, createErrorFailure]
     return [null, errorValue]
   }
   const webAppUrl = typeof googleSheetsSettings.webAppUrl === 'string' ? googleSheetsSettings.webAppUrl.trim() : ''
   if (webAppUrl.length === 0) {
-    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext(
-      'VALIDATION',
-      'google sheets web app url is required',
-      true
-    )
+    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorFromDefinitionAndOptionalDetails(IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_VALIDATION_GOOGLE_SHEETS_WEB_APP_URL_IS_REQUIRED)
     if (createErrorFailure) return [null, createErrorFailure]
     return [null, errorValue]
   }
@@ -545,22 +999,14 @@ export async function exportFinancialProfileToGoogleSheetsUsingTupleResultPlaceh
   )
   if (profileJsonTextError) return [null, profileJsonTextError]
   if (!profileJsonText) {
-    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext(
-      'VALIDATION',
-      'profile json text is unexpectedly empty before google sheets export',
-      true
-    )
+    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorFromDefinitionAndOptionalDetails(IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_VALIDATION_PROFILE_JSON_TEXT_IS_UNEXPECTEDLY_EMPTY_BEFORE_GOOGLE_SHEETS_EXPORT)
     if (createErrorFailure) return [null, createErrorFailure]
     return [null, errorValue]
   }
   const [profilePayload, profilePayloadError] = await safelyParseJsonTextIntoObjectUsingPromiseBoundary(profileJsonText)
   if (profilePayloadError) return [null, profilePayloadError]
   if (!profilePayload || Array.isArray(profilePayload) || typeof profilePayload !== 'object') {
-    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext(
-      'VALIDATION',
-      'profile payload is malformed before google sheets export',
-      true
-    )
+    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorFromDefinitionAndOptionalDetails(IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_VALIDATION_PROFILE_PAYLOAD_IS_MALFORMED_BEFORE_GOOGLE_SHEETS_EXPORT)
     if (createErrorFailure) return [null, createErrorFailure]
     return [null, errorValue]
   }
@@ -586,48 +1032,46 @@ export async function exportFinancialProfileToGoogleSheetsUsingTupleResultPlaceh
   if (typeof googleSheetsSettings.oauthAccessToken === 'string' && googleSheetsSettings.oauthAccessToken.trim().length > 0) {
     requestHeaders.Authorization = `Bearer ${googleSheetsSettings.oauthAccessToken.trim()}`
   }
-  const [responseText, responseTextError] = await Promise.resolve()
-    .then(() => fetch(webAppUrl, { method: 'POST', headers: requestHeaders, body: JSON.stringify(requestBody) }))
-    .then((responseObject) => responseObject.text())
-    .then((textValue) => /** @type {Result<string>} */ ([textValue, null]))
-    .catch((fetchFailure) => {
-      const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext(
-        'NETWORK',
-        'failed to export profile to google sheets endpoint',
-        true,
-        { fetchFailure }
-      )
-      if (createErrorFailure) return /** @type {Result<string>} */ ([null, createErrorFailure])
-      return /** @type {Result<string>} */ ([null, errorValue])
-    })
-  if (responseTextError) return [null, responseTextError]
-  if (responseText === null) {
-    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext(
-      'NETWORK',
-      'google sheets export endpoint returned null response body',
-      true
-    )
+  const responseObjectResult = await settleAsyncOrSyncOperation(() => fetch(webAppUrl, { method: 'POST', headers: requestHeaders, body: JSON.stringify(requestBody) }))
+  if (responseObjectResult.status === 'rejected') {
+    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorFromDefinitionAndOptionalDetails(IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_NETWORK_FAILED_TO_EXPORT_PROFILE_TO_GOOGLE_SHEETS_ENDPOINT, { fetchFailure: responseObjectResult.reason })
     if (createErrorFailure) return [null, createErrorFailure]
     return [null, errorValue]
   }
-  const [responsePayload, responsePayloadError] = await safelyParseJsonTextIntoObjectUsingPromiseBoundary(responseText)
+  const responseObject = responseObjectResult.value
+  if (responseObject === null) {
+    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorFromDefinitionAndOptionalDetails(IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_NETWORK_GOOGLE_SHEETS_EXPORT_ENDPOINT_RETURNED_NULL_RESPONSE_OBJECT_UNEXPECTEDLY, { webAppUrl })
+    if (createErrorFailure) return [null, createErrorFailure]
+    return [null, errorValue]
+  }
+  const responseTextResult = await settleAsyncOrSyncOperation(() => responseObject.text())
+  if (responseTextResult.status === 'rejected') {
+    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorFromDefinitionAndOptionalDetails(IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_NETWORK_FAILED_TO_READ_GOOGLE_SHEETS_EXPORT_ENDPOINT_RESPONSE_BODY, { readFailure: responseTextResult.reason, webAppUrl })
+    if (createErrorFailure) return [null, createErrorFailure]
+    return [null, errorValue]
+  }
+  const responseText = responseTextResult.value
+  if (responseText === null) {
+    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorFromDefinitionAndOptionalDetails(IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_NETWORK_GOOGLE_SHEETS_EXPORT_ENDPOINT_RETURNED_NULL_RESPONSE_BODY)
+    if (createErrorFailure) return [null, createErrorFailure]
+    return [null, errorValue]
+  }
+  const [responsePayload, responsePayloadError] = responseText.trim().length > 0
+    ? await safelyParseJsonTextIntoObjectUsingPromiseBoundary(responseText)
+    : [null, null]
   if (responsePayloadError) return [null, responsePayloadError]
+  if (!responseObject.ok) {
+    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorFromDefinitionAndOptionalDetails(buildImpureLayerApplicationErrorDefinitionForGoogleSheetsEndpointReturnedStatus('export', responseObject.status), { responseStatus: responseObject.status, responsePayload, webAppUrl })
+    if (createErrorFailure) return [null, createErrorFailure]
+    return [null, errorValue]
+  }
   if (!responsePayload || Array.isArray(responsePayload) || typeof responsePayload !== 'object') {
-    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext(
-      'VALIDATION',
-      'google sheets export endpoint payload is malformed',
-      true
-    )
+    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorFromDefinitionAndOptionalDetails(IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_VALIDATION_GOOGLE_SHEETS_EXPORT_ENDPOINT_PAYLOAD_IS_MALFORMED)
     if (createErrorFailure) return [null, createErrorFailure]
     return [null, errorValue]
   }
   if (responsePayload.ok === false) {
-    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext(
-      'NETWORK',
-      'google sheets export endpoint returned not-ok status',
-      true,
-      { responsePayload }
-    )
+    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorFromDefinitionAndOptionalDetails(IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_NETWORK_GOOGLE_SHEETS_EXPORT_ENDPOINT_RETURNED_NOT_OK_STATUS, { responsePayload })
     if (createErrorFailure) return [null, createErrorFailure]
     return [null, errorValue]
   }
@@ -647,30 +1091,18 @@ export async function exportFinancialProfileToGoogleSheetsUsingTupleResultPlaceh
  */
 export async function importFinancialProfileFromGoogleSheetsUsingTupleResultPlaceholder(googleSheetsSettings, importOptions = {}) {
   if (!googleSheetsSettings || typeof googleSheetsSettings !== 'object' || Array.isArray(googleSheetsSettings)) {
-    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext(
-      'VALIDATION',
-      'googleSheetsSettings must be an object',
-      true
-    )
+    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorFromDefinitionAndOptionalDetails(IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_VALIDATION_GOOGLESHEETSSETTINGS_MUST_BE_AN_OBJECT)
     if (createErrorFailure) return [null, createErrorFailure]
     return [null, errorValue]
   }
   if (googleSheetsSettings.enabled !== true) {
-    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext(
-      'VALIDATION',
-      'google sheets sync is disabled',
-      true
-    )
+    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorFromDefinitionAndOptionalDetails(IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_VALIDATION_GOOGLE_SHEETS_SYNC_IS_DISABLED)
     if (createErrorFailure) return [null, createErrorFailure]
     return [null, errorValue]
   }
   const webAppUrl = typeof googleSheetsSettings.webAppUrl === 'string' ? googleSheetsSettings.webAppUrl.trim() : ''
   if (webAppUrl.length === 0) {
-    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext(
-      'VALIDATION',
-      'google sheets web app url is required',
-      true
-    )
+    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorFromDefinitionAndOptionalDetails(IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_VALIDATION_GOOGLE_SHEETS_WEB_APP_URL_IS_REQUIRED)
     if (createErrorFailure) return [null, createErrorFailure]
     return [null, errorValue]
   }
@@ -690,48 +1122,46 @@ export async function importFinancialProfileFromGoogleSheetsUsingTupleResultPlac
   if (typeof googleSheetsSettings.oauthAccessToken === 'string' && googleSheetsSettings.oauthAccessToken.trim().length > 0) {
     requestHeaders.Authorization = `Bearer ${googleSheetsSettings.oauthAccessToken.trim()}`
   }
-  const [responseText, responseTextError] = await Promise.resolve()
-    .then(() => fetch(webAppUrl, { method: 'POST', headers: requestHeaders, body: JSON.stringify(requestBody) }))
-    .then((responseObject) => responseObject.text())
-    .then((textValue) => /** @type {Result<string>} */ ([textValue, null]))
-    .catch((fetchFailure) => {
-      const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext(
-        'NETWORK',
-        'failed to import profile from google sheets endpoint',
-        true,
-        { fetchFailure }
-      )
-      if (createErrorFailure) return /** @type {Result<string>} */ ([null, createErrorFailure])
-      return /** @type {Result<string>} */ ([null, errorValue])
-    })
-  if (responseTextError) return [null, responseTextError]
-  if (responseText === null) {
-    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext(
-      'NETWORK',
-      'google sheets import endpoint returned null response body',
-      true
-    )
+  const responseObjectResult = await settleAsyncOrSyncOperation(() => fetch(webAppUrl, { method: 'POST', headers: requestHeaders, body: JSON.stringify(requestBody) }))
+  if (responseObjectResult.status === 'rejected') {
+    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorFromDefinitionAndOptionalDetails(IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_NETWORK_FAILED_TO_IMPORT_PROFILE_FROM_GOOGLE_SHEETS_ENDPOINT, { fetchFailure: responseObjectResult.reason })
     if (createErrorFailure) return [null, createErrorFailure]
     return [null, errorValue]
   }
-  const [responsePayload, responsePayloadError] = await safelyParseJsonTextIntoObjectUsingPromiseBoundary(responseText)
+  const responseObject = responseObjectResult.value
+  if (responseObject === null) {
+    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorFromDefinitionAndOptionalDetails(IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_NETWORK_GOOGLE_SHEETS_IMPORT_ENDPOINT_RETURNED_NULL_RESPONSE_OBJECT_UNEXPECTEDLY, { webAppUrl })
+    if (createErrorFailure) return [null, createErrorFailure]
+    return [null, errorValue]
+  }
+  const responseTextResult = await settleAsyncOrSyncOperation(() => responseObject.text())
+  if (responseTextResult.status === 'rejected') {
+    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorFromDefinitionAndOptionalDetails(IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_NETWORK_FAILED_TO_READ_GOOGLE_SHEETS_IMPORT_ENDPOINT_RESPONSE_BODY, { readFailure: responseTextResult.reason, webAppUrl })
+    if (createErrorFailure) return [null, createErrorFailure]
+    return [null, errorValue]
+  }
+  const responseText = responseTextResult.value
+  if (responseText === null) {
+    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorFromDefinitionAndOptionalDetails(IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_NETWORK_GOOGLE_SHEETS_IMPORT_ENDPOINT_RETURNED_NULL_RESPONSE_BODY)
+    if (createErrorFailure) return [null, createErrorFailure]
+    return [null, errorValue]
+  }
+  const [responsePayload, responsePayloadError] = responseText.trim().length > 0
+    ? await safelyParseJsonTextIntoObjectUsingPromiseBoundary(responseText)
+    : [null, null]
   if (responsePayloadError) return [null, responsePayloadError]
+  if (!responseObject.ok) {
+    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorFromDefinitionAndOptionalDetails(buildImpureLayerApplicationErrorDefinitionForGoogleSheetsEndpointReturnedStatus('import', responseObject.status), { responseStatus: responseObject.status, responsePayload, webAppUrl })
+    if (createErrorFailure) return [null, createErrorFailure]
+    return [null, errorValue]
+  }
   if (!responsePayload || Array.isArray(responsePayload) || typeof responsePayload !== 'object') {
-    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext(
-      'VALIDATION',
-      'google sheets import endpoint payload is malformed',
-      true
-    )
+    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorFromDefinitionAndOptionalDetails(IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_VALIDATION_GOOGLE_SHEETS_IMPORT_ENDPOINT_PAYLOAD_IS_MALFORMED)
     if (createErrorFailure) return [null, createErrorFailure]
     return [null, errorValue]
   }
   if (responsePayload.ok === false) {
-    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext(
-      'NETWORK',
-      'google sheets import endpoint returned not-ok status',
-      true,
-      { responsePayload }
-    )
+    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorFromDefinitionAndOptionalDetails(IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_NETWORK_GOOGLE_SHEETS_IMPORT_ENDPOINT_RETURNED_NOT_OK_STATUS, { responsePayload })
     if (createErrorFailure) return [null, createErrorFailure]
     return [null, errorValue]
   }
@@ -740,11 +1170,7 @@ export async function importFinancialProfileFromGoogleSheetsUsingTupleResultPlac
   const [profileJsonText, profileJsonTextError] = await safelyStringifyObjectIntoJsonTextUsingPromiseBoundary(profilePayloadCandidate)
   if (profileJsonTextError) return [null, profileJsonTextError]
   if (!profileJsonText) {
-    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext(
-      'VALIDATION',
-      'google sheets import payload is unexpectedly empty',
-      true
-    )
+    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorFromDefinitionAndOptionalDetails(IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_VALIDATION_GOOGLE_SHEETS_IMPORT_PAYLOAD_IS_UNEXPECTEDLY_EMPTY)
     if (createErrorFailure) return [null, createErrorFailure]
     return [null, errorValue]
   }
@@ -759,11 +1185,7 @@ export async function importFinancialProfileFromGoogleSheetsUsingTupleResultPlac
  */
 export async function exportBudgetCollectionsStateAsJsonTextSnapshot(budgetCollectionsState) {
   if (!budgetCollectionsState || typeof budgetCollectionsState !== 'object') {
-    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext(
-      'VALIDATION',
-      'budgetCollectionsState must be an object',
-      true
-    )
+    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorFromDefinitionAndOptionalDetails(IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_VALIDATION_BUDGETCOLLECTIONSSTATE_MUST_BE_AN_OBJECT)
     if (createErrorFailure) return [null, createErrorFailure]
     return [null, errorValue]
   }
@@ -773,11 +1195,7 @@ export async function exportBudgetCollectionsStateAsJsonTextSnapshot(budgetColle
   )
   if (supportedCollectionsShapeError) return [null, supportedCollectionsShapeError]
   if (!hasSupportedCollectionsShape) {
-    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext(
-      'VALIDATION',
-      'supported collections shape validation did not return success unexpectedly',
-      true
-    )
+    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorFromDefinitionAndOptionalDetails(IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_VALIDATION_SUPPORTED_COLLECTIONS_SHAPE_VALIDATION_DID_NOT_RETURN_SUCCESS_UNEXPECTEDLY)
     if (createErrorFailure) return [null, createErrorFailure]
     return [null, errorValue]
   }
@@ -785,11 +1203,7 @@ export async function exportBudgetCollectionsStateAsJsonTextSnapshot(budgetColle
   const [jsonText, jsonTextError] = await safelyStringifyObjectIntoJsonTextUsingPromiseBoundary(budgetCollectionsState)
   if (jsonTextError) return [null, jsonTextError]
   if (jsonText === null) {
-    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext(
-      'JSON_STRINGIFY',
-      'json text is unexpectedly null',
-      true
-    )
+    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorFromDefinitionAndOptionalDetails(IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_JSON_STRINGIFY_JSON_TEXT_IS_UNEXPECTEDLY_NULL)
     if (createErrorFailure) return [null, createErrorFailure]
     return [null, errorValue]
   }
@@ -804,11 +1218,7 @@ export async function exportBudgetCollectionsStateAsJsonTextSnapshot(budgetColle
  */
 export async function importBudgetCollectionsStateFromJsonTextSnapshot(budgetCollectionsJsonText) {
   if (typeof budgetCollectionsJsonText !== 'string' || budgetCollectionsJsonText.trim().length === 0) {
-    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext(
-      'VALIDATION',
-      'budgetCollectionsJsonText must be a non-empty string',
-      true
-    )
+    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorFromDefinitionAndOptionalDetails(IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_VALIDATION_BUDGETCOLLECTIONSJSONTEXT_MUST_BE_A_NON_EMPTY_STRING)
     if (createErrorFailure) return [null, createErrorFailure]
     return [null, errorValue]
   }
@@ -816,11 +1226,7 @@ export async function importBudgetCollectionsStateFromJsonTextSnapshot(budgetCol
   const [parsedValue, parsedValueError] = await safelyParseJsonTextIntoObjectUsingPromiseBoundary(budgetCollectionsJsonText)
   if (parsedValueError) return [null, parsedValueError]
   if (!parsedValue || Array.isArray(parsedValue) || typeof parsedValue !== 'object') {
-    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext(
-      'VALIDATION',
-      'imported profile must be a JSON object',
-      true
-    )
+    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorFromDefinitionAndOptionalDetails(IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_VALIDATION_IMPORTED_PROFILE_MUST_BE_A_JSON_OBJECT)
     if (createErrorFailure) return [null, createErrorFailure]
     return [null, errorValue]
   }
@@ -830,11 +1236,7 @@ export async function importBudgetCollectionsStateFromJsonTextSnapshot(budgetCol
   )
   if (supportedImportedCollectionsShapeError) return [null, supportedImportedCollectionsShapeError]
   if (!isSupportedImportedCollectionsShape) {
-    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext(
-      'VALIDATION',
-      'supported imported collections validation did not return success unexpectedly',
-      true
-    )
+    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorFromDefinitionAndOptionalDetails(IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_VALIDATION_SUPPORTED_IMPORTED_COLLECTIONS_VALIDATION_DID_NOT_RETURN_SUCCESS_UNEXPECTEDLY)
     if (createErrorFailure) return [null, createErrorFailure]
     return [null, errorValue]
   }
@@ -854,11 +1256,7 @@ export async function exportCompleteFinancialProfileAsJsonTextSnapshot(budgetCol
   const [collectionsJsonText, collectionsJsonTextError] = await exportBudgetCollectionsStateAsJsonTextSnapshot(budgetCollectionsState)
   if (collectionsJsonTextError) return [null, collectionsJsonTextError]
   if (!collectionsJsonText) {
-    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext(
-      'JSON_STRINGIFY',
-      'collections json text is unexpectedly empty during complete export',
-      true
-    )
+    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorFromDefinitionAndOptionalDetails(IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_JSON_STRINGIFY_COLLECTIONS_JSON_TEXT_IS_UNEXPECTEDLY_EMPTY_DURING_COMPLETE_EXPORT)
     if (createErrorFailure) return [null, createErrorFailure]
     return [null, errorValue]
   }
@@ -866,11 +1264,7 @@ export async function exportCompleteFinancialProfileAsJsonTextSnapshot(budgetCol
   const [collectionsPayload, collectionsPayloadError] = await safelyParseJsonTextIntoObjectUsingPromiseBoundary(collectionsJsonText)
   if (collectionsPayloadError) return [null, collectionsPayloadError]
   if (!collectionsPayload || Array.isArray(collectionsPayload) || typeof collectionsPayload !== 'object') {
-    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext(
-      'VALIDATION',
-      'collections payload is malformed during complete export',
-      true
-    )
+    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorFromDefinitionAndOptionalDetails(IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_VALIDATION_COLLECTIONS_PAYLOAD_IS_MALFORMED_DURING_COMPLETE_EXPORT)
     if (createErrorFailure) return [null, createErrorFailure]
     return [null, errorValue]
   }
@@ -887,11 +1281,7 @@ export async function exportCompleteFinancialProfileAsJsonTextSnapshot(budgetCol
   const [jsonText, jsonTextError] = await safelyStringifyObjectIntoJsonTextUsingPromiseBoundary(completePayload)
   if (jsonTextError) return [null, jsonTextError]
   if (jsonText === null) {
-    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext(
-      'JSON_STRINGIFY',
-      'complete profile json text is unexpectedly null',
-      true
-    )
+    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorFromDefinitionAndOptionalDetails(IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_JSON_STRINGIFY_COMPLETE_PROFILE_JSON_TEXT_IS_UNEXPECTEDLY_NULL)
     if (createErrorFailure) return [null, createErrorFailure]
     return [null, errorValue]
   }
@@ -908,11 +1298,7 @@ export async function importCompleteFinancialProfileFromJsonTextSnapshot(profile
   const [parsedValue, parsedValueError] = await safelyParseJsonTextIntoObjectUsingPromiseBoundary(profileJsonText)
   if (parsedValueError) return [null, parsedValueError]
   if (!parsedValue || Array.isArray(parsedValue) || typeof parsedValue !== 'object') {
-    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext(
-      'VALIDATION',
-      'imported profile must be a JSON object',
-      true
-    )
+    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorFromDefinitionAndOptionalDetails(IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_VALIDATION_IMPORTED_PROFILE_MUST_BE_A_JSON_OBJECT)
     if (createErrorFailure) return [null, createErrorFailure]
     return [null, errorValue]
   }
@@ -930,22 +1316,14 @@ export async function importCompleteFinancialProfileFromJsonTextSnapshot(profile
 
   const profile = parsedValue.profile
   if (!profile || Array.isArray(profile) || typeof profile !== 'object') {
-    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext(
-      'VALIDATION',
-      'imported profile is missing profile object',
-      true
-    )
+    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorFromDefinitionAndOptionalDetails(IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_VALIDATION_IMPORTED_PROFILE_IS_MISSING_PROFILE_OBJECT)
     if (createErrorFailure) return [null, createErrorFailure]
     return [null, errorValue]
   }
 
   const collections = profile.collections
   if (!collections || Array.isArray(collections) || typeof collections !== 'object') {
-    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext(
-      'VALIDATION',
-      'imported profile is missing collections object',
-      true
-    )
+    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorFromDefinitionAndOptionalDetails(IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_VALIDATION_IMPORTED_PROFILE_IS_MISSING_COLLECTIONS_OBJECT)
     if (createErrorFailure) return [null, createErrorFailure]
     return [null, errorValue]
   }
@@ -955,32 +1333,51 @@ export async function importCompleteFinancialProfileFromJsonTextSnapshot(profile
   )
   if (supportedNestedCollectionsShapeError) return [null, supportedNestedCollectionsShapeError]
   if (!hasSupportedNestedCollectionsShape) {
-    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext(
-      'VALIDATION',
-      'supported nested collections validation did not return success unexpectedly',
-      true
-    )
+    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorFromDefinitionAndOptionalDetails(IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_VALIDATION_SUPPORTED_NESTED_COLLECTIONS_VALIDATION_DID_NOT_RETURN_SUCCESS_UNEXPECTEDLY)
     if (createErrorFailure) return [null, createErrorFailure]
     return [null, errorValue]
   }
 
   const uiPreferencesCandidate = profile.uiPreferences
   let normalizedUiPreferences = null
-  if (uiPreferencesCandidate && !Array.isArray(uiPreferencesCandidate) && typeof uiPreferencesCandidate === 'object') {
+  if (uiPreferencesCandidate !== undefined && uiPreferencesCandidate !== null) {
+    if (Array.isArray(uiPreferencesCandidate) || typeof uiPreferencesCandidate !== 'object') {
+      const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorFromDefinitionAndOptionalDetails(IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_VALIDATION_IMPORTED_PROFILE_UIPREFERENCES_MUST_BE_AN_OBJECT_WHEN_PROVIDED)
+      if (createErrorFailure) return [null, createErrorFailure]
+      return [null, errorValue]
+    }
     const themeName = uiPreferencesCandidate.themeName
     const textScaleMultiplier = uiPreferencesCandidate.textScaleMultiplier
     const tableSortState = uiPreferencesCandidate.tableSortState
     const isValidTheme = themeName === 'light' || themeName === 'dark'
     const isValidScale = typeof textScaleMultiplier === 'number' && Number.isFinite(textScaleMultiplier)
     const isValidSortState = tableSortState === undefined || (!!tableSortState && !Array.isArray(tableSortState) && typeof tableSortState === 'object')
-    if (isValidTheme && isValidScale && isValidSortState) {
-      normalizedUiPreferences = /** @type {{themeName: 'light'|'dark', textScaleMultiplier: number, tableSortState?: Record<string, {key: string, direction: 'asc'|'desc'}>}} */ ({ themeName, textScaleMultiplier, tableSortState })
+    if (!isValidTheme || !isValidScale || !isValidSortState) {
+      const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorFromDefinitionAndOptionalDetails(IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_VALIDATION_IMPORTED_PROFILE_UIPREFERENCES_ARE_MALFORMED)
+      if (createErrorFailure) return [null, createErrorFailure]
+      return [null, errorValue]
     }
+    normalizedUiPreferences = /** @type {{themeName: 'light'|'dark', textScaleMultiplier: number, tableSortState?: Record<string, {key: string, direction: 'asc'|'desc'}>}} */ ({ themeName, textScaleMultiplier, tableSortState })
   }
 
-  const auditTimelineEntries = Array.isArray(profile.auditTimelineEntries)
-    ? profile.auditTimelineEntries.filter((rowItem) => !!rowItem && typeof rowItem === 'object')
-    : []
+  const auditTimelineEntriesCandidate = profile.auditTimelineEntries
+  /** @type {Array<Record<string, unknown>>} */
+  const auditTimelineEntries = []
+  if (auditTimelineEntriesCandidate !== undefined && auditTimelineEntriesCandidate !== null) {
+    if (!Array.isArray(auditTimelineEntriesCandidate)) {
+      const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorFromDefinitionAndOptionalDetails(IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_VALIDATION_IMPORTED_PROFILE_AUDITTIMELINEENTRIES_MUST_BE_AN_ARRAY_WHEN_PROVIDED)
+      if (createErrorFailure) return [null, createErrorFailure]
+      return [null, errorValue]
+    }
+    for (const [auditTimelineEntryIndex, auditTimelineEntryValue] of auditTimelineEntriesCandidate.entries()) {
+      if (!auditTimelineEntryValue || Array.isArray(auditTimelineEntryValue) || typeof auditTimelineEntryValue !== 'object') {
+        const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorFromDefinitionAndOptionalDetails(IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_VALIDATION_IMPORTED_PROFILE_AUDITTIMELINEENTRIES_CONTAINS_MALFORMED_ROWS, { auditTimelineEntryIndex })
+        if (createErrorFailure) return [null, createErrorFailure]
+        return [null, errorValue]
+      }
+      auditTimelineEntries.push(auditTimelineEntryValue)
+    }
+  }
 
   return [{
     collections,
@@ -1009,7 +1406,7 @@ export async function loadFirebaseWebConfigFromLocalStorageCache() {
     }, null]
   }
   if (Array.isArray(cachedValue) || typeof cachedValue !== 'object') {
-    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext('VALIDATION', 'cached firebase config must be an object', true)
+    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorFromDefinitionAndOptionalDetails(IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_VALIDATION_CACHED_FIREBASE_CONFIG_MUST_BE_AN_OBJECT)
     if (createErrorFailure) return [null, createErrorFailure]
     return [null, errorValue]
   }
@@ -1031,19 +1428,19 @@ export async function loadFirebaseWebConfigFromLocalStorageCache() {
  */
 export async function persistFirebaseWebConfigIntoLocalStorageCache(firebaseWebConfig) {
   if (!firebaseWebConfig || typeof firebaseWebConfig !== 'object' || Array.isArray(firebaseWebConfig)) {
-    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext('VALIDATION', 'firebase web config must be an object', true)
+    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorFromDefinitionAndOptionalDetails(IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_VALIDATION_FIREBASE_WEB_CONFIG_MUST_BE_AN_OBJECT)
     if (createErrorFailure) return [null, createErrorFailure]
     return [null, errorValue]
   }
   const requiredStringFieldNames = ['apiKey', 'authDomain', 'projectId', 'storageBucket', 'messagingSenderId', 'appId']
   if (typeof firebaseWebConfig.enabled !== 'boolean') {
-    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext('VALIDATION', 'firebase enabled must be boolean', true)
+    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorFromDefinitionAndOptionalDetails(IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_VALIDATION_FIREBASE_ENABLED_MUST_BE_BOOLEAN)
     if (createErrorFailure) return [null, createErrorFailure]
     return [null, errorValue]
   }
   for (const fieldName of requiredStringFieldNames) {
     if (typeof firebaseWebConfig[fieldName] !== 'string') {
-      const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext('VALIDATION', `firebase ${fieldName} must be a string`, true)
+      const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorFromDefinitionAndOptionalDetails(buildImpureLayerApplicationErrorDefinitionForFirebaseFieldMustBeString(fieldName))
       if (createErrorFailure) return [null, createErrorFailure]
       return [null, errorValue]
     }
@@ -1060,14 +1457,44 @@ export async function persistFirebaseWebConfigIntoLocalStorageCache(firebaseWebC
   const [persistSuccess, persistError] = await safelyWriteJsonSnapshotToBrowserLocalStorageByKey(LOCAL_FIREBASE_WEB_CONFIG_STORAGE_KEY, payload)
   if (persistError) return [null, persistError]
   if (!persistSuccess) {
-    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext('LOCAL_STORAGE', 'fallback localStorage write for firebase config did not return success flag', true)
+    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorFromDefinitionAndOptionalDetails(IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_LOCAL_STORAGE_FALLBACK_LOCALSTORAGE_WRITE_FOR_FIREBASE_CONFIG_DID_NOT_RETURN_SUCCESS_FLAG)
     if (createErrorFailure) return [null, createErrorFailure]
     return [null, errorValue]
   }
   return [true, null]
 }
 
-let cachedFirebaseClientBundle = null
+const cachedFirebaseClientBundleByConfigCacheKey = new Map()
+
+/**
+ * Builds a stable cache key from Firebase web config fields that affect app identity.
+ * @param {{enabled: boolean, apiKey: string, authDomain: string, projectId: string, storageBucket: string, messagingSenderId: string, appId: string}} firebaseWebConfig
+ * @returns {string}
+ */
+function buildFirebaseWebConfigCacheKey(firebaseWebConfig) {
+  return JSON.stringify({
+    enabled: firebaseWebConfig.enabled === true,
+    apiKey: firebaseWebConfig.apiKey.trim(),
+    authDomain: firebaseWebConfig.authDomain.trim(),
+    projectId: firebaseWebConfig.projectId.trim(),
+    storageBucket: firebaseWebConfig.storageBucket.trim(),
+    messagingSenderId: firebaseWebConfig.messagingSenderId.trim(),
+    appId: firebaseWebConfig.appId.trim()
+  })
+}
+
+/**
+ * Derives a deterministic Firebase app name from the config cache key.
+ * @param {string} firebaseWebConfigCacheKey
+ * @returns {string}
+ */
+function buildFirebaseAppNameFromWebConfigCacheKey(firebaseWebConfigCacheKey) {
+  let runningHash = 0
+  for (const keyCharacter of firebaseWebConfigCacheKey) {
+    runningHash = ((runningHash << 5) - runningHash + keyCharacter.charCodeAt(0)) >>> 0
+  }
+  return `budgeting-tool-firebase-${runningHash.toString(36)}`
+}
 
 /**
  * Initializes Firebase app/auth/firestore from web config.
@@ -1076,57 +1503,113 @@ let cachedFirebaseClientBundle = null
  */
 export async function initializeFirebaseClientsFromWebConfig(firebaseWebConfig) {
   if (!firebaseWebConfig || typeof firebaseWebConfig !== 'object' || Array.isArray(firebaseWebConfig)) {
-    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext('VALIDATION', 'firebaseWebConfig must be an object', true)
+    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorFromDefinitionAndOptionalDetails(IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_VALIDATION_FIREBASEWEBCONFIG_MUST_BE_AN_OBJECT)
     if (createErrorFailure) return [null, createErrorFailure]
     return [null, errorValue]
   }
   if (firebaseWebConfig.enabled !== true) {
-    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext('VALIDATION', 'firebase sync is disabled', true)
+    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorFromDefinitionAndOptionalDetails(IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_VALIDATION_FIREBASE_SYNC_IS_DISABLED)
     if (createErrorFailure) return [null, createErrorFailure]
     return [null, errorValue]
   }
   if (!firebaseWebConfig.apiKey || !firebaseWebConfig.authDomain || !firebaseWebConfig.projectId || !firebaseWebConfig.appId) {
-    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext('VALIDATION', 'firebase config is missing required fields', true)
+    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorFromDefinitionAndOptionalDetails(IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_VALIDATION_FIREBASE_CONFIG_IS_MISSING_REQUIRED_FIELDS)
     if (createErrorFailure) return [null, createErrorFailure]
     return [null, errorValue]
   }
+  const firebaseWebConfigCacheKey = buildFirebaseWebConfigCacheKey(firebaseWebConfig)
+  const cachedFirebaseClientBundle = cachedFirebaseClientBundleByConfigCacheKey.get(firebaseWebConfigCacheKey) ?? null
   if (cachedFirebaseClientBundle) return [cachedFirebaseClientBundle, null]
 
-  const [firebaseModules, firebaseModulesError] = await Promise.all([
+  const firebaseModulesResult = await settleAsyncOrSyncOperation(() => Promise.all([
     import('firebase/app'),
     import('firebase/auth'),
     import('firebase/firestore')
-  ])
-    .then((moduleValues) => /** @type {Result<[any, any, any]>} */ ([/** @type {any} */ (moduleValues), null]))
-    .catch((loadFailure) => {
-      const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext('NETWORK', 'failed to load firebase sdk modules', true, { loadFailure })
-      if (createErrorFailure) return /** @type {Result<[any, any, any]>} */ ([null, createErrorFailure])
-      return /** @type {Result<[any, any, any]>} */ ([null, errorValue])
-    })
-  if (firebaseModulesError) return [null, firebaseModulesError]
+  ]))
+  if (firebaseModulesResult.status === 'rejected') {
+    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorFromDefinitionAndOptionalDetails(IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_NETWORK_FAILED_TO_LOAD_FIREBASE_SDK_MODULES, { loadFailure: firebaseModulesResult.reason })
+    if (createErrorFailure) return [null, createErrorFailure]
+    return [null, errorValue]
+  }
+  const firebaseModules = /** @type {[any, any, any]} */ (firebaseModulesResult.value)
   if (!firebaseModules) {
-    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext('VALIDATION', 'firebase module bundle is unexpectedly empty', true)
+    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorFromDefinitionAndOptionalDetails(IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_VALIDATION_FIREBASE_MODULE_BUNDLE_IS_UNEXPECTEDLY_EMPTY)
     if (createErrorFailure) return [null, createErrorFailure]
     return [null, errorValue]
   }
   const [firebaseAppModule, firebaseAuthModule, firebaseFirestoreModule] = firebaseModules
   const appConfig = {
-    apiKey: firebaseWebConfig.apiKey,
-    authDomain: firebaseWebConfig.authDomain,
-    projectId: firebaseWebConfig.projectId,
-    storageBucket: firebaseWebConfig.storageBucket,
-    messagingSenderId: firebaseWebConfig.messagingSenderId,
-    appId: firebaseWebConfig.appId
+    apiKey: firebaseWebConfig.apiKey.trim(),
+    authDomain: firebaseWebConfig.authDomain.trim(),
+    projectId: firebaseWebConfig.projectId.trim(),
+    storageBucket: firebaseWebConfig.storageBucket.trim(),
+    messagingSenderId: firebaseWebConfig.messagingSenderId.trim(),
+    appId: firebaseWebConfig.appId.trim()
   }
-  const appInstance = firebaseAppModule.getApps().length > 0
-    ? firebaseAppModule.getApp()
-    : firebaseAppModule.initializeApp(appConfig)
+  const firebaseAppName = buildFirebaseAppNameFromWebConfigCacheKey(firebaseWebConfigCacheKey)
+  const existingAppInstance = firebaseAppModule.getApps().find((firebaseAppValue) => firebaseAppValue.name === firebaseAppName)
+  const appInstance = existingAppInstance ?? firebaseAppModule.initializeApp(appConfig, firebaseAppName)
   const auth = firebaseAuthModule.getAuth(appInstance)
   const db = firebaseFirestoreModule.getFirestore(appInstance)
-  cachedFirebaseClientBundle = { auth, db }
-  return [cachedFirebaseClientBundle, null]
+  const nextFirebaseClientBundle = { auth, db }
+  cachedFirebaseClientBundleByConfigCacheKey.set(firebaseWebConfigCacheKey, nextFirebaseClientBundle)
+  return [nextFirebaseClientBundle, null]
 }
 
+/**
+ * Maps API response status codes into the most useful application error kind for UI handling.
+ * @param {number} statusCode
+ * @returns {string}
+ */
+function mapBudgetApiResponseStatusCodeIntoApplicationErrorKind(statusCode) {
+  if (statusCode === 401 || statusCode === 403) return API_KIND_AUTH
+  if (statusCode === 404) return API_KIND_NOT_FOUND
+  return API_KIND_NETWORK
+}
+
+/**
+ * Requests JSON from the budget API using cookie-authenticated fetch and tuple error handling.
+ * @param {string} url
+ * @param {RequestInit} [requestInit={}]
+ * @returns {Promise<Result<any>>}
+ */
+async function requestBudgetApiJson(url, requestInit = {}) {
+  const responseResult = await settleAsyncOrSyncOperation(() => fetch(url, {
+    credentials: 'include',
+    ...requestInit
+  }))
+  if (responseResult.status === 'rejected') {
+    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorFromDefinitionAndOptionalDetails(IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_API_KIND_NETWORK_API_ERR_REQUEST_FAILED, { networkFailure: responseResult.reason, url })
+    if (createErrorFailure) return [null, createErrorFailure]
+    return [null, errorValue]
+  }
+  const response = responseResult.value
+  if (!response) {
+    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorFromDefinitionAndOptionalDetails(IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_API_KIND_NETWORK_API_ERR_RESPONSE_MISSING, { url })
+    if (createErrorFailure) return [null, createErrorFailure]
+    return [null, errorValue]
+  }
+  const textValueResult = await settleAsyncOrSyncOperation(() => response.text())
+  if (textValueResult.status === 'rejected') {
+    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorFromDefinitionAndOptionalDetails(IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_API_KIND_NETWORK_API_ERR_RESPONSE_READ_FAILED, { readFailure: textValueResult.reason, url })
+    if (createErrorFailure) return [null, createErrorFailure]
+    return [null, errorValue]
+  }
+  const textValue = textValueResult.value
+  const [jsonValue, jsonError] = textValue
+    ? await safelyParseJsonTextIntoObjectUsingPromiseBoundary(textValue)
+    : [null, null]
+  if (jsonError) return [null, jsonError]
+  if (!response.ok) {
+    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorFromDefinitionAndOptionalDetails(
+      buildImpureLayerApplicationErrorDefinitionForBudgetApiRequestStatus(response.status, jsonValue),
+      { url, status: response.status, responseBody: jsonValue }
+    )
+    if (createErrorFailure) return [null, createErrorFailure]
+    return [null, errorValue]
+  }
+  return [jsonValue, null]
+}
 /**
  * Starts Google sign-in popup for Firebase auth.
  * @param {{enabled: boolean, apiKey: string, authDomain: string, projectId: string, storageBucket: string, messagingSenderId: string, appId: string}} firebaseWebConfig
@@ -1136,32 +1619,31 @@ export async function signInToFirebaseWithGooglePopup(firebaseWebConfig) {
   const [clientBundle, clientBundleError] = await initializeFirebaseClientsFromWebConfig(firebaseWebConfig)
   if (clientBundleError) return [null, clientBundleError]
   if (!clientBundle) {
-    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext('VALIDATION', 'firebase client bundle is unexpectedly empty', true)
+    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorFromDefinitionAndOptionalDetails(IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_VALIDATION_FIREBASE_CLIENT_BUNDLE_IS_UNEXPECTEDLY_EMPTY)
     if (createErrorFailure) return [null, createErrorFailure]
     return [null, errorValue]
   }
-  const [firebaseAuthModule, firebaseAuthModuleError] = await import('firebase/auth')
-    .then((moduleValue) => /** @type {Result<any>} */ ([moduleValue, null]))
-    .catch((loadFailure) => {
-      const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext('NETWORK', 'failed to load firebase auth module for sign-in', true, { loadFailure })
-      if (createErrorFailure) return /** @type {Result<any>} */ ([null, createErrorFailure])
-      return /** @type {Result<any>} */ ([null, errorValue])
-    })
-  if (firebaseAuthModuleError) return [null, firebaseAuthModuleError]
+  const firebaseAuthModuleResult = await settleAsyncOrSyncOperation(() => import('firebase/auth'))
+  if (firebaseAuthModuleResult.status === 'rejected') {
+    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorFromDefinitionAndOptionalDetails(IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_NETWORK_FAILED_TO_LOAD_FIREBASE_AUTH_MODULE_FOR_SIGN_IN, { loadFailure: firebaseAuthModuleResult.reason })
+    if (createErrorFailure) return [null, createErrorFailure]
+    return [null, errorValue]
+  }
+  const firebaseAuthModule = firebaseAuthModuleResult.value
   const provider = new firebaseAuthModule.GoogleAuthProvider()
-  const [userCredential, signInError] = await firebaseAuthModule.signInWithPopup(clientBundle.auth, provider)
-    .then((resultValue) => /** @type {Result<any>} */ ([resultValue, null]))
-    .catch((popupFailure) => {
-      const popupFailureCode = popupFailure && typeof popupFailure.code === 'string' ? popupFailure.code : ''
-      const popupFailureMessage = popupFailure && typeof popupFailure.message === 'string' ? popupFailure.message : ''
-      const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext('AUTH', 'firebase google popup sign-in failed', true, { popupFailure, popupFailureCode, popupFailureMessage })
-      if (createErrorFailure) return /** @type {Result<any>} */ ([null, createErrorFailure])
-      return /** @type {Result<any>} */ ([null, errorValue])
-    })
-  if (signInError) return [null, signInError]
+  const userCredentialResult = await settleAsyncOrSyncOperation(() => firebaseAuthModule.signInWithPopup(clientBundle.auth, provider))
+  if (userCredentialResult.status === 'rejected') {
+    const popupFailure = userCredentialResult.reason
+    const popupFailureCode = popupFailure && typeof popupFailure.code === 'string' ? popupFailure.code : ''
+    const popupFailureMessage = popupFailure && typeof popupFailure.message === 'string' ? popupFailure.message : ''
+    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorFromDefinitionAndOptionalDetails(IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_AUTH_FIREBASE_GOOGLE_POPUP_SIGN_IN_FAILED, { popupFailure, popupFailureCode, popupFailureMessage })
+    if (createErrorFailure) return [null, createErrorFailure]
+    return [null, errorValue]
+  }
+  const userCredential = userCredentialResult.value
   const user = userCredential?.user
   if (!user) {
-    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext('AUTH', 'firebase sign-in returned empty user', true)
+    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorFromDefinitionAndOptionalDetails(IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_AUTH_FIREBASE_SIGN_IN_RETURNED_EMPTY_USER)
     if (createErrorFailure) return [null, createErrorFailure]
     return [null, errorValue]
   }
@@ -1181,20 +1663,20 @@ export async function signOutFromFirebaseCurrentSession(firebaseWebConfig) {
   const [clientBundle, clientBundleError] = await initializeFirebaseClientsFromWebConfig(firebaseWebConfig)
   if (clientBundleError) return [null, clientBundleError]
   if (!clientBundle) {
-    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext('VALIDATION', 'firebase client bundle is unexpectedly empty', true)
+    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorFromDefinitionAndOptionalDetails(IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_VALIDATION_FIREBASE_CLIENT_BUNDLE_IS_UNEXPECTEDLY_EMPTY)
     if (createErrorFailure) return [null, createErrorFailure]
     return [null, errorValue]
   }
-  const [signOutSuccess, signOutError] = await Promise.resolve()
-    .then(() => clientBundle.auth.signOut())
-    .then(() => /** @type {Result<true>} */ ([true, null]))
-    .catch((signOutFailure) => {
-      const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext('AUTH', 'firebase sign-out failed', true, { signOutFailure })
-      if (createErrorFailure) return /** @type {Result<true>} */ ([null, createErrorFailure])
-      return /** @type {Result<true>} */ ([null, errorValue])
-    })
-  if (signOutError) return [null, signOutError]
-  return [signOutSuccess, null]
+  const signOutResult = await settleAsyncOrSyncOperation(async () => {
+    await clientBundle.auth.signOut()
+    return true
+  })
+  if (signOutResult.status === 'rejected') {
+    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorFromDefinitionAndOptionalDetails(IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_AUTH_FIREBASE_SIGN_OUT_FAILED, { signOutFailure: signOutResult.reason })
+    if (createErrorFailure) return [null, createErrorFailure]
+    return [null, errorValue]
+  }
+  return [signOutResult.value, null]
 }
 
 /**
@@ -1227,55 +1709,56 @@ export async function pushCompleteFinancialProfileIntoFirebaseForAuthenticatedUs
   const [clientBundle, clientBundleError] = await initializeFirebaseClientsFromWebConfig(firebaseWebConfig)
   if (clientBundleError) return [null, clientBundleError]
   if (!clientBundle) {
-    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext('VALIDATION', 'firebase client bundle is unexpectedly empty', true)
+    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorFromDefinitionAndOptionalDetails(IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_VALIDATION_FIREBASE_CLIENT_BUNDLE_IS_UNEXPECTEDLY_EMPTY)
     if (createErrorFailure) return [null, createErrorFailure]
     return [null, errorValue]
   }
   const authUser = clientBundle.auth.currentUser
   if (!authUser || typeof authUser.uid !== 'string' || authUser.uid.length === 0) {
-    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext('AUTH', 'firebase user must be signed in before sync', true)
+    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorFromDefinitionAndOptionalDetails(IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_AUTH_FIREBASE_USER_MUST_BE_SIGNED_IN_BEFORE_SYNC)
     if (createErrorFailure) return [null, createErrorFailure]
     return [null, errorValue]
   }
   const [profileJsonText, profileJsonTextError] = await exportCompleteFinancialProfileAsJsonTextSnapshot(budgetCollectionsState, uiPreferences, auditTimelineEntries)
   if (profileJsonTextError) return [null, profileJsonTextError]
   if (!profileJsonText) {
-    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext('VALIDATION', 'profile json text is unexpectedly empty before firebase push', true)
+    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorFromDefinitionAndOptionalDetails(IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_VALIDATION_PROFILE_JSON_TEXT_IS_UNEXPECTEDLY_EMPTY_BEFORE_FIREBASE_PUSH)
     if (createErrorFailure) return [null, createErrorFailure]
     return [null, errorValue]
   }
   const [profilePayload, profilePayloadError] = await safelyParseJsonTextIntoObjectUsingPromiseBoundary(profileJsonText)
   if (profilePayloadError) return [null, profilePayloadError]
   if (!profilePayload || Array.isArray(profilePayload) || typeof profilePayload !== 'object') {
-    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext('VALIDATION', 'profile payload is malformed before firebase push', true)
+    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorFromDefinitionAndOptionalDetails(IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_VALIDATION_PROFILE_PAYLOAD_IS_MALFORMED_BEFORE_FIREBASE_PUSH)
     if (createErrorFailure) return [null, createErrorFailure]
     return [null, errorValue]
   }
-  const [firebaseFirestoreModule, firebaseFirestoreModuleError] = await import('firebase/firestore')
-    .then((moduleValue) => /** @type {Result<any>} */ ([moduleValue, null]))
-    .catch((loadFailure) => {
-      const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext('NETWORK', 'failed to load firestore module for push', true, { loadFailure })
-      if (createErrorFailure) return /** @type {Result<any>} */ ([null, createErrorFailure])
-      return /** @type {Result<any>} */ ([null, errorValue])
-    })
-  if (firebaseFirestoreModuleError) return [null, firebaseFirestoreModuleError]
+  const firebaseFirestoreModuleResult = await settleAsyncOrSyncOperation(() => import('firebase/firestore'))
+  if (firebaseFirestoreModuleResult.status === 'rejected') {
+    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorFromDefinitionAndOptionalDetails(IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_NETWORK_FAILED_TO_LOAD_FIRESTORE_MODULE_FOR_PUSH, { loadFailure: firebaseFirestoreModuleResult.reason })
+    if (createErrorFailure) return [null, createErrorFailure]
+    return [null, errorValue]
+  }
+  const firebaseFirestoreModule = firebaseFirestoreModuleResult.value
   const savedAtIso = new Date().toISOString()
   const currentRef = firebaseFirestoreModule.doc(clientBundle.db, 'users', authUser.uid, 'profile', 'current')
   const historyCollectionRef = firebaseFirestoreModule.collection(clientBundle.db, 'users', authUser.uid, 'profile_history')
-  const [writeSuccess, writeError] = await Promise.resolve()
-    .then(() => firebaseFirestoreModule.setDoc(currentRef, { profilePayload, savedAtIso }, { merge: true }))
-    .then(() => firebaseFirestoreModule.addDoc(historyCollectionRef, { profilePayload, savedAtIso }))
-    .then(() => /** @type {Result<true>} */ ([true, null]))
-    .catch((writeFailure) => {
-      const writeFailureCode = writeFailure && typeof writeFailure.code === 'string' ? writeFailure.code : ''
-      const writeFailureMessage = writeFailure && typeof writeFailure.message === 'string' ? writeFailure.message : ''
-      const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext('NETWORK', 'failed to write profile into firebase firestore', true, { writeFailure, writeFailureCode, writeFailureMessage })
-      if (createErrorFailure) return /** @type {Result<true>} */ ([null, createErrorFailure])
-      return /** @type {Result<true>} */ ([null, errorValue])
-    })
-  if (writeError) return [null, writeError]
+  const writeResult = await settleAsyncOrSyncOperation(async () => {
+    await firebaseFirestoreModule.setDoc(currentRef, { profilePayload, savedAtIso }, { merge: true })
+    await firebaseFirestoreModule.addDoc(historyCollectionRef, { profilePayload, savedAtIso })
+    return true
+  })
+  if (writeResult.status === 'rejected') {
+    const writeFailure = writeResult.reason
+    const writeFailureCode = writeFailure && typeof writeFailure.code === 'string' ? writeFailure.code : ''
+    const writeFailureMessage = writeFailure && typeof writeFailure.message === 'string' ? writeFailure.message : ''
+    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorFromDefinitionAndOptionalDetails(IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_NETWORK_FAILED_TO_WRITE_PROFILE_INTO_FIREBASE_FIRESTORE, { writeFailure, writeFailureCode, writeFailureMessage })
+    if (createErrorFailure) return [null, createErrorFailure]
+    return [null, errorValue]
+  }
+  const writeSuccess = writeResult.value
   if (!writeSuccess) {
-    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext('NETWORK', 'firebase firestore write returned empty success flag', true)
+    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorFromDefinitionAndOptionalDetails(IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_NETWORK_FIREBASE_FIRESTORE_WRITE_RETURNED_EMPTY_SUCCESS_FLAG)
     if (createErrorFailure) return [null, createErrorFailure]
     return [null, errorValue]
   }
@@ -1291,51 +1774,50 @@ export async function pullCompleteFinancialProfileFromFirebaseForAuthenticatedUs
   const [clientBundle, clientBundleError] = await initializeFirebaseClientsFromWebConfig(firebaseWebConfig)
   if (clientBundleError) return [null, clientBundleError]
   if (!clientBundle) {
-    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext('VALIDATION', 'firebase client bundle is unexpectedly empty', true)
+    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorFromDefinitionAndOptionalDetails(IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_VALIDATION_FIREBASE_CLIENT_BUNDLE_IS_UNEXPECTEDLY_EMPTY)
     if (createErrorFailure) return [null, createErrorFailure]
     return [null, errorValue]
   }
   const authUser = clientBundle.auth.currentUser
   if (!authUser || typeof authUser.uid !== 'string' || authUser.uid.length === 0) {
-    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext('AUTH', 'firebase user must be signed in before pull', true)
+    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorFromDefinitionAndOptionalDetails(IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_AUTH_FIREBASE_USER_MUST_BE_SIGNED_IN_BEFORE_PULL)
     if (createErrorFailure) return [null, createErrorFailure]
     return [null, errorValue]
   }
-  const [firebaseFirestoreModule, firebaseFirestoreModuleError] = await import('firebase/firestore')
-    .then((moduleValue) => /** @type {Result<any>} */ ([moduleValue, null]))
-    .catch((loadFailure) => {
-      const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext('NETWORK', 'failed to load firestore module for pull', true, { loadFailure })
-      if (createErrorFailure) return /** @type {Result<any>} */ ([null, createErrorFailure])
-      return /** @type {Result<any>} */ ([null, errorValue])
-    })
-  if (firebaseFirestoreModuleError) return [null, firebaseFirestoreModuleError]
+  const firebaseFirestoreModuleResult = await settleAsyncOrSyncOperation(() => import('firebase/firestore'))
+  if (firebaseFirestoreModuleResult.status === 'rejected') {
+    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorFromDefinitionAndOptionalDetails(IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_NETWORK_FAILED_TO_LOAD_FIRESTORE_MODULE_FOR_PULL, { loadFailure: firebaseFirestoreModuleResult.reason })
+    if (createErrorFailure) return [null, createErrorFailure]
+    return [null, errorValue]
+  }
+  const firebaseFirestoreModule = firebaseFirestoreModuleResult.value
   const currentRef = firebaseFirestoreModule.doc(clientBundle.db, 'users', authUser.uid, 'profile', 'current')
-  const [docSnapshot, docSnapshotError] = await firebaseFirestoreModule.getDoc(currentRef)
-    .then((snapshotValue) => /** @type {Result<any>} */ ([snapshotValue, null]))
-    .catch((readFailure) => {
-      const readFailureCode = readFailure && typeof readFailure.code === 'string' ? readFailure.code : ''
-      const readFailureMessage = readFailure && typeof readFailure.message === 'string' ? readFailure.message : ''
-      const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext('NETWORK', 'failed to read profile from firebase firestore', true, { readFailure, readFailureCode, readFailureMessage })
-      if (createErrorFailure) return /** @type {Result<any>} */ ([null, createErrorFailure])
-      return /** @type {Result<any>} */ ([null, errorValue])
-    })
-  if (docSnapshotError) return [null, docSnapshotError]
+  const docSnapshotResult = await settleAsyncOrSyncOperation(() => firebaseFirestoreModule.getDoc(currentRef))
+  if (docSnapshotResult.status === 'rejected') {
+    const readFailure = docSnapshotResult.reason
+    const readFailureCode = readFailure && typeof readFailure.code === 'string' ? readFailure.code : ''
+    const readFailureMessage = readFailure && typeof readFailure.message === 'string' ? readFailure.message : ''
+    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorFromDefinitionAndOptionalDetails(IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_NETWORK_FAILED_TO_READ_PROFILE_FROM_FIREBASE_FIRESTORE, { readFailure, readFailureCode, readFailureMessage })
+    if (createErrorFailure) return [null, createErrorFailure]
+    return [null, errorValue]
+  }
+  const docSnapshot = docSnapshotResult.value
   if (!docSnapshot || !docSnapshot.exists()) {
-    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext('NOT_FOUND', 'no firebase profile snapshot exists for this user', true)
+    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorFromDefinitionAndOptionalDetails(IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_NOT_FOUND_NO_FIREBASE_PROFILE_SNAPSHOT_EXISTS_FOR_THIS_USER)
     if (createErrorFailure) return [null, createErrorFailure]
     return [null, errorValue]
   }
   const docData = docSnapshot.data()
   const profilePayload = docData?.profilePayload
   if (!profilePayload || typeof profilePayload !== 'object' || Array.isArray(profilePayload)) {
-    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext('VALIDATION', 'firebase profile payload is malformed', true)
+    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorFromDefinitionAndOptionalDetails(IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_VALIDATION_FIREBASE_PROFILE_PAYLOAD_IS_MALFORMED)
     if (createErrorFailure) return [null, createErrorFailure]
     return [null, errorValue]
   }
   const [profileJsonText, profileJsonTextError] = await safelyStringifyObjectIntoJsonTextUsingPromiseBoundary(profilePayload)
   if (profileJsonTextError) return [null, profileJsonTextError]
   if (!profileJsonText) {
-    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext('VALIDATION', 'firebase profile json is unexpectedly empty', true)
+    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorFromDefinitionAndOptionalDetails(IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_VALIDATION_FIREBASE_PROFILE_JSON_IS_UNEXPECTEDLY_EMPTY)
     if (createErrorFailure) return [null, createErrorFailure]
     return [null, errorValue]
   }
@@ -1354,7 +1836,7 @@ export async function loadSupabaseWebConfigFromLocalStorageCache() {
     return [{ enabled: false }, null]
   }
   if (Array.isArray(cachedValue) || typeof cachedValue !== 'object') {
-    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext(API_KIND_VALIDATION, API_ERR_CACHED_CONFIG_OBJECT, true)
+    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorFromDefinitionAndOptionalDetails(IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_API_KIND_VALIDATION_API_ERR_CACHED_CONFIG_OBJECT)
     if (createErrorFailure) return [null, createErrorFailure]
     return [null, errorValue]
   }
@@ -1363,12 +1845,12 @@ export async function loadSupabaseWebConfigFromLocalStorageCache() {
 
 export async function persistSupabaseWebConfigIntoLocalStorageCache(supabaseWebConfig) {
   if (!supabaseWebConfig || typeof supabaseWebConfig !== 'object' || Array.isArray(supabaseWebConfig)) {
-    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext(API_KIND_VALIDATION, API_ERR_CONFIG_OBJECT, true)
+    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorFromDefinitionAndOptionalDetails(IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_API_KIND_VALIDATION_API_ERR_CONFIG_OBJECT)
     if (createErrorFailure) return [null, createErrorFailure]
     return [null, errorValue]
   }
   if (typeof supabaseWebConfig.enabled !== 'boolean') {
-    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext(API_KIND_VALIDATION, API_ERR_ENABLED_BOOLEAN, true)
+    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorFromDefinitionAndOptionalDetails(IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_API_KIND_VALIDATION_API_ERR_ENABLED_BOOLEAN)
     if (createErrorFailure) return [null, createErrorFailure]
     return [null, errorValue]
   }
@@ -1376,7 +1858,7 @@ export async function persistSupabaseWebConfigIntoLocalStorageCache(supabaseWebC
   const [persistSuccess, persistError] = await safelyWriteJsonSnapshotToBrowserLocalStorageByKey(LOCAL_SUPABASE_WEB_CONFIG_STORAGE_KEY, payload)
   if (persistError) return [null, persistError]
   if (!persistSuccess) {
-    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext(API_KIND_LOCAL_STORAGE, API_ERR_PERSIST_CONFIG, true)
+    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorFromDefinitionAndOptionalDetails(IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_API_KIND_LOCAL_STORAGE_API_ERR_PERSIST_CONFIG)
     if (createErrorFailure) return [null, createErrorFailure]
     return [null, errorValue]
   }
@@ -1385,12 +1867,12 @@ export async function persistSupabaseWebConfigIntoLocalStorageCache(supabaseWebC
 
 export async function initializeSupabaseClientFromWebConfig(supabaseWebConfig) {
   if (!supabaseWebConfig || typeof supabaseWebConfig !== 'object' || Array.isArray(supabaseWebConfig)) {
-    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext(API_KIND_VALIDATION, API_ERR_CONFIG_OBJECT, true)
+    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorFromDefinitionAndOptionalDetails(IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_API_KIND_VALIDATION_API_ERR_CONFIG_OBJECT)
     if (createErrorFailure) return [null, createErrorFailure]
     return [null, errorValue]
   }
   if (supabaseWebConfig.enabled !== true) {
-    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext(API_KIND_VALIDATION, API_ERR_SYNC_DISABLED, true)
+    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorFromDefinitionAndOptionalDetails(IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_API_KIND_VALIDATION_API_ERR_SYNC_DISABLED)
     if (createErrorFailure) return [null, createErrorFailure]
     return [null, errorValue]
   }
@@ -1439,56 +1921,11 @@ function summarizeErrorForDiagnostics(errorValue) {
   }
 }
 
-async function requestBudgetApiJson(url, requestInit = {}) {
-  const [response, responseError] = await Promise.resolve()
-    .then(() => fetch(url, {
-      credentials: 'include',
-      ...requestInit
-    }))
-    .then((value) => [value, null])
-    .catch((networkFailure) => {
-      const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext(API_KIND_NETWORK, API_ERR_REQUEST_FAILED, true, { networkFailure, url })
-      if (createErrorFailure) return [null, createErrorFailure]
-      return [null, errorValue]
-    })
-  if (responseError) return [null, responseError]
-  if (!response) {
-    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext(API_KIND_NETWORK, API_ERR_RESPONSE_MISSING, true, { url })
-    if (createErrorFailure) return [null, createErrorFailure]
-    return [null, errorValue]
-  }
-  const [textValue, textError] = await Promise.resolve()
-    .then(() => response.text())
-    .then((value) => [value, null])
-    .catch((readFailure) => {
-      const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext(API_KIND_NETWORK, API_ERR_RESPONSE_READ_FAILED, true, { readFailure, url })
-      if (createErrorFailure) return [null, createErrorFailure]
-      return [null, errorValue]
-    })
-  if (textError) return [null, textError]
-  const [jsonValue, jsonError] = textValue
-    ? await safelyParseJsonTextIntoObjectUsingPromiseBoundary(textValue)
-    : [null, null]
-  if (jsonError) return [null, jsonError]
-  if (!response.ok) {
-    const readableErrorMessage = buildReadableApiErrorMessage(response.status, jsonValue)
-    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext(
-      API_KIND_NETWORK,
-      readableErrorMessage,
-      true,
-      { url, status: response.status, responseBody: jsonValue }
-    )
-    if (createErrorFailure) return [null, createErrorFailure]
-    return [null, errorValue]
-  }
-  return [jsonValue, null]
-}
-
 export async function startSupabaseEmailOtpSignInWithRedirect(supabaseWebConfig) {
   const [clientBundle, clientBundleError] = await initializeSupabaseClientFromWebConfig(supabaseWebConfig)
   if (clientBundleError) return [null, clientBundleError]
   if (!clientBundle) {
-    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext(API_KIND_VALIDATION, API_ERR_SYNC_BUNDLE_MISSING, true)
+    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorFromDefinitionAndOptionalDetails(IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_API_KIND_VALIDATION_API_ERR_SYNC_BUNDLE_MISSING)
     if (createErrorFailure) return [null, createErrorFailure]
     return [null, errorValue]
   }
@@ -1499,13 +1936,13 @@ export async function verifySupabaseEmailOtpCodeAndCreateSession(supabaseWebConf
   const [clientBundle, clientBundleError] = await initializeSupabaseClientFromWebConfig(supabaseWebConfig)
   if (clientBundleError) return [null, clientBundleError]
   if (!clientBundle) {
-    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext(API_KIND_VALIDATION, API_ERR_SYNC_BUNDLE_MISSING, true)
+    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorFromDefinitionAndOptionalDetails(IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_API_KIND_VALIDATION_API_ERR_SYNC_BUNDLE_MISSING)
     if (createErrorFailure) return [null, createErrorFailure]
     return [null, errorValue]
   }
   const password = typeof oneTimeCode === 'string' ? oneTimeCode.trim() : ''
   if (!password) {
-    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext(API_KIND_VALIDATION, API_ERR_LOGIN_PASSWORD_REQUIRED, true)
+    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorFromDefinitionAndOptionalDetails(IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_API_KIND_VALIDATION_API_ERR_LOGIN_PASSWORD_REQUIRED)
     if (createErrorFailure) return [null, createErrorFailure]
     return [null, errorValue]
   }
@@ -1530,12 +1967,7 @@ export async function readSupabaseAuthenticatedUserSummary(supabaseWebConfig) {
     return [null, dashboardError]
   }
   if (!dashboardResponse || typeof dashboardResponse !== 'object' || Array.isArray(dashboardResponse)) {
-    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext(
-      API_KIND_NETWORK,
-      'API returned an unexpected session payload',
-      true,
-      { dashboardResponseType: typeof dashboardResponse }
-    )
+    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorFromDefinitionAndOptionalDetails(IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_API_KIND_NETWORK_API_RETURNED_AN_UNEXPECTED_SESSION_PAYLOAD, { dashboardResponseType: typeof dashboardResponse })
     if (createErrorFailure) return [null, createErrorFailure]
     return [null, errorValue]
   }
@@ -1546,7 +1978,7 @@ export async function signOutFromSupabaseCurrentSession(supabaseWebConfig) {
   const [clientBundle, clientBundleError] = await initializeSupabaseClientFromWebConfig(supabaseWebConfig)
   if (clientBundleError) return [null, clientBundleError]
   if (!clientBundle) {
-    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext(API_KIND_VALIDATION, API_ERR_SYNC_BUNDLE_MISSING, true)
+    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorFromDefinitionAndOptionalDetails(IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_API_KIND_VALIDATION_API_ERR_SYNC_BUNDLE_MISSING)
     if (createErrorFailure) return [null, createErrorFailure]
     return [null, errorValue]
   }
@@ -1559,21 +1991,21 @@ export async function pushCompleteFinancialProfileIntoSupabaseForAuthenticatedUs
   const [clientBundle, clientBundleError] = await initializeSupabaseClientFromWebConfig(supabaseWebConfig)
   if (clientBundleError) return [null, clientBundleError]
   if (!clientBundle) {
-    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext(API_KIND_VALIDATION, API_ERR_SYNC_BUNDLE_MISSING, true)
+    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorFromDefinitionAndOptionalDetails(IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_API_KIND_VALIDATION_API_ERR_SYNC_BUNDLE_MISSING)
     if (createErrorFailure) return [null, createErrorFailure]
     return [null, errorValue]
   }
   const [profileJsonText, profileJsonTextError] = await exportCompleteFinancialProfileAsJsonTextSnapshot(budgetCollectionsState, uiPreferences, auditTimelineEntries)
   if (profileJsonTextError) return [null, profileJsonTextError]
   if (!profileJsonText) {
-    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext(API_KIND_VALIDATION, API_ERR_PROFILE_EXPORT_EMPTY, true)
+    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorFromDefinitionAndOptionalDetails(IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_API_KIND_VALIDATION_API_ERR_PROFILE_EXPORT_EMPTY)
     if (createErrorFailure) return [null, createErrorFailure]
     return [null, errorValue]
   }
   const [profilePayload, profilePayloadError] = await safelyParseJsonTextIntoObjectUsingPromiseBoundary(profileJsonText)
   if (profilePayloadError) return [null, profilePayloadError]
   if (!profilePayload || typeof profilePayload !== 'object' || Array.isArray(profilePayload)) {
-    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext(API_KIND_VALIDATION, API_ERR_PROFILE_PAYLOAD_INVALID, true)
+    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorFromDefinitionAndOptionalDetails(IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_API_KIND_VALIDATION_API_ERR_PROFILE_PAYLOAD_INVALID)
     if (createErrorFailure) return [null, createErrorFailure]
     return [null, errorValue]
   }
@@ -1587,10 +2019,8 @@ export async function pushCompleteFinancialProfileIntoSupabaseForAuthenticatedUs
   )
   if (supportedCollectionsShapeError) return [null, supportedCollectionsShapeError]
   if (!hasSupportedCollectionsShape) {
-    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext(
-      API_KIND_VALIDATION,
-      'profile collections validation did not return success unexpectedly',
-      true
+    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorFromDefinitionAndOptionalDetails(
+      IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_VALIDATION_PROFILE_COLLECTIONS_VALIDATION_DID_NOT_RETURN_SUCCESS_UNEXPECTEDLY
     )
     if (createErrorFailure) return [null, createErrorFailure]
     return [null, errorValue]
@@ -1608,7 +2038,7 @@ export async function pullCompleteFinancialProfileFromSupabaseForAuthenticatedUs
   const [clientBundle, clientBundleError] = await initializeSupabaseClientFromWebConfig(supabaseWebConfig)
   if (clientBundleError) return [null, clientBundleError]
   if (!clientBundle) {
-    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext(API_KIND_VALIDATION, API_ERR_SYNC_BUNDLE_MISSING, true)
+    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorFromDefinitionAndOptionalDetails(IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_API_KIND_VALIDATION_API_ERR_SYNC_BUNDLE_MISSING)
     if (createErrorFailure) return [null, createErrorFailure]
     return [null, errorValue]
   }
@@ -1618,14 +2048,14 @@ export async function pullCompleteFinancialProfileFromSupabaseForAuthenticatedUs
     ? pullResponse.profilePayload
     : null
   if (!profilePayload) {
-    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext(API_KIND_NOT_FOUND, API_ERR_PROFILE_NOT_FOUND, true)
+    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorFromDefinitionAndOptionalDetails(IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_API_KIND_NOT_FOUND_API_ERR_PROFILE_NOT_FOUND)
     if (createErrorFailure) return [null, createErrorFailure]
     return [null, errorValue]
   }
   const [profileJsonText, profileJsonTextError] = await safelyStringifyObjectIntoJsonTextUsingPromiseBoundary(profilePayload)
   if (profileJsonTextError) return [null, profileJsonTextError]
   if (!profileJsonText) {
-    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext(API_KIND_VALIDATION, API_ERR_PROFILE_JSON_EMPTY, true)
+    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorFromDefinitionAndOptionalDetails(IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_API_KIND_VALIDATION_API_ERR_PROFILE_JSON_EMPTY)
     if (createErrorFailure) return [null, createErrorFailure]
     return [null, errorValue]
   }
@@ -1645,15 +2075,11 @@ const INDEXED_DB_OBJECT_STORE_NAME = 'app-cache'
  * Returns an error tuple when IndexedDB is unavailable or open request fails.
  * @returns {Promise<Result<IDBDatabase>>}
  */
-export function openBudgetingIndexedDbDatabaseConnection() {
+export async function openBudgetingIndexedDbDatabaseConnection() {
   if (typeof globalThis.indexedDB === 'undefined') {
-    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext(
-      'INDEXED_DB',
-      'indexedDB is not available in this runtime',
-      true
-    )
-    if (createErrorFailure) return Promise.resolve([null, createErrorFailure])
-    return Promise.resolve([null, errorValue])
+    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorFromDefinitionAndOptionalDetails(IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_INDEXED_DB_INDEXEDDB_IS_NOT_AVAILABLE_IN_THIS_RUNTIME)
+    if (createErrorFailure) return [null, createErrorFailure]
+    return [null, errorValue]
   }
 
   return new Promise((resolve) => {
@@ -1666,12 +2092,7 @@ export function openBudgetingIndexedDbDatabaseConnection() {
     }
     openRequest.onsuccess = () => resolve([openRequest.result, null])
     openRequest.onerror = () => {
-      const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext(
-        'INDEXED_DB',
-        'failed to open indexedDB database',
-        true,
-        { error: openRequest.error }
-      )
+      const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorFromDefinitionAndOptionalDetails(IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_INDEXED_DB_FAILED_TO_OPEN_INDEXEDDB_DATABASE, { error: openRequest.error })
       if (createErrorFailure) {
         resolve([null, createErrorFailure])
         return
@@ -1692,11 +2113,7 @@ export async function safelyWriteValueIntoIndexedDbObjectStoreByKey(cacheKey, ca
   const [databaseConnection, databaseConnectionError] = await openBudgetingIndexedDbDatabaseConnection()
   if (databaseConnectionError) return [null, databaseConnectionError]
   if (!databaseConnection) {
-    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext(
-      'INDEXED_DB',
-      'indexedDB connection is unexpectedly empty',
-      true
-    )
+    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorFromDefinitionAndOptionalDetails(IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_INDEXED_DB_INDEXEDDB_CONNECTION_IS_UNEXPECTEDLY_EMPTY)
     if (createErrorFailure) return [null, createErrorFailure]
     return [null, errorValue]
   }
@@ -1711,12 +2128,7 @@ export async function safelyWriteValueIntoIndexedDbObjectStoreByKey(cacheKey, ca
     }
     writeRequest.onerror = () => {
       databaseConnection.close()
-      const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext(
-        'INDEXED_DB',
-        'failed to write value into indexedDB object store',
-        true,
-        { cacheKey, error: writeRequest.error }
-      )
+      const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorFromDefinitionAndOptionalDetails(IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_INDEXED_DB_FAILED_TO_WRITE_VALUE_INTO_INDEXEDDB_OBJECT_STORE, { cacheKey, error: writeRequest.error })
       if (createErrorFailure) {
         resolve([null, createErrorFailure])
         return
@@ -1736,11 +2148,7 @@ export async function safelyReadValueFromIndexedDbObjectStoreByKey(cacheKey) {
   const [databaseConnection, databaseConnectionError] = await openBudgetingIndexedDbDatabaseConnection()
   if (databaseConnectionError) return [null, databaseConnectionError]
   if (!databaseConnection) {
-    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext(
-      'INDEXED_DB',
-      'indexedDB connection is unexpectedly empty',
-      true
-    )
+    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorFromDefinitionAndOptionalDetails(IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_INDEXED_DB_INDEXEDDB_CONNECTION_IS_UNEXPECTEDLY_EMPTY)
     if (createErrorFailure) return [null, createErrorFailure]
     return [null, errorValue]
   }
@@ -1755,12 +2163,7 @@ export async function safelyReadValueFromIndexedDbObjectStoreByKey(cacheKey) {
     }
     readRequest.onerror = () => {
       databaseConnection.close()
-      const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext(
-        'INDEXED_DB',
-        'failed to read value from indexedDB object store',
-        true,
-        { cacheKey, error: readRequest.error }
-      )
+      const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorFromDefinitionAndOptionalDetails(IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_INDEXED_DB_FAILED_TO_READ_VALUE_FROM_INDEXEDDB_OBJECT_STORE, { cacheKey, error: readRequest.error })
       if (createErrorFailure) {
         resolve([null, createErrorFailure])
         return
@@ -1778,11 +2181,7 @@ export async function safelyReadValueFromIndexedDbObjectStoreByKey(cacheKey) {
  */
 export async function persistBudgetCollectionsStateIntoLocalStorageCache(budgetCollectionsState) {
   if (!budgetCollectionsState || typeof budgetCollectionsState !== 'object') {
-    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext(
-      'VALIDATION',
-      'budgetCollectionsState must be an object',
-      true
-    )
+    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorFromDefinitionAndOptionalDetails(IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_VALIDATION_BUDGETCOLLECTIONSSTATE_MUST_BE_AN_OBJECT)
     if (createErrorFailure) return [null, createErrorFailure]
     return [null, errorValue]
   }
@@ -1793,11 +2192,7 @@ export async function persistBudgetCollectionsStateIntoLocalStorageCache(budgetC
   )
   if (supportedPersistCollectionsShapeError) return [null, supportedPersistCollectionsShapeError]
   if (!hasSupportedPersistCollectionsShape) {
-    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext(
-      'VALIDATION',
-      'supported persist collections validation did not return success unexpectedly',
-      true
-    )
+    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorFromDefinitionAndOptionalDetails(IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_VALIDATION_SUPPORTED_PERSIST_COLLECTIONS_VALIDATION_DID_NOT_RETURN_SUCCESS_UNEXPECTEDLY)
     if (createErrorFailure) return [null, createErrorFailure]
     return [null, errorValue]
   }
@@ -1815,11 +2210,7 @@ export async function persistBudgetCollectionsStateIntoLocalStorageCache(budgetC
   )
   if (writeError) return [null, indexedDbWriteError ?? writeError]
   if (writeSuccessValue !== true) {
-    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext(
-      'LOCAL_STORAGE',
-      'fallback localStorage write did not return success flag',
-      true
-    )
+    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorFromDefinitionAndOptionalDetails(IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_LOCAL_STORAGE_FALLBACK_LOCALSTORAGE_WRITE_DID_NOT_RETURN_SUCCESS_FLAG)
     if (createErrorFailure) return [null, createErrorFailure]
     return [null, errorValue]
   }
@@ -1840,7 +2231,7 @@ export async function loadBudgetCollectionsStateFromLocalStorageCache() {
     const [cachedSnapshotValueFromLocalStorage, readError] = await safelyReadJsonSnapshotFromBrowserLocalStorageByKey(
       LOCAL_BUDGET_STATE_CACHE_STORAGE_KEY
     )
-    if (readError) return [null, indexedDbReadError]
+    if (readError) return [null, readError]
     cachedSnapshotValue = cachedSnapshotValueFromLocalStorage
   }
 
@@ -1848,11 +2239,7 @@ export async function loadBudgetCollectionsStateFromLocalStorageCache() {
 
   // Critical path: malformed cached payload should hard-fail instead of silently mutating shape assumptions.
   if (Array.isArray(cachedSnapshotValue) || typeof cachedSnapshotValue !== 'object') {
-    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext(
-      'VALIDATION',
-      'cached budgeting state must be an object',
-      true
-    )
+    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorFromDefinitionAndOptionalDetails(IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_VALIDATION_CACHED_BUDGETING_STATE_MUST_BE_AN_OBJECT)
     if (createErrorFailure) return [null, createErrorFailure]
     return [null, errorValue]
   }
@@ -1863,11 +2250,7 @@ export async function loadBudgetCollectionsStateFromLocalStorageCache() {
   )
   if (supportedCachedCollectionsShapeError) return [null, supportedCachedCollectionsShapeError]
   if (!hasSupportedCachedCollectionsShape) {
-    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext(
-      'VALIDATION',
-      'supported cached collections validation did not return success unexpectedly',
-      true
-    )
+    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorFromDefinitionAndOptionalDetails(IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_VALIDATION_SUPPORTED_CACHED_COLLECTIONS_VALIDATION_DID_NOT_RETURN_SUCCESS_UNEXPECTEDLY)
     if (createErrorFailure) return [null, createErrorFailure]
     return [null, errorValue]
   }
@@ -1883,11 +2266,7 @@ export async function loadBudgetCollectionsStateFromLocalStorageCache() {
 export function readCurrentIsoTimestampForBudgetRecordUpdates() {
   const isoTimestamp = new Date().toISOString()
   if (typeof isoTimestamp !== 'string' || isoTimestamp.length === 0) {
-    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext(
-      'TIME',
-      'failed to produce ISO timestamp string',
-      true
-    )
+    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorFromDefinitionAndOptionalDetails(IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_TIME_FAILED_TO_PRODUCE_ISO_TIMESTAMP_STRING)
     if (createErrorFailure) return [null, createErrorFailure]
     return [null, errorValue]
   }
@@ -1902,42 +2281,26 @@ export function readCurrentIsoTimestampForBudgetRecordUpdates() {
  */
 export async function persistUiPreferencesIntoLocalStorageCache(uiPreferences) {
   if (!uiPreferences || typeof uiPreferences !== 'object') {
-    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext(
-      'VALIDATION',
-      'uiPreferences must be an object',
-      true
-    )
+    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorFromDefinitionAndOptionalDetails(IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_VALIDATION_UIPREFERENCES_MUST_BE_AN_OBJECT)
     if (createErrorFailure) return [null, createErrorFailure]
     return [null, errorValue]
   }
 
   if (uiPreferences.themeName !== 'light' && uiPreferences.themeName !== 'dark') {
-    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext(
-      'VALIDATION',
-      'uiPreferences.themeName must be light or dark',
-      true
-    )
+    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorFromDefinitionAndOptionalDetails(IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_VALIDATION_UIPREFERENCES_THEMENAME_MUST_BE_LIGHT_OR_DARK)
     if (createErrorFailure) return [null, createErrorFailure]
     return [null, errorValue]
   }
 
   if (typeof uiPreferences.textScaleMultiplier !== 'number' || !Number.isFinite(uiPreferences.textScaleMultiplier)) {
-    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext(
-      'VALIDATION',
-      'uiPreferences.textScaleMultiplier must be a finite number',
-      true
-    )
+    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorFromDefinitionAndOptionalDetails(IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_VALIDATION_UIPREFERENCES_TEXTSCALEMULTIPLIER_MUST_BE_A_FINITE_NUMBER)
     if (createErrorFailure) return [null, createErrorFailure]
     return [null, errorValue]
   }
 
   if (uiPreferences.tableSortState !== undefined) {
     if (!uiPreferences.tableSortState || Array.isArray(uiPreferences.tableSortState) || typeof uiPreferences.tableSortState !== 'object') {
-      const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext(
-        'VALIDATION',
-        'uiPreferences.tableSortState must be an object when provided',
-        true
-      )
+      const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorFromDefinitionAndOptionalDetails(IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_VALIDATION_UIPREFERENCES_TABLESORTSTATE_MUST_BE_AN_OBJECT_WHEN_PROVIDED)
       if (createErrorFailure) return [null, createErrorFailure]
       return [null, errorValue]
     }
@@ -1955,11 +2318,7 @@ export async function persistUiPreferencesIntoLocalStorageCache(uiPreferences) {
   )
   if (writeError) return [null, indexedDbWriteError ?? writeError]
   if (writeSuccessValue !== true) {
-    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext(
-      'LOCAL_STORAGE',
-      'fallback localStorage write for ui preferences did not return success flag',
-      true
-    )
+    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorFromDefinitionAndOptionalDetails(IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_LOCAL_STORAGE_FALLBACK_LOCALSTORAGE_WRITE_FOR_UI_PREFERENCES_DID_NOT_RETURN_SUCCESS_FLAG)
     if (createErrorFailure) return [null, createErrorFailure]
     return [null, errorValue]
   }
@@ -1980,18 +2339,14 @@ export async function loadUiPreferencesFromLocalStorageCache() {
     const [cachedPreferencesValueFromLocalStorage, readError] = await safelyReadJsonSnapshotFromBrowserLocalStorageByKey(
       LOCAL_UI_PREFERENCES_CACHE_STORAGE_KEY
     )
-    if (readError) return [null, indexedDbReadError]
+    if (readError) return [null, readError]
     cachedPreferencesValue = cachedPreferencesValueFromLocalStorage
   }
   if (cachedPreferencesValue === null) return [null, null]
 
   // Critical path: preferences cache must retain strict shape before touching UI state.
   if (Array.isArray(cachedPreferencesValue) || typeof cachedPreferencesValue !== 'object') {
-    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext(
-      'VALIDATION',
-      'cached ui preferences must be an object',
-      true
-    )
+    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorFromDefinitionAndOptionalDetails(IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_VALIDATION_CACHED_UI_PREFERENCES_MUST_BE_AN_OBJECT)
     if (createErrorFailure) return [null, createErrorFailure]
     return [null, errorValue]
   }
@@ -1999,11 +2354,7 @@ export async function loadUiPreferencesFromLocalStorageCache() {
   const themeName = cachedPreferencesValue.themeName
   const textScaleMultiplier = cachedPreferencesValue.textScaleMultiplier
   if ((themeName !== 'light' && themeName !== 'dark') || typeof textScaleMultiplier !== 'number') {
-    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext(
-      'VALIDATION',
-      'cached ui preferences are malformed',
-      true
-    )
+    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorFromDefinitionAndOptionalDetails(IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_VALIDATION_CACHED_UI_PREFERENCES_ARE_MALFORMED)
     if (createErrorFailure) return [null, createErrorFailure]
     return [null, errorValue]
   }
@@ -2011,11 +2362,7 @@ export async function loadUiPreferencesFromLocalStorageCache() {
   const tableSortState = cachedPreferencesValue.tableSortState
   const hasValidTableSortState = tableSortState === undefined || (!!tableSortState && !Array.isArray(tableSortState) && typeof tableSortState === 'object')
   if (!hasValidTableSortState) {
-    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext(
-      'VALIDATION',
-      'cached ui preferences tableSortState is malformed',
-      true
-    )
+    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorFromDefinitionAndOptionalDetails(IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_VALIDATION_CACHED_UI_PREFERENCES_TABLESORTSTATE_IS_MALFORMED)
     if (createErrorFailure) return [null, createErrorFailure]
     return [null, errorValue]
   }
@@ -2030,11 +2377,7 @@ export async function loadUiPreferencesFromLocalStorageCache() {
  */
 export async function persistAuditTimelineIntoLocalStorageCache(auditTimelineEntries) {
   if (!Array.isArray(auditTimelineEntries)) {
-    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext(
-      'VALIDATION',
-      'auditTimelineEntries must be an array',
-      true
-    )
+    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorFromDefinitionAndOptionalDetails(IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_VALIDATION_AUDITTIMELINEENTRIES_MUST_BE_AN_ARRAY)
     if (createErrorFailure) return [null, createErrorFailure]
     return [null, errorValue]
   }
@@ -2050,11 +2393,7 @@ export async function persistAuditTimelineIntoLocalStorageCache(auditTimelineEnt
   )
   if (writeError) return [null, indexedDbWriteError ?? writeError]
   if (writeSuccessValue !== true) {
-    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext(
-      'LOCAL_STORAGE',
-      'fallback localStorage write for audit timeline did not return success flag',
-      true
-    )
+    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorFromDefinitionAndOptionalDetails(IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_LOCAL_STORAGE_FALLBACK_LOCALSTORAGE_WRITE_FOR_AUDIT_TIMELINE_DID_NOT_RETURN_SUCCESS_FLAG)
     if (createErrorFailure) return [null, createErrorFailure]
     return [null, errorValue]
   }
@@ -2074,16 +2413,12 @@ export async function loadAuditTimelineFromLocalStorageCache() {
     const [cachedAuditValueFromLocalStorage, readError] = await safelyReadJsonSnapshotFromBrowserLocalStorageByKey(
       LOCAL_AUDIT_TIMELINE_CACHE_STORAGE_KEY
     )
-    if (readError) return [null, indexedDbReadError]
+    if (readError) return [null, readError]
     cachedAuditValue = cachedAuditValueFromLocalStorage
   }
   if (cachedAuditValue === null) return [null, null]
   if (!Array.isArray(cachedAuditValue)) {
-    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext(
-      'VALIDATION',
-      'cached audit timeline must be an array',
-      true
-    )
+    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorFromDefinitionAndOptionalDetails(IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_VALIDATION_CACHED_AUDIT_TIMELINE_MUST_BE_AN_ARRAY)
     if (createErrorFailure) return [null, createErrorFailure]
     return [null, errorValue]
   }
@@ -2098,22 +2433,14 @@ export async function loadAuditTimelineFromLocalStorageCache() {
  */
 export function applyThemeNameToDocumentBodyDataAttribute(themeName) {
   if (themeName !== 'light' && themeName !== 'dark') {
-    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext(
-      'VALIDATION',
-      'themeName must be light or dark',
-      true
-    )
+    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorFromDefinitionAndOptionalDetails(IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_VALIDATION_THEMENAME_MUST_BE_LIGHT_OR_DARK)
     if (createErrorFailure) return [null, createErrorFailure]
     return [null, errorValue]
   }
 
   // Critical path: document access must be guarded to keep SSR/tests safe.
   if (!globalThis.document || !globalThis.document.body) {
-    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext(
-      'BROWSER_API',
-      'document body is unavailable',
-      true
-    )
+    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorFromDefinitionAndOptionalDetails(IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_BROWSER_API_DOCUMENT_BODY_IS_UNAVAILABLE)
     if (createErrorFailure) return [null, createErrorFailure]
     return [null, errorValue]
   }
@@ -2130,11 +2457,7 @@ export function applyThemeNameToDocumentBodyDataAttribute(themeName) {
 export function scrollViewportToTopWithSmoothBehavior() {
   // Critical path: keep this wrapper safe in test and server runtimes.
   if (!globalThis.window || typeof globalThis.window.scrollTo !== 'function') {
-    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext(
-      'BROWSER_API',
-      'window scroll API is unavailable',
-      true
-    )
+    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorFromDefinitionAndOptionalDetails(IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_BROWSER_API_WINDOW_SCROLL_API_IS_UNAVAILABLE)
     if (createErrorFailure) return [null, createErrorFailure]
     return [null, errorValue]
   }
@@ -2151,37 +2474,29 @@ export function scrollViewportToTopWithSmoothBehavior() {
  */
 export async function copyTextToClipboardUsingBrowserApi(textToCopy) {
   if (typeof textToCopy !== 'string') {
-    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext(
-      'VALIDATION',
-      'textToCopy must be a string',
-      true
-    )
+    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorFromDefinitionAndOptionalDetails(IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_VALIDATION_TEXTTOCOPY_MUST_BE_A_STRING)
     if (createErrorFailure) return [null, createErrorFailure]
     return [null, errorValue]
   }
   if (!globalThis.navigator || !globalThis.navigator.clipboard || typeof globalThis.navigator.clipboard.writeText !== 'function') {
-    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext(
-      'BROWSER_API',
-      'clipboard write API is unavailable',
-      true
-    )
+    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorFromDefinitionAndOptionalDetails(IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_BROWSER_API_CLIPBOARD_WRITE_API_IS_UNAVAILABLE)
     if (createErrorFailure) return [null, createErrorFailure]
     return [null, errorValue]
   }
-  const [writeSuccess, writeError] = await Promise.resolve()
-    .then(() => globalThis.navigator.clipboard.writeText(textToCopy))
-    .then(() => /** @type {Result<true>} */ ([true, null]))
-    .catch((clipboardWriteFailure) => {
-      const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext(
-        'BROWSER_API',
-        'failed to write clipboard text',
-        true,
-        { clipboardWriteFailure }
-      )
-      if (createErrorFailure) return /** @type {Result<true>} */ ([null, createErrorFailure])
-      return /** @type {Result<true>} */ ([null, errorValue])
-    })
-  if (writeError || writeSuccess !== true) return [null, writeError]
+  const writeResult = await settleAsyncOrSyncOperation(async () => {
+    await globalThis.navigator.clipboard.writeText(textToCopy)
+    return true
+  })
+  if (writeResult.status === 'rejected') {
+    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorFromDefinitionAndOptionalDetails(IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_BROWSER_API_FAILED_TO_WRITE_CLIPBOARD_TEXT, { clipboardWriteFailure: writeResult.reason })
+    if (createErrorFailure) return [null, createErrorFailure]
+    return [null, errorValue]
+  }
+  if (writeResult.value !== true) {
+    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorFromDefinitionAndOptionalDetails(IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_BROWSER_API_CLIPBOARD_WRITE_RETURNED_EMPTY_SUCCESS_FLAG)
+    if (createErrorFailure) return [null, createErrorFailure]
+    return [null, errorValue]
+  }
   return [true, null]
 }
 
@@ -2193,21 +2508,13 @@ export async function copyTextToClipboardUsingBrowserApi(textToCopy) {
  */
 export function applyGlobalTextScaleMultiplierToDocumentRoot(textScaleMultiplier) {
   if (typeof textScaleMultiplier !== 'number' || !Number.isFinite(textScaleMultiplier)) {
-    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext(
-      'VALIDATION',
-      'textScaleMultiplier must be a finite number',
-      true
-    )
+    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorFromDefinitionAndOptionalDetails(IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_VALIDATION_TEXTSCALEMULTIPLIER_MUST_BE_A_FINITE_NUMBER)
     if (createErrorFailure) return [null, createErrorFailure]
     return [null, errorValue]
   }
 
   if (!globalThis.document || !globalThis.document.documentElement) {
-    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext(
-      'BROWSER_API',
-      'document root element is unavailable',
-      true
-    )
+    const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorFromDefinitionAndOptionalDetails(IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_BROWSER_API_DOCUMENT_ROOT_ELEMENT_IS_UNAVAILABLE)
     if (createErrorFailure) return [null, createErrorFailure]
     return [null, errorValue]
   }
@@ -2218,117 +2525,117 @@ export function applyGlobalTextScaleMultiplierToDocumentRoot(textScaleMultiplier
 
 /**
  * Computes risk findings in a background worker when supported, with tuple-safe fallback.
+ * The helper multiplexes requests through a shared worker instance using `requestId`, then falls back to the
+ * pure main-thread extractor when worker construction, runtime delivery, or `postMessage` fails.
  * Returns main-thread pure computation result when workers are unavailable.
  * @param {Record<string, unknown>} currentCollectionsState
  * @returns {Promise<Result<Array<{id: string, severity: 'high'|'medium'|'low', title: string, detail: string, metricValue: number}>>>}
  */
 export async function computeFinancialRiskFindingsUsingBackgroundWorkerWhenAvailable(currentCollectionsState) {
-  if (typeof globalThis.Worker === 'undefined') {
-    console.info('[risk] Worker unavailable; running risk checks on main thread.')
-    return extractFinancialRiskFindingsFromCurrentCollectionsState(/** @type {any} */ (currentCollectionsState))
+  async function buildMainThreadRiskFallbackResultForWorkerFailure(currentCollectionsStateValue, workerFailureDetails) {
+    const [fallbackValue, fallbackError] = extractFinancialRiskFindingsFromCurrentCollectionsState(/** @type {any} */ (currentCollectionsStateValue))
+    if (fallbackError) return [null, fallbackError]
+    if (!fallbackValue) {
+      const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorFromDefinitionAndOptionalDetails(IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_WORKER_WORKER_FALLBACK_PRODUCED_EMPTY_FINDINGS_UNEXPECTEDLY, {
+          parentFunctionUseHint: 'Used to compute financial risk findings using a background worker when available.',
+          errorDetailsHint: 'The main-thread fallback after a worker failure returned an empty findings value unexpectedly.',
+          errorSeverityHint: 'high',
+          applicationErrorCode: 'WORKER_RISK_FALLBACK_RETURNED_EMPTY_UNEXPECTEDLY',
+          relevantRuntimeContext: workerFailureDetails
+        })
+      if (createErrorFailure) return [null, createErrorFailure]
+      return [null, errorValue]
+    }
+    return [fallbackValue, null]
   }
 
-  return new Promise((resolve) => {
-    let workerHandle
-    try {
-      workerHandle = new Worker(new URL('../workers/risk-worker.js', import.meta.url), { type: 'module' })
-    } catch (workerConstructionFailure) {
-      console.warn('[risk] Worker construction failed; falling back to main-thread risk checks.', {
-        error: summarizeErrorForDiagnostics(workerConstructionFailure)
-      })
-      const [fallbackValue, fallbackError] = extractFinancialRiskFindingsFromCurrentCollectionsState(/** @type {any} */ (currentCollectionsState))
-      if (fallbackError) {
-        resolve([null, fallbackError])
-        return
-      }
-      if (!fallbackValue) {
-        const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext(
-          'WORKER',
-          'worker fallback produced empty findings unexpectedly',
-          true,
-          { workerConstructionFailure }
-        )
-        if (createErrorFailure) {
-          resolve([null, createErrorFailure])
-          return
-        }
-        resolve([null, errorValue])
-        return
-      }
-      resolve([fallbackValue, null])
-      return
+  async function ensureReusableRiskWorkerHandle() {
+    if (cachedRiskWorkerHandle) return [cachedRiskWorkerHandle, null]
+    const workerConstructionResult = await settleAsyncOrSyncOperation(
+      () => new Worker(new URL('../workers/risk-worker.js', import.meta.url), { type: 'module' })
+    )
+    if (workerConstructionResult.status === 'rejected') {
+      return [null, workerConstructionResult.reason]
     }
-
-    const cleanupAndResolve = (value, err) => {
-      if (workerHandle) workerHandle.terminate()
-      resolve([value, err])
-    }
-
+    const workerHandle = workerConstructionResult.value
     workerHandle.onmessage = (messageEvent) => {
       const payload = messageEvent.data
-      if (!payload || typeof payload !== 'object') {
-        const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext(
-          'WORKER',
-          'worker returned malformed risk payload',
-          true
-        )
-        if (createErrorFailure) {
-          cleanupAndResolve(null, createErrorFailure)
-          return
+      if (!payload || typeof payload !== 'object' || typeof payload.requestId !== 'number') {
+        const pendingRequests = [...pendingRiskWorkerRequestById.entries()]
+        pendingRiskWorkerRequestById.clear()
+        clearCachedRiskWorkerHandle()
+        for (const [, pendingRequest] of pendingRequests) {
+          const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorFromDefinitionAndOptionalDetails(IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_WORKER_WORKER_RETURNED_MALFORMED_RISK_PAYLOAD)
+          pendingRequest.resolve(createErrorFailure ? [null, createErrorFailure] : [null, errorValue])
         }
-        cleanupAndResolve(null, errorValue)
         return
       }
-
+      const pendingRequest = pendingRiskWorkerRequestById.get(payload.requestId)
+      if (!pendingRequest) return
+      pendingRiskWorkerRequestById.delete(payload.requestId)
       if (payload.error) {
-        const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext(
-          'WORKER',
-          'worker risk computation returned error',
-          true,
-          payload.error
-        )
-        if (createErrorFailure) {
-          cleanupAndResolve(null, createErrorFailure)
-          return
-        }
-        cleanupAndResolve(null, errorValue)
+        const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorFromDefinitionAndOptionalDetails(IMPURE_LAYER_APPLICATION_ERROR_DEFINITION_FOR_WORKER_WORKER_RISK_COMPUTATION_RETURNED_ERROR, payload.error)
+        pendingRequest.resolve(createErrorFailure ? [null, createErrorFailure] : [null, errorValue])
         return
       }
-
-      cleanupAndResolve(Array.isArray(payload.findings) ? payload.findings : [], null)
+      pendingRequest.resolve([Array.isArray(payload.findings) ? payload.findings : [], null])
     }
-
     workerHandle.onerror = (workerFailureEvent) => {
-      // Critical path: worker failure must degrade to deterministic in-process pure computation.
       console.warn('[risk] Worker runtime error; falling back to main-thread risk checks.', {
         message: workerFailureEvent?.message || 'worker runtime error',
         filename: workerFailureEvent?.filename || '',
         lineno: workerFailureEvent?.lineno || 0,
         colno: workerFailureEvent?.colno || 0
       })
-      const [fallbackValue, fallbackError] = extractFinancialRiskFindingsFromCurrentCollectionsState(/** @type {any} */ (currentCollectionsState))
-      if (fallbackError) {
-        cleanupAndResolve(null, fallbackError)
-        return
+      const pendingRequests = [...pendingRiskWorkerRequestById.entries()]
+      pendingRiskWorkerRequestById.clear()
+      clearCachedRiskWorkerHandle()
+      for (const [, pendingRequest] of pendingRequests) {
+        void (async () => {
+          const [fallbackValue, fallbackError] = await buildMainThreadRiskFallbackResultForWorkerFailure(
+            pendingRequest.currentCollectionsState,
+            { workerFailureEvent }
+          )
+          pendingRequest.resolve([fallbackValue, fallbackError])
+        })()
       }
-      if (!fallbackValue) {
-        const [errorValue, createErrorFailure] = createImpureLayerApplicationErrorWithContext(
-          'WORKER',
-          'worker failure fallback produced empty findings unexpectedly',
-          true,
-          { workerFailureEvent }
-        )
-        if (createErrorFailure) {
-          cleanupAndResolve(null, createErrorFailure)
-          return
-        }
-        cleanupAndResolve(null, errorValue)
-        return
-      }
-      cleanupAndResolve(fallbackValue, null)
     }
+    cachedRiskWorkerHandle = workerHandle
+    return [workerHandle, null]
+  }
 
-    workerHandle.postMessage({ currentCollectionsState })
+  if (typeof globalThis.Worker === 'undefined') {
+    console.info('[risk] Worker unavailable; running risk checks on main thread.')
+    return extractFinancialRiskFindingsFromCurrentCollectionsState(/** @type {any} */ (currentCollectionsState))
+  }
+
+  const [workerHandle, workerConstructionFailure] = await ensureReusableRiskWorkerHandle()
+  if (!workerHandle) {
+    console.warn('[risk] Worker construction failed; falling back to main-thread risk checks.', {
+      error: summarizeErrorForDiagnostics(workerConstructionFailure)
+    })
+    return buildMainThreadRiskFallbackResultForWorkerFailure(currentCollectionsState, { workerConstructionFailure })
+  }
+
+  return new Promise((resolve) => {
+    const requestId = nextRiskWorkerRequestId
+    nextRiskWorkerRequestId += 1
+    pendingRiskWorkerRequestById.set(requestId, { resolve, currentCollectionsState })
+    void (async () => {
+      const postMessageResult = await settleAsyncOrSyncOperation(() => {
+        workerHandle.postMessage({ requestId, currentCollectionsState })
+        return true
+      })
+      if (postMessageResult.status !== 'rejected') return
+      console.warn('[risk] Worker postMessage failed; falling back to main-thread risk checks.', {
+        error: summarizeErrorForDiagnostics(postMessageResult.reason)
+      })
+      pendingRiskWorkerRequestById.delete(requestId)
+      const [fallbackValue, fallbackError] = await buildMainThreadRiskFallbackResultForWorkerFailure(currentCollectionsState, {
+        workerPostMessageFailure: postMessageResult.reason
+      })
+      resolve([fallbackValue, fallbackError])
+    })()
   })
 }
 
