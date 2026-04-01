@@ -5040,39 +5040,51 @@ export default function App() {
       ) : null}
 
       {isProfileTransferModalOpen ? (
-        <section className="profile-transfer-modal fixed inset-0 z-[5000] flex items-center justify-center p-3 sm:p-4" role="dialog" aria-modal="true" aria-label="Financial Profile Import Export Modal">
-          <button className="absolute inset-0 bg-black/55 backdrop-blur-sm" onClick={() => setIsProfileTransferModalOpen(false)} type="button" aria-label="Close profile transfer modal backdrop" />
-          <div className="profile-transfer-shell relative z-[5001] w-full max-w-2xl rounded-3xl border border-white/40 bg-[#141414] p-4 shadow-2xl sm:p-6">
-            <div className="mb-4 flex items-center justify-between gap-3">
-              <h3 className="text-lg font-bold text-[#ededed]">{profileTransferFormState.mode === 'import' ? 'Import Profile' : 'Export Profile'}</h3>
-              <button className="rounded-xl border border-white/[0.025] px-3 py-2 text-sm font-semibold text-[#d4d4d4] inline-flex items-center gap-1.5" onClick={() => setIsProfileTransferModalOpen(false)} type="button"><IconX /> Close</button>
-            </div>
-            <form className="grid grid-cols-1 gap-3" onSubmit={submitImportedProfileJson}>
-              <textarea className="min-h-[260px] w-full rounded-2xl border border-white/[0.06] bg-[rgba(15,15,15,0.8)] p-3 font-mono text-xs text-[#ededed] outline-none transition focus:border-indigo-400 focus:bg-[#141414]" value={profileTransferFormState.jsonText} onChange={(event) => updateProfileTransferFormFieldValue('jsonText', event.target.value)} readOnly={profileTransferFormState.mode === 'export'} placeholder={profileTransferFormState.mode === 'import' ? 'Paste profile JSON here...' : ''} />
-              {!supabaseAuthUserSummary ? (
-                <p className="text-[11px] text-amber-600">Log in as admin to enable server sync.</p>
-              ) : (
-                <p className="text-[11px] text-emerald-600">Signed in as {supabaseAuthUserSummary.email || supabaseAuthUserSummary.id}.</p>
-              )}
-              <div className="flex flex-wrap justify-end gap-2">
-                <button className="rounded-2xl border border-white/[0.025] px-4 py-2 text-sm font-semibold text-[#d4d4d4] inline-flex items-center gap-1.5" onClick={() => setIsProfileTransferModalOpen(false)} type="button"><IconX /> Cancel</button>
-                {profileTransferFormState.mode === 'export' ? (
-                  <React.Fragment>
-                    <button className="rounded-2xl border border-indigo-300 bg-indigo-50 px-4 py-2 text-sm font-semibold text-indigo-700 disabled:cursor-not-allowed disabled:opacity-40" onClick={() => { void copyProfileTransferJsonTextToClipboard() }} type="button">Copy JSON</button>
-                    <button className="rounded-2xl border border-white/[0.025] bg-[#0f0f0f] px-4 py-2 text-sm font-semibold text-[#a1a1aa] disabled:cursor-not-allowed disabled:opacity-40" disabled={!supabaseAuthUserSummary || isSupabaseOperationInFlight} onClick={() => { void pushCurrentProfileSnapshotToSupabase() }} type="button">Save to Server</button>
-                    {profileDeleteUndoSnapshotJsonText ? (
-                      <button className="rounded-2xl border border-emerald-500/40 bg-emerald-500/10 px-4 py-2 text-sm font-semibold text-emerald-400" onClick={() => { void restoreDeletedLocalFinancialProfileDataFromUndoSnapshot() }} type="button">Undo Delete</button>
-                    ) : null}
-                    <button className="rounded-2xl border border-rose-500/40 bg-rose-500/10 px-4 py-2 text-sm font-semibold text-rose-400" onClick={() => { void deleteAllLocalFinancialProfileDataWithUndoSnapshot() }} type="button">Delete Local</button>
-                  </React.Fragment>
-                ) : (
-                  <React.Fragment>
-                    <button className="rounded-2xl border border-white/[0.025] bg-[#0f0f0f] px-4 py-2 text-sm font-semibold text-[#a1a1aa] disabled:cursor-not-allowed disabled:opacity-40" disabled={!supabaseAuthUserSummary || isSupabaseOperationInFlight} onClick={() => { void pullProfileSnapshotFromSupabase() }} type="button">Restore from Server</button>
-                    <button className="rounded-2xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-indigo-700" type="submit">Import JSON</button>
-                  </React.Fragment>
-                )}
+        <section style={{ position: 'fixed', inset: 0, zIndex: 5000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }} role="dialog" aria-modal="true" aria-label="Financial Profile Import Export Modal">
+          <button style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)' }} onClick={() => setIsProfileTransferModalOpen(false)} type="button" aria-label="Close profile transfer modal backdrop" />
+          <div style={{ position: 'relative', zIndex: 5001, width: '100%', maxWidth: '600px', overflow: 'hidden', borderRadius: '24px', boxShadow: '0 25px 60px rgba(0,0,0,0.6)', background: 'rgba(17,17,17,0.97)', backdropFilter: 'blur(24px)', WebkitBackdropFilter: 'blur(24px)', border: '1px solid rgba(99,102,241,0.18)' }}>
+            <div style={{ height: '3px', background: profileTransferFormState.mode === 'import' ? 'linear-gradient(90deg,#6366f1,#4f46e5)' : 'linear-gradient(90deg,#8b5cf6,#7c3aed)' }} />
+            <div style={{ padding: '20px 24px 24px' }}>
+              <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '16px', marginBottom: '20px' }}>
+                <div>
+                  <p style={{ margin: 0, fontSize: '10px', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#71717a' }}>Profile</p>
+                  <h3 style={{ margin: '2px 0 0', fontSize: '20px', fontWeight: 700, letterSpacing: '-0.01em', color: '#ededed' }}>{profileTransferFormState.mode === 'import' ? 'Import Profile' : 'Export Profile'}</h3>
+                </div>
+                <button style={{ flexShrink: 0, width: '32px', height: '32px', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.08)', background: 'rgba(255,255,255,0.03)', color: '#71717a', cursor: 'pointer' }} onClick={() => setIsProfileTransferModalOpen(false)} type="button" aria-label="Close"><IconX /></button>
               </div>
-            </form>
+              <form style={{ display: 'flex', flexDirection: 'column', gap: '12px' }} onSubmit={submitImportedProfileJson}>
+                <textarea
+                  style={{ minHeight: '220px', width: '100%', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.07)', background: 'rgba(15,15,15,0.8)', padding: '12px', fontFamily: 'monospace', fontSize: '11px', color: '#ededed', outline: 'none', resize: 'vertical', boxSizing: 'border-box' }}
+                  value={profileTransferFormState.jsonText}
+                  onChange={(event) => updateProfileTransferFormFieldValue('jsonText', event.target.value)}
+                  readOnly={profileTransferFormState.mode === 'export'}
+                  placeholder={profileTransferFormState.mode === 'import' ? 'Paste profile JSON here...' : ''}
+                />
+                {!supabaseAuthUserSummary ? (
+                  <p style={{ margin: 0, fontSize: '11px', color: '#d97706' }}>Log in as admin to enable server sync.</p>
+                ) : (
+                  <p style={{ margin: 0, fontSize: '11px', color: '#34d399' }}>Signed in as <strong>{supabaseAuthUserSummary.email || supabaseAuthUserSummary.id}</strong>.</p>
+                )}
+                <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'flex-end', gap: '8px' }}>
+                  <button style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '7px 16px', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.07)', background: 'rgba(255,255,255,0.03)', color: '#a1a1aa', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }} onClick={() => setIsProfileTransferModalOpen(false)} type="button"><IconX /> Cancel</button>
+                  {profileTransferFormState.mode === 'export' ? (
+                    <React.Fragment>
+                      <button style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '7px 16px', borderRadius: '10px', border: '1px solid rgba(99,102,241,0.4)', background: 'rgba(99,102,241,0.12)', color: '#a5b4fc', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }} onClick={() => { void copyProfileTransferJsonTextToClipboard() }} type="button">Copy JSON</button>
+                      <button style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '7px 16px', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.07)', background: 'rgba(255,255,255,0.04)', color: '#a1a1aa', fontSize: '13px', fontWeight: 600, cursor: 'pointer', opacity: (!supabaseAuthUserSummary || isSupabaseOperationInFlight) ? 0.4 : 1 }} disabled={!supabaseAuthUserSummary || isSupabaseOperationInFlight} onClick={() => { void pushCurrentProfileSnapshotToSupabase() }} type="button">Save to Server</button>
+                      {profileDeleteUndoSnapshotJsonText ? (
+                        <button style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '7px 16px', borderRadius: '10px', border: '1px solid rgba(52,211,153,0.35)', background: 'rgba(52,211,153,0.08)', color: '#34d399', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }} onClick={() => { void restoreDeletedLocalFinancialProfileDataFromUndoSnapshot() }} type="button">Undo Delete</button>
+                      ) : null}
+                      <button style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '7px 16px', borderRadius: '10px', border: '1px solid rgba(239,68,68,0.35)', background: 'rgba(239,68,68,0.08)', color: '#f87171', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }} onClick={() => { void deleteAllLocalFinancialProfileDataWithUndoSnapshot() }} type="button">Delete Local</button>
+                    </React.Fragment>
+                  ) : (
+                    <React.Fragment>
+                      <button style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '7px 16px', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.07)', background: 'rgba(255,255,255,0.04)', color: '#a1a1aa', fontSize: '13px', fontWeight: 600, cursor: 'pointer', opacity: (!supabaseAuthUserSummary || isSupabaseOperationInFlight) ? 0.4 : 1 }} disabled={!supabaseAuthUserSummary || isSupabaseOperationInFlight} onClick={() => { void pullProfileSnapshotFromSupabase() }} type="button">Restore from Server</button>
+                      <button style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '7px 16px', borderRadius: '10px', border: 'none', background: 'rgba(99,102,241,0.9)', color: '#fff', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }} type="submit">Import JSON</button>
+                    </React.Fragment>
+                  )}
+                </div>
+              </form>
+            </div>
           </div>
         </section>
       ) : null}
@@ -5204,56 +5216,62 @@ export default function App() {
       ) : null}
 
       {isLoginModalOpen ? (
-        <section className="fixed inset-0 z-[5000] flex items-center justify-center p-3 sm:p-4" role="dialog" aria-modal="true" aria-label="Admin Login Modal">
-          <button className="absolute inset-0 bg-black/55 backdrop-blur-sm" onClick={() => setIsLoginModalOpen(false)} type="button" aria-label="Close login modal backdrop" />
-          <div className="relative z-[5001] w-full max-w-sm rounded-3xl border border-white/40 bg-[#141414] p-4 shadow-2xl sm:p-6">
-            <div className="mb-5 flex items-center justify-between gap-3">
-              <h3 className="text-lg font-bold text-[#ededed]">{supabaseAuthUserSummary ? 'Admin Session' : 'Admin Login'}</h3>
-              <button className="inline-flex items-center gap-1.5 rounded-xl border border-white/[0.025] px-3 py-2 text-sm font-semibold text-[#d4d4d4]" onClick={() => setIsLoginModalOpen(false)} type="button"><IconX /> Close</button>
-            </div>
-            {supabaseAuthUserSummary ? (
-              <div className="space-y-4">
-                <p className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-400">Signed in as <span className="font-semibold">{supabaseAuthUserSummary.email || supabaseAuthUserSummary.id}</span>.</p>
-                <div className="flex justify-end gap-2">
-                  <button className="rounded-2xl border border-white/[0.025] px-4 py-2 text-sm font-semibold text-[#d4d4d4]" onClick={() => setIsLoginModalOpen(false)} type="button">Close</button>
-                  <button className="inline-flex items-center gap-1.5 rounded-2xl bg-rose-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-40" disabled={isLoginOperationInFlight} onClick={() => void submitAdminLogoutFromModal()} type="button"><IconLogOut /> Sign Out</button>
+        <section style={{ position: 'fixed', inset: 0, zIndex: 5000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }} role="dialog" aria-modal="true" aria-label="Admin Login Modal">
+          <button style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)' }} onClick={() => setIsLoginModalOpen(false)} type="button" aria-label="Close login modal backdrop" />
+          <div style={{ position: 'relative', zIndex: 5001, width: '100%', maxWidth: '400px', overflow: 'hidden', borderRadius: '24px', boxShadow: '0 25px 60px rgba(0,0,0,0.6)', background: 'rgba(17,17,17,0.97)', backdropFilter: 'blur(24px)', WebkitBackdropFilter: 'blur(24px)', border: '1px solid rgba(99,102,241,0.18)' }}>
+            <div style={{ height: '3px', background: supabaseAuthUserSummary ? 'linear-gradient(90deg,#34d399,#059669)' : 'linear-gradient(90deg,#6366f1,#4f46e5)' }} />
+            <div style={{ padding: '20px 24px 24px' }}>
+              <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '16px', marginBottom: '20px' }}>
+                <div>
+                  <p style={{ margin: 0, fontSize: '10px', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#71717a' }}>Account</p>
+                  <h3 style={{ margin: '2px 0 0', fontSize: '20px', fontWeight: 700, letterSpacing: '-0.01em', color: '#ededed' }}>{supabaseAuthUserSummary ? 'Admin Session' : 'Admin Login'}</h3>
                 </div>
+                <button style={{ flexShrink: 0, width: '32px', height: '32px', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.08)', background: 'rgba(255,255,255,0.03)', color: '#71717a', cursor: 'pointer' }} onClick={() => setIsLoginModalOpen(false)} type="button" aria-label="Close"><IconX /></button>
               </div>
-            ) : (
-              <form className="space-y-4" onSubmit={(e) => void submitAdminLoginFromModal(e)}>
-                <label className="block">
-                  <span className="text-xs font-semibold uppercase tracking-[0.12em] text-[#71717a]">Admin Password</span>
-                  <div className="relative mt-2">
-                    <input
-                      autoFocus
-                      className="h-11 w-full rounded-2xl border border-white/[0.06] bg-[rgba(15,15,15,0.8)] text-[#ededed] outline-none transition focus:border-indigo-400 focus:bg-[#141414]"
-                      style={{ paddingLeft: '14px', paddingRight: '44px' }}
-                      type={isLoginPasswordVisible ? 'text' : 'password'}
-                      value={loginPasswordInputValue}
-                      onChange={(e) => setLoginPasswordInputValue(e.target.value)}
-                      disabled={isLoginOperationInFlight}
-                    />
-                    <button
-                      className="absolute flex h-8 w-8 items-center justify-center rounded-xl text-[#52525b] transition hover:bg-white/[0.07] hover:text-[#a1a1aa]"
-                      style={{ right: '6px', top: '50%', transform: 'translateY(-50%)' }}
-                      type="button"
-                      tabIndex={-1}
-                      onClick={() => setIsLoginPasswordVisible((v) => !v)}
-                      aria-label={isLoginPasswordVisible ? 'Hide password' : 'Show password'}
-                    >
-                      {isLoginPasswordVisible ? <IconEyeOff /> : <IconEye />}
-                    </button>
+              {supabaseAuthUserSummary ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                  <div style={{ padding: '12px 16px', borderRadius: '12px', border: '1px solid rgba(52,211,153,0.25)', background: 'rgba(52,211,153,0.07)', fontSize: '13px', color: '#34d399' }}>
+                    Signed in as <strong>{supabaseAuthUserSummary.email || supabaseAuthUserSummary.id}</strong>.
                   </div>
-                </label>
-                {loginStatusMessage ? (
-                  <p className="rounded-2xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-400">{loginStatusMessage}</p>
-                ) : null}
-                <div className="flex justify-end gap-2">
-                  <button className="rounded-2xl border border-white/[0.025] px-4 py-2 text-sm font-semibold text-[#d4d4d4]" onClick={() => setIsLoginModalOpen(false)} type="button">Cancel</button>
-                  <button className="inline-flex items-center gap-1.5 rounded-2xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-40" disabled={isLoginOperationInFlight} type="submit"><IconLogIn /> {isLoginOperationInFlight ? 'Signing in...' : 'Sign In'}</button>
+                  <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
+                    <button style={{ padding: '7px 16px', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.07)', background: 'rgba(255,255,255,0.03)', color: '#a1a1aa', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }} onClick={() => setIsLoginModalOpen(false)} type="button">Close</button>
+                    <button style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '7px 16px', borderRadius: '10px', border: 'none', background: 'rgba(239,68,68,0.85)', color: '#fff', fontSize: '13px', fontWeight: 600, cursor: 'pointer', opacity: isLoginOperationInFlight ? 0.4 : 1 }} disabled={isLoginOperationInFlight} onClick={() => void submitAdminLogoutFromModal()} type="button"><IconLogOut /> Sign Out</button>
+                  </div>
                 </div>
-              </form>
-            )}
+              ) : (
+                <form style={{ display: 'flex', flexDirection: 'column', gap: '14px' }} onSubmit={(e) => void submitAdminLoginFromModal(e)}>
+                  <label style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    <span style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#71717a' }}>Admin Password</span>
+                    <div style={{ position: 'relative' }}>
+                      <input
+                        autoFocus
+                        style={{ height: '44px', width: '100%', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.08)', background: 'rgba(15,15,15,0.8)', color: '#ededed', paddingLeft: '14px', paddingRight: '48px', fontSize: '13px', outline: 'none', boxSizing: 'border-box' }}
+                        type={isLoginPasswordVisible ? 'text' : 'password'}
+                        value={loginPasswordInputValue}
+                        onChange={(e) => setLoginPasswordInputValue(e.target.value)}
+                        disabled={isLoginOperationInFlight}
+                      />
+                      <button
+                        style={{ position: 'absolute', right: '6px', top: '50%', transform: 'translateY(-50%)', width: '32px', height: '32px', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '8px', border: 'none', background: 'none', color: '#52525b', cursor: 'pointer' }}
+                        type="button"
+                        tabIndex={-1}
+                        onClick={() => setIsLoginPasswordVisible((v) => !v)}
+                        aria-label={isLoginPasswordVisible ? 'Hide password' : 'Show password'}
+                      >
+                        {isLoginPasswordVisible ? <IconEyeOff /> : <IconEye />}
+                      </button>
+                    </div>
+                  </label>
+                  {loginStatusMessage ? (
+                    <div style={{ padding: '10px 14px', borderRadius: '10px', border: '1px solid rgba(239,68,68,0.3)', background: 'rgba(239,68,68,0.07)', fontSize: '13px', color: '#f87171' }}>{loginStatusMessage}</div>
+                  ) : null}
+                  <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
+                    <button style={{ padding: '7px 16px', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.07)', background: 'rgba(255,255,255,0.03)', color: '#a1a1aa', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }} onClick={() => setIsLoginModalOpen(false)} type="button">Cancel</button>
+                    <button style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '7px 16px', borderRadius: '10px', border: 'none', background: 'rgba(99,102,241,0.9)', color: '#fff', fontSize: '13px', fontWeight: 600, cursor: 'pointer', opacity: isLoginOperationInFlight ? 0.4 : 1 }} disabled={isLoginOperationInFlight} type="submit"><IconLogIn /> {isLoginOperationInFlight ? 'Signing in...' : 'Sign In'}</button>
+                  </div>
+                </form>
+              )}
+            </div>
           </div>
         </section>
       ) : null}
