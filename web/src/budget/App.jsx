@@ -110,8 +110,8 @@ const COMMON_BUDGET_CATEGORIES = [
 
 const DEFAULT_PERSONA_NAMES = ['User']
 const DEFAULT_PERSONA_NAME = 'User'
-const DEFAULT_PERSONA_EMOJI = '=���G��=��+'
-const PERSONA_EMOJI_OPTIONS = ['=���G��=��+', '=��', '=��', '=��', '=��', '=��', '=��', '=���', '=��G��=��+', '=��G��=��+', '=��G��=���', '=��G��=���', '=��G��=�Ž', '=��G��=�Ž', '=��G��G��n+�', '=��G��G��n+�', '=���G��=���', '=���G��=��', '=���G��=��+', '=���G��=�Ŀ']
+const DEFAULT_PERSONA_EMOJI = '👤'
+const PERSONA_EMOJI_OPTIONS = ['👤', '🧑', '👨', '👩', '👦', '👧', '👴', '👵', '👶', '🧒', '💼', '🎓', '🏠', '🤝', '👑', '⭐', '🌟', '💎', '🎯', '🦁']
 
 const ENABLE_FIREBASE_SYNC_UI = false
 const SYNC_STATUS_TONE_NEUTRAL = 'neutral'
@@ -4887,69 +4887,152 @@ export default function App() {
       ) : null}
 
       {isAddPersonaModalOpen ? (
-        <section className="manage-personas-modal fixed inset-0 z-[5000] flex items-center justify-center p-3 sm:p-4" role="dialog" aria-modal="true" aria-label="Manage Personas Modal">
-          <button className="absolute inset-0 bg-black/55 backdrop-blur-sm" onClick={() => setIsAddPersonaModalOpen(false)} type="button" aria-label="Close manage personas modal backdrop" />
-          <div className="manage-personas-shell relative z-[5001] w-full max-w-6xl rounded-3xl border border-white/40 bg-[#141414] p-4 shadow-2xl sm:p-6">
-            <div className="mb-4 flex items-center justify-between gap-3"><h3 className="text-lg font-bold text-[#ededed]">Manage Personas</h3><button className="inline-flex items-center gap-1.5 rounded-xl border border-white/[0.025] px-3 py-2 text-sm font-semibold text-[#d4d4d4]" onClick={() => setIsAddPersonaModalOpen(false)} type="button"><IconX /> Close</button></div>
-            <div className="grid grid-cols-1 gap-4 lg:grid-cols-[300px_minmax(0,1fr)]">
-              <aside className="manage-personas-panel rounded-2xl border border-white/[0.06] bg-[rgba(15,15,15,0.7)] p-3">
-                <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[#71717a]">Existing Personas</p>
-                <ul className="mt-3 space-y-2">
-                  {personaOptions.map((personaName) => {
-                    const isSelected = normalizePersonaNameForDisplay(personaCrudFormState.personaName).toLowerCase() === normalizePersonaNameForDisplay(personaName).toLowerCase()
-                    return (
-                      <li key={personaName}>
-                        <button className={`manage-persona-row w-full rounded-xl border px-3 py-2 text-left text-sm font-semibold transition ${isSelected ? 'border-violet-500/40 bg-violet-500/10 text-violet-300' : 'border-white/[0.025] bg-[#141414] text-[#d4d4d4] hover:border-white/[0.06]'}`} type="button" onClick={() => selectPersonaForCrudByName(personaName)}>{formatPersonaLabelWithEmoji(personaName, personaEmojiByName)}</button>
-                      </li>
-                    )
-                  })}
-                </ul>
-                {personaDangerBackupState ? (
-                  <div className="manage-personas-warning mt-3 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3">
-                    <p className="text-xs font-semibold uppercase tracking-[0.12em] text-amber-400">Backup Available</p>
-                    <p className="mt-1 text-xs text-amber-300">Destructive change backup from {personaDangerBackupState.at}.</p>
-                    <button className="inline-flex items-center gap-1.5 mt-2 rounded-lg border border-amber-500/40 bg-amber-500/15 px-3 py-2 text-xs font-semibold text-amber-300" type="button" onClick={() => void restorePersonaDangerBackupIntoCollections()}><IconRefresh /> Restore Backup</button>
+        <section style={{ position: 'fixed', inset: 0, zIndex: 5000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }} role="dialog" aria-modal="true" aria-label="Manage Personas Modal">
+          <button style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)' }} onClick={() => setIsAddPersonaModalOpen(false)} type="button" aria-label="Close manage personas modal backdrop" />
+          <div style={{ position: 'relative', zIndex: 5001, width: '100%', maxWidth: '780px', overflow: 'hidden', borderRadius: '24px', boxShadow: '0 25px 60px rgba(0,0,0,0.6)', background: 'rgba(17,17,17,0.97)', backdropFilter: 'blur(24px)', WebkitBackdropFilter: 'blur(24px)', border: '1px solid rgba(139,92,246,0.18)' }}>
+            <div style={{ height: '3px', background: 'linear-gradient(90deg,#8b5cf6,#7c3aed)' }} />
+            <div style={{ padding: '20px 24px 24px', maxHeight: 'calc(90vh - 3px)', overflowY: 'auto' }}>
+              <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '16px', marginBottom: '20px' }}>
+                <div>
+                  <p style={{ margin: 0, fontSize: '10px', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#71717a' }}>Settings</p>
+                  <h3 style={{ margin: '2px 0 0', fontSize: '20px', fontWeight: 700, letterSpacing: '-0.01em', color: '#ededed' }}>Manage Personas</h3>
+                </div>
+                <button style={{ flexShrink: 0, width: '32px', height: '32px', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.08)', background: 'rgba(255,255,255,0.03)', color: '#71717a', cursor: 'pointer', transition: 'color 0.12s, border-color 0.12s' }} onClick={() => setIsAddPersonaModalOpen(false)} type="button" aria-label="Close"><IconX /></button>
+              </div>
+              <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap', alignItems: 'flex-start' }}>
+                <aside style={{ width: '220px', flexShrink: 0, minWidth: '160px' }}>
+                  <div style={{ padding: '14px 16px', borderRadius: '16px', border: '1px solid rgba(255,255,255,0.06)', background: 'rgba(15,15,15,0.7)' }}>
+                    <p style={{ margin: '0 0 10px', fontSize: '10px', fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#71717a' }}>Existing Personas</p>
+                    <ul style={{ margin: 0, padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                      {personaOptions.map((personaName) => {
+                        const isSelectedPersona = normalizePersonaNameForDisplay(personaCrudFormState.personaName).toLowerCase() === normalizePersonaNameForDisplay(personaName).toLowerCase()
+                        return (
+                          <li key={personaName}>
+                            <button
+                              style={{ width: '100%', textAlign: 'left', padding: '8px 12px', borderRadius: '10px', border: `1px solid ${isSelectedPersona ? 'rgba(139,92,246,0.4)' : 'rgba(255,255,255,0.04)'}`, background: isSelectedPersona ? 'rgba(139,92,246,0.12)' : 'rgba(20,20,20,0.8)', color: isSelectedPersona ? '#c4b5fd' : '#d4d4d4', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }}
+                              type="button"
+                              onClick={() => selectPersonaForCrudByName(personaName)}
+                            >{formatPersonaLabelWithEmoji(personaName, personaEmojiByName)}</button>
+                          </li>
+                        )
+                      })}
+                    </ul>
+                    {personaDangerBackupState ? (
+                      <div style={{ marginTop: '12px', padding: '12px', borderRadius: '12px', border: '1px solid rgba(251,191,36,0.3)', background: 'rgba(251,191,36,0.06)' }}>
+                        <p style={{ margin: '0 0 4px', fontSize: '10px', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#fbbf24' }}>Backup Available</p>
+                        <p style={{ margin: '0 0 8px', fontSize: '11px', color: '#fcd34d' }}>From {personaDangerBackupState.at}.</p>
+                        <button style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '5px 12px', borderRadius: '8px', border: '1px solid rgba(251,191,36,0.4)', background: 'rgba(251,191,36,0.1)', color: '#fbbf24', fontSize: '11px', fontWeight: 600, cursor: 'pointer' }} type="button" onClick={() => void restorePersonaDangerBackupIntoCollections()}><IconRefresh /> Restore</button>
+                      </div>
+                    ) : null}
                   </div>
-                ) : null}
-              </aside>
-
-              <div className="space-y-4">
-                <form className="manage-personas-panel rounded-2xl border border-white/[0.06] bg-[#0f0f0f]/70 p-4" onSubmit={submitNewPersonaRecord}>
-                  <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[#71717a]">Create Persona</p>
-                  <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
-                    <label className="text-sm font-medium text-[#d4d4d4]">Name<input className="mt-1 h-11 w-full rounded-2xl border border-white/[0.06] bg-[#141414] px-3 text-[#ededed] outline-none transition focus:border-violet-400" type="text" value={personaEntryFormState.name} onChange={(event) => updatePersonaEntryFormFieldValue('name', event.target.value)} /></label>
-                    <label className="text-sm font-medium text-[#d4d4d4]">Emoji Preset<select className="mt-1 h-11 w-full rounded-2xl border border-white/[0.06] bg-[#141414] px-3 text-xl text-[#ededed] outline-none transition focus:border-violet-400" value={personaEntryFormState.emojiPreset} onChange={(event) => updatePersonaEntryFormFieldValue('emojiPreset', event.target.value)}>{PERSONA_EMOJI_OPTIONS.map((emojiOption) => <option key={emojiOption} value={emojiOption}>{emojiOption}</option>)}</select></label>
-                    <label className="text-sm font-medium text-[#d4d4d4]">Custom Emoji (Optional)<input className="mt-1 h-11 w-full rounded-2xl border border-white/[0.06] bg-[#141414] px-3 text-2xl text-[#ededed] outline-none transition focus:border-violet-400" type="text" maxLength="4" value={personaEntryFormState.customEmoji} onChange={(event) => updatePersonaEntryFormFieldValue('customEmoji', event.target.value)} /></label>
-                    <label className="text-sm font-medium text-[#d4d4d4]">Note (Optional)<input className="mt-1 h-11 w-full rounded-2xl border border-white/[0.06] bg-[#141414] px-3 text-[#ededed] outline-none transition focus:border-violet-400" type="text" value={personaEntryFormState.note} onChange={(event) => updatePersonaEntryFormFieldValue('note', event.target.value)} /></label>
-                  </div>
-                  <div className="mt-3 flex justify-end gap-2"><button className="inline-flex items-center gap-1.5 rounded-2xl border border-white/[0.025] px-4 py-2 text-sm font-semibold text-[#d4d4d4]" type="button" onClick={() => setPersonaEntryFormState(buildInitialPersonaEntryFormState())}><IconX /> Clear</button><button className="inline-flex items-center gap-1.5 rounded-2xl bg-violet-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-violet-700" type="submit"><IconPlus /> Create Persona</button></div>
-                </form>
-
-                {personaCrudFormState.personaName ? (
-                  <form className="manage-personas-panel rounded-2xl border border-white/[0.06] bg-[rgba(20,20,20,0.8)] p-4" onSubmit={submitPersonaCrudOperation}>
-                    <div className="mb-3 flex items-center justify-between gap-3">
-                      <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[#71717a]">Edit / Delete Persona</p>
-                      <span className="rounded-full bg-[#1a1a1a] px-2 py-1 text-xs font-semibold text-[#d4d4d4]">{formatPersonaLabelWithEmoji(personaCrudFormState.personaName, personaEmojiByName)}</span>
+                </aside>
+                <div style={{ flex: 1, minWidth: '280px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                  <form style={{ padding: '16px', borderRadius: '16px', border: '1px solid rgba(255,255,255,0.06)', background: 'rgba(15,15,15,0.7)' }} onSubmit={submitNewPersonaRecord}>
+                    <p style={{ margin: '0 0 14px', fontSize: '10px', fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#71717a' }}>Create Persona</p>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '12px' }}>
+                      <label style={{ display: 'flex', flexDirection: 'column', gap: '6px', fontSize: '12px', fontWeight: 600, color: '#d4d4d4' }}>
+                        Name
+                        <input style={{ height: '40px', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.08)', background: '#141414', color: '#ededed', padding: '0 12px', fontSize: '13px', outline: 'none' }} type="text" value={personaEntryFormState.name} onChange={(event) => updatePersonaEntryFormFieldValue('name', event.target.value)} />
+                      </label>
+                      <label style={{ display: 'flex', flexDirection: 'column', gap: '6px', fontSize: '12px', fontWeight: 600, color: '#d4d4d4' }}>
+                        Emoji Preset
+                        <select style={{ height: '40px', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.08)', background: '#141414', color: '#ededed', padding: '0 12px', fontSize: '18px', outline: 'none' }} value={personaEntryFormState.emojiPreset} onChange={(event) => updatePersonaEntryFormFieldValue('emojiPreset', event.target.value)}>
+                          {PERSONA_EMOJI_OPTIONS.map((emojiOption) => <option key={emojiOption} value={emojiOption}>{emojiOption}</option>)}
+                        </select>
+                      </label>
+                      <label style={{ display: 'flex', flexDirection: 'column', gap: '6px', fontSize: '12px', fontWeight: 600, color: '#d4d4d4' }}>
+                        Custom Emoji
+                        <input style={{ height: '40px', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.08)', background: '#141414', color: '#ededed', padding: '0 12px', fontSize: '20px', outline: 'none' }} type="text" maxLength="4" placeholder="Optional" value={personaEntryFormState.customEmoji} onChange={(event) => updatePersonaEntryFormFieldValue('customEmoji', event.target.value)} />
+                      </label>
+                      <label style={{ display: 'flex', flexDirection: 'column', gap: '6px', fontSize: '12px', fontWeight: 600, color: '#d4d4d4' }}>
+                        Note
+                        <input style={{ height: '40px', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.08)', background: '#141414', color: '#ededed', padding: '0 12px', fontSize: '13px', outline: 'none' }} type="text" placeholder="Optional" value={personaEntryFormState.note} onChange={(event) => updatePersonaEntryFormFieldValue('note', event.target.value)} />
+                      </label>
                     </div>
-                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                      <label className="text-sm font-medium text-[#d4d4d4]">Mode<select className="mt-1 h-11 w-full rounded-2xl border border-white/[0.06] bg-[#141414] px-3 text-[#ededed] outline-none transition focus:border-violet-400" value={personaCrudFormState.mode} onChange={(event) => updatePersonaCrudFormFieldValue('mode', event.target.value)}><option value="edit">Edit</option><option value="delete_reassign">Delete + Reassign</option><option value="delete_cascade">Delete Cascade</option></select></label>
-                      {selectedPersonaImpactSummary ? <div className="rounded-2xl border border-white/[0.06] bg-[#0f0f0f] px-3 py-2 text-xs text-[#a1a1aa]"><p className="font-semibold text-[#d4d4d4]">Impacted records</p><p className="mt-1">Total: {Math.round(typeof selectedPersonaImpactSummary.total === 'number' ? selectedPersonaImpactSummary.total : 0)}</p></div> : <div />}
-                      {personaCrudFormState.mode === 'edit' ? <label className="text-sm font-medium text-[#d4d4d4]">Name<input className="mt-1 h-11 w-full rounded-2xl border border-white/[0.06] bg-[#141414] px-3 text-[#ededed] outline-none transition focus:border-violet-400" type="text" value={personaCrudFormState.nextName} onChange={(event) => updatePersonaCrudFormFieldValue('nextName', event.target.value)} /></label> : null}
-                      {personaCrudFormState.mode === 'edit' ? <label className="text-sm font-medium text-[#d4d4d4]">Emoji Preset<select className="mt-1 h-11 w-full rounded-2xl border border-white/[0.06] bg-[#141414] px-3 text-xl text-[#ededed] outline-none transition focus:border-violet-400" value={personaCrudFormState.nextEmojiPreset} onChange={(event) => updatePersonaCrudFormFieldValue('nextEmojiPreset', event.target.value)}>{PERSONA_EMOJI_OPTIONS.map((emojiOption) => <option key={emojiOption} value={emojiOption}>{emojiOption}</option>)}</select></label> : null}
-                      {personaCrudFormState.mode === 'edit' ? <label className="text-sm font-medium text-[#d4d4d4]">Custom Emoji<input className="mt-1 h-11 w-full rounded-2xl border border-white/[0.06] bg-[#141414] px-3 text-2xl text-[#ededed] outline-none transition focus:border-violet-400" type="text" maxLength="4" value={personaCrudFormState.nextCustomEmoji} onChange={(event) => updatePersonaCrudFormFieldValue('nextCustomEmoji', event.target.value)} /></label> : null}
-                      {personaCrudFormState.mode === 'edit' ? <label className="text-sm font-medium text-[#d4d4d4]">Note<input className="mt-1 h-11 w-full rounded-2xl border border-white/[0.06] bg-[#141414] px-3 text-[#ededed] outline-none transition focus:border-violet-400" type="text" value={personaCrudFormState.nextNote} onChange={(event) => updatePersonaCrudFormFieldValue('nextNote', event.target.value)} /></label> : null}
-                      {personaCrudFormState.mode === 'delete_reassign' ? <label className="text-sm font-medium text-[#d4d4d4] sm:col-span-2">Reassign all records to<select className="mt-1 h-11 w-full rounded-2xl border border-white/[0.06] bg-[#141414] px-3 text-[#ededed] outline-none transition focus:border-violet-400" value={personaCrudFormState.reassignToPersonaName} onChange={(event) => updatePersonaCrudFormFieldValue('reassignToPersonaName', event.target.value)}>{reassignablePersonaOptions.map((personaName) => <option key={personaName} value={personaName}>{formatPersonaLabelWithEmoji(personaName, personaEmojiByName)}</option>)}</select></label> : null}
-                      {personaCrudFormState.mode === 'delete_reassign' && reassignablePersonaOptions.length === 0 ? <div className="sm:col-span-2 rounded-xl border border-amber-500/40 bg-amber-500/10/80 px-3 py-2 text-xs text-amber-300">No alternate persona exists to reassign records. To delete the default user profile, switch to <span className="font-semibold">Delete Cascade</span>.<button className="inline-flex items-center gap-1 ml-2 rounded-md border border-rose-500/40 bg-rose-500/10 px-2 py-1 text-xs font-semibold text-rose-400" type="button" onClick={() => updatePersonaCrudFormFieldValue('mode', 'delete_cascade')}><IconTrash /> Switch to Cascade</button></div> : null}
-                      {personaCrudFormState.mode === 'delete_cascade' ? <label className="text-sm font-medium text-rose-400 sm:col-span-2">Type to confirm hard delete<input className="mt-1 h-11 w-full rounded-2xl border border-rose-500/40 bg-rose-500/10/70 px-3 text-[#ededed] outline-none transition focus:border-rose-500" type="text" placeholder={`DELETE ${personaCrudFormState.personaName}`} value={personaCrudFormState.deleteConfirmText} onChange={(event) => updatePersonaCrudFormFieldValue('deleteConfirmText', event.target.value)} /></label> : null}
-                    </div>
-                    <div className="mt-3 flex flex-wrap justify-end gap-2">
-                      <button className="inline-flex items-center gap-1.5 rounded-2xl border border-white/[0.025] px-4 py-2 text-sm font-semibold text-[#d4d4d4]" type="button" onClick={() => setPersonaCrudFormState(buildInitialPersonaCrudFormState())}><IconX /> Clear Selection</button>
-                      <button className={`inline-flex items-center gap-1.5 rounded-2xl px-4 py-2 text-sm font-semibold text-white transition ${personaCrudFormState.mode === 'edit' ? 'bg-violet-500/20 hover:bg-violet-500/30' : 'bg-rose-500/20 hover:bg-rose-500/30'}`} type="submit">{personaCrudFormState.mode === 'edit' ? <><IconCheck /> Save Persona</> : <><IconTrash /> Apply Delete Operation</>}</button>
+                    <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
+                      <button style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '7px 16px', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.07)', background: 'rgba(255,255,255,0.03)', color: '#a1a1aa', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }} type="button" onClick={() => setPersonaEntryFormState(buildInitialPersonaEntryFormState())}><IconX /> Clear</button>
+                      <button style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '7px 16px', borderRadius: '10px', border: 'none', background: 'rgba(124,58,237,0.9)', color: '#fff', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }} type="submit"><IconPlus /> Create</button>
                     </div>
                   </form>
-                ) : (
-                  <div className="manage-personas-panel rounded-2xl border border-white/[0.06] bg-[rgba(20,20,20,0.8)] p-4 text-sm text-[#a1a1aa]">Select a persona from the left list to edit or delete with safety controls.</div>
-                )}
+                  {personaCrudFormState.personaName ? (
+                    <form style={{ padding: '16px', borderRadius: '16px', border: '1px solid rgba(255,255,255,0.06)', background: 'rgba(15,15,15,0.7)' }} onSubmit={submitPersonaCrudOperation}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', marginBottom: '14px' }}>
+                        <p style={{ margin: 0, fontSize: '10px', fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#71717a' }}>Edit / Delete</p>
+                        <span style={{ padding: '3px 10px', borderRadius: '999px', background: '#1a1a1a', border: '1px solid rgba(255,255,255,0.06)', fontSize: '12px', fontWeight: 600, color: '#d4d4d4' }}>{formatPersonaLabelWithEmoji(personaCrudFormState.personaName, personaEmojiByName)}</span>
+                      </div>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '12px' }}>
+                        <label style={{ display: 'flex', flexDirection: 'column', gap: '6px', fontSize: '12px', fontWeight: 600, color: '#d4d4d4' }}>
+                          Mode
+                          <select style={{ height: '40px', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.08)', background: '#141414', color: '#ededed', padding: '0 12px', fontSize: '13px', outline: 'none' }} value={personaCrudFormState.mode} onChange={(event) => updatePersonaCrudFormFieldValue('mode', event.target.value)}>
+                            <option value="edit">Edit</option>
+                            <option value="delete_reassign">Delete + Reassign</option>
+                            <option value="delete_cascade">Delete Cascade</option>
+                          </select>
+                        </label>
+                        {selectedPersonaImpactSummary ? (
+                          <div style={{ padding: '8px 12px', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.06)', background: '#0f0f0f', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+                            <p style={{ margin: '0 0 2px', fontSize: '11px', fontWeight: 600, color: '#a1a1aa' }}>Impacted records</p>
+                            <p style={{ margin: 0, fontSize: '15px', fontWeight: 700, color: '#d4d4d4' }}>{Math.round(typeof selectedPersonaImpactSummary.total === 'number' ? selectedPersonaImpactSummary.total : 0)}</p>
+                          </div>
+                        ) : <div />}
+                        {personaCrudFormState.mode === 'edit' ? (
+                          <label style={{ display: 'flex', flexDirection: 'column', gap: '6px', fontSize: '12px', fontWeight: 600, color: '#d4d4d4' }}>
+                            Name
+                            <input style={{ height: '40px', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.08)', background: '#141414', color: '#ededed', padding: '0 12px', fontSize: '13px', outline: 'none' }} type="text" value={personaCrudFormState.nextName} onChange={(event) => updatePersonaCrudFormFieldValue('nextName', event.target.value)} />
+                          </label>
+                        ) : null}
+                        {personaCrudFormState.mode === 'edit' ? (
+                          <label style={{ display: 'flex', flexDirection: 'column', gap: '6px', fontSize: '12px', fontWeight: 600, color: '#d4d4d4' }}>
+                            Emoji Preset
+                            <select style={{ height: '40px', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.08)', background: '#141414', color: '#ededed', padding: '0 12px', fontSize: '18px', outline: 'none' }} value={personaCrudFormState.nextEmojiPreset} onChange={(event) => updatePersonaCrudFormFieldValue('nextEmojiPreset', event.target.value)}>
+                              {PERSONA_EMOJI_OPTIONS.map((emojiOption) => <option key={emojiOption} value={emojiOption}>{emojiOption}</option>)}
+                            </select>
+                          </label>
+                        ) : null}
+                        {personaCrudFormState.mode === 'edit' ? (
+                          <label style={{ display: 'flex', flexDirection: 'column', gap: '6px', fontSize: '12px', fontWeight: 600, color: '#d4d4d4' }}>
+                            Custom Emoji
+                            <input style={{ height: '40px', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.08)', background: '#141414', color: '#ededed', padding: '0 12px', fontSize: '20px', outline: 'none' }} type="text" maxLength="4" value={personaCrudFormState.nextCustomEmoji} onChange={(event) => updatePersonaCrudFormFieldValue('nextCustomEmoji', event.target.value)} />
+                          </label>
+                        ) : null}
+                        {personaCrudFormState.mode === 'edit' ? (
+                          <label style={{ display: 'flex', flexDirection: 'column', gap: '6px', fontSize: '12px', fontWeight: 600, color: '#d4d4d4' }}>
+                            Note
+                            <input style={{ height: '40px', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.08)', background: '#141414', color: '#ededed', padding: '0 12px', fontSize: '13px', outline: 'none' }} type="text" value={personaCrudFormState.nextNote} onChange={(event) => updatePersonaCrudFormFieldValue('nextNote', event.target.value)} />
+                          </label>
+                        ) : null}
+                        {personaCrudFormState.mode === 'delete_reassign' ? (
+                          <label style={{ display: 'flex', flexDirection: 'column', gap: '6px', fontSize: '12px', fontWeight: 600, color: '#d4d4d4', gridColumn: '1 / -1' }}>
+                            Reassign all records to
+                            <select style={{ height: '40px', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.08)', background: '#141414', color: '#ededed', padding: '0 12px', fontSize: '13px', outline: 'none' }} value={personaCrudFormState.reassignToPersonaName} onChange={(event) => updatePersonaCrudFormFieldValue('reassignToPersonaName', event.target.value)}>
+                              {reassignablePersonaOptions.map((personaName) => <option key={personaName} value={personaName}>{formatPersonaLabelWithEmoji(personaName, personaEmojiByName)}</option>)}
+                            </select>
+                          </label>
+                        ) : null}
+                        {personaCrudFormState.mode === 'delete_reassign' && reassignablePersonaOptions.length === 0 ? (
+                          <div style={{ gridColumn: '1 / -1', padding: '10px 14px', borderRadius: '10px', border: '1px solid rgba(251,191,36,0.35)', background: 'rgba(251,191,36,0.07)', fontSize: '12px', color: '#fcd34d', display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                            No alternate persona to reassign to. Use Delete Cascade instead.
+                            <button style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '4px 10px', borderRadius: '6px', border: '1px solid rgba(239,68,68,0.4)', background: 'rgba(239,68,68,0.08)', color: '#f87171', fontSize: '11px', fontWeight: 600, cursor: 'pointer' }} type="button" onClick={() => updatePersonaCrudFormFieldValue('mode', 'delete_cascade')}><IconTrash /> Cascade</button>
+                          </div>
+                        ) : null}
+                        {personaCrudFormState.mode === 'delete_cascade' ? (
+                          <label style={{ display: 'flex', flexDirection: 'column', gap: '6px', fontSize: '12px', fontWeight: 600, color: '#f87171', gridColumn: '1 / -1' }}>
+                            Type to confirm hard delete
+                            <input style={{ height: '40px', borderRadius: '10px', border: '1px solid rgba(239,68,68,0.4)', background: 'rgba(239,68,68,0.06)', color: '#ededed', padding: '0 12px', fontSize: '13px', outline: 'none' }} type="text" placeholder={`DELETE ${personaCrudFormState.personaName}`} value={personaCrudFormState.deleteConfirmText} onChange={(event) => updatePersonaCrudFormFieldValue('deleteConfirmText', event.target.value)} />
+                          </label>
+                        ) : null}
+                      </div>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'flex-end', gap: '8px' }}>
+                        <button style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '7px 16px', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.07)', background: 'rgba(255,255,255,0.03)', color: '#a1a1aa', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }} type="button" onClick={() => setPersonaCrudFormState(buildInitialPersonaCrudFormState())}><IconX /> Clear</button>
+                        <button style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '7px 16px', borderRadius: '10px', border: 'none', background: personaCrudFormState.mode === 'edit' ? 'rgba(124,58,237,0.85)' : 'rgba(239,68,68,0.8)', color: '#fff', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }} type="submit">
+                          {personaCrudFormState.mode === 'edit' ? <><IconCheck /> Save Persona</> : <><IconTrash /> Apply Delete</>}
+                        </button>
+                      </div>
+                    </form>
+                  ) : (
+                    <div style={{ padding: '16px', borderRadius: '16px', border: '1px solid rgba(255,255,255,0.06)', background: 'rgba(15,15,15,0.7)', fontSize: '13px', color: '#52525b' }}>Select a persona from the left to edit or delete it.</div>
+                  )}
+                </div>
               </div>
             </div>
           </div>
